@@ -1,0 +1,11 @@
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\bin\Debug\net8.0\UiPath.Engineering.Mcp.Core.deps.json
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\bin\Debug\net8.0\UiPath.Engineering.Mcp.Core.dll
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\bin\Debug\net8.0\UiPath.Engineering.Mcp.Core.pdb
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\obj\Debug\net8.0\UiPath.Engineering.Mcp.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\obj\Debug\net8.0\UiPath.Engineering.Mcp.Core.AssemblyInfoInputs.cache
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\obj\Debug\net8.0\UiPath.Engineering.Mcp.Core.AssemblyInfo.cs
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\obj\Debug\net8.0\UiPath.Engineering.Mcp.Core.csproj.CoreCompileInputs.cache
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\obj\Debug\net8.0\UiPath.Engineering.Mcp.Core.dll
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\obj\Debug\net8.0\refint\UiPath.Engineering.Mcp.Core.dll
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\obj\Debug\net8.0\UiPath.Engineering.Mcp.Core.pdb
+C:\Users\arauj\Documents\UiPathEngineeringMCP\src\UiPath.Engineering.Mcp.Core\obj\Debug\net8.0\ref\UiPath.Engineering.Mcp.Core.dll

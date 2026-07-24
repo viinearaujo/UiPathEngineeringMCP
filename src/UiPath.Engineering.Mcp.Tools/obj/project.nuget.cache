@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "dgSpecHash": "e3MVzE67cwvFacEmxpFk+frqFWmZcbBRT4LsfW3L5YLwDaSPAde6HzOPFq8xK0fcBB0VjU1XWStiiSMaOu3cOg==",
+  "success": true,
+  "projectFilePath": "C:\\Users\\arauj\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Tools\\UiPath.Engineering.Mcp.Tools.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.ai.abstractions\\10.5.2\\microsoft.extensions.ai.abstractions.10.5.2.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.caching.abstractions\\10.0.7\\microsoft.extensions.caching.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\10.0.7\\microsoft.extensions.configuration.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\10.0.10\\microsoft.extensions.dependencyinjection.abstractions.10.0.10.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.diagnostics.abstractions\\10.0.7\\microsoft.extensions.diagnostics.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.fileproviders.abstractions\\10.0.7\\microsoft.extensions.fileproviders.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.hosting.abstractions\\10.0.7\\microsoft.extensions.hosting.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\10.0.7\\microsoft.extensions.logging.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.options\\10.0.10\\microsoft.extensions.options.10.0.10.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.primitives\\10.0.10\\microsoft.extensions.primitives.10.0.10.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\modelcontextprotocol\\1.4.1\\modelcontextprotocol.1.4.1.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\modelcontextprotocol.core\\1.4.1\\modelcontextprotocol.core.1.4.1.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\system.diagnostics.diagnosticsource\\10.0.7\\system.diagnostics.diagnosticsource.10.0.7.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\system.io.pipelines\\10.0.7\\system.io.pipelines.10.0.7.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\system.net.serversentevents\\10.0.7\\system.net.serversentevents.10.0.7.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\system.text.encodings.web\\10.0.6\\system.text.encodings.web.10.0.6.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\system.text.json\\10.0.6\\system.text.json.10.0.6.nupkg.sha512"
+  ],
+  "logs": []
+}

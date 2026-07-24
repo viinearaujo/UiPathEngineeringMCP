@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\UiPath.Engineering.Mcp.Core\UiPath.Engineering.Mcp.Core.csproj" />
+    <ProjectReference Include="..\UiPath.Engineering.Mcp.Providers\UiPath.Engineering.Mcp.Providers.csproj" />
+    <ProjectReference Include="..\UiPath.Engineering.Mcp.Tools\UiPath.Engineering.Mcp.Tools.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" Version="2.0.0-preview.3" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.0.0-preview.3" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
