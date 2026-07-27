@@ -6,4 +6,5 @@ public sealed class UiPathCliResult {
     public string Summary { get; init; } = string.Empty;
     public List<string> Errors { get; init; } = [];
     public List<string> Warnings { get; init; } = [];
+    public List<string> RawOutputLines { get; init; } = [];
 }

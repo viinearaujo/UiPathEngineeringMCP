@@ -1,5 +1,5 @@
 using UiPath.Engineering.Mcp.Core.Models;
-using UiPath.Engineering.Mcp.Providers.Filesystem;
+using UiPath.Engineering.Mcp.Core.Abstractions;
 
 namespace UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -17,21 +17,12 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder
     public Task<UiPathProjectModel> BuildAsync(string projectPath, CancellationToken cancellationToken = default)
     {
         var projectJsonPath = _filesystem.FindProjectJson(projectPath);
-        if (projectJsonPath == null)
+        if (projectJsonPath is null)
         {
             throw new FileNotFoundException("project.json not found in the specified directory.", projectPath);
         }
 
         var model = _parser.Parse(projectJsonPath, projectPath);
-        
-        // Read README if it exists
-        var readmePath = Path.Combine(projectPath, "README.md");
-        if (File.Exists(readmePath))
-        {
-            var readmeContent = _filesystem.ReadAllText(readmePath);
-            model.ReadmeSummary = readmeContent.Length > 500 ? readmeContent[..500] + "..." : readmeContent;
-        }
-
         return Task.FromResult(model);
     }
 }

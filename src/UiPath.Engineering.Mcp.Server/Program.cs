@@ -1,7 +1,10 @@
 using ModelContextProtocol.AspNetCore;
 using UiPath.Engineering.Mcp.Core.Configuration;
+using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
+using UiPath.Engineering.Mcp.Tools;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,16 +17,28 @@ builder.Services.Configure<UiPathCliOptions>(builder.Configuration.GetSection("U
 builder.Services.AddSingleton<IFilesystemProvider, FilesystemProvider>();
 builder.Services.AddSingleton<IUiPathCliProvider, UiPathCliProvider>();
 
-// Add health checks and MCP server
+// Register parsing services
+builder.Services.AddSingleton<IProjectModelBuilder, ProjectModelBuilder>();
+
+// Add health checks and MCP server.
+// IMPORTANT: the tool classes live in the UiPath.Engineering.Mcp.Tools assembly,
+// NOT in this Server (entry) assembly. WithToolsFromAssembly() with no argument
+// scans the entry assembly and would therefore discover ZERO tools. We must point
+// the scan at the Tools assembly explicitly.
 builder.Services.AddHealthChecks();
 builder.Services.AddMcpServer()
     .WithHttpTransport()
-    .WithToolsFromAssembly();
+    .WithToolsFromAssembly(typeof(AnalyzeProjectTool).Assembly);
 
 var app = builder.Build();
 
 // Map endpoints
 app.MapHealthChecks("/health");
+
+// MapMcp wires the Streamable HTTP MCP endpoint at the given path.
+// The path "/sse" is kept to match the existing Copilot registration docs; note
+// that this is the modern Streamable HTTP transport (it handles GET/POST/DELETE
+// on this single path), not the deprecated legacy SSE transport.
 app.MapMcp("/sse");
 
 app.Run();

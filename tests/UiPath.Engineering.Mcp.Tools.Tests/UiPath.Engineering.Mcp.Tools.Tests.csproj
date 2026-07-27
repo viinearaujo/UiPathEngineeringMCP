@@ -20,4 +20,10 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\UiPath.Engineering.Mcp.Core\UiPath.Engineering.Mcp.Core.csproj" />
+    <ProjectReference Include="..\..\src\UiPath.Engineering.Mcp.Providers\UiPath.Engineering.Mcp.Providers.csproj" />
+    <ProjectReference Include="..\..\src\UiPath.Engineering.Mcp.Tools\UiPath.Engineering.Mcp.Tools.csproj" />
+  </ItemGroup>
+
 </Project>

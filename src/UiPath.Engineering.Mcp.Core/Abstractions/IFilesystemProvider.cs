@@ -1,5 +1,7 @@
-namespace UiPath.Engineering.Mcp.Providers.Filesystem;
-public interface IFilesystemProvider {
+namespace UiPath.Engineering.Mcp.Core.Abstractions;
+
+public interface IFilesystemProvider
+{
     bool IsPathAllowed(string requestedPath);
     string? FindProjectJson(string projectPath);
     IReadOnlyList<string> FindXamlFiles(string projectPath);

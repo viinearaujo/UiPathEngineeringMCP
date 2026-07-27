@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Models;
-using UiPath.Engineering.Mcp.Providers.Filesystem;
+using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 using System.ComponentModel;
 

@@ -1,0 +1,13 @@
+# Build output
+bin/
+obj/
+artifacts/
+
+# Rider / VS
+.vs/
+.idea/
+*.user
+
+# Dev tunnel / local secrets
+appsettings.Local.json
+*.env

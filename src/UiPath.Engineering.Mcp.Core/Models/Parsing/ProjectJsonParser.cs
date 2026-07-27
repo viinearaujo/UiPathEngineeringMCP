@@ -1,6 +1,6 @@
 using System.Text.Json;
 using UiPath.Engineering.Mcp.Core.Models;
-using UiPath.Engineering.Mcp.Providers.Filesystem;
+using UiPath.Engineering.Mcp.Core.Abstractions;
 
 namespace UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -16,33 +16,30 @@ public sealed class ProjectJsonParser
         using var doc = JsonDocument.Parse(jsonContent);
         var root = doc.RootElement;
 
-        var model = new UiPathProjectModel
+        var mainWorkflow = root.TryGetProperty("main", out var main) ? main.GetString() : null;
+
+        var dependencies = new List<string>();
+        if (root.TryGetProperty("dependencies", out var deps) && deps.ValueKind == JsonValueKind.Object)
+        {
+            dependencies = deps.EnumerateObject()
+                .Select(p => $"{p.Name} ({p.Value.GetString() ?? "unknown"})")
+                .ToList();
+        }
+
+        var workflows = _filesystem.FindXamlFiles(projectRoot)
+            .Select(Path.GetFileName)
+            .Where(f => f is not null)
+            .Cast<string>()
+            .ToList();
+
+        return new UiPathProjectModel
         {
             ProjectPath = projectRoot,
             ProjectJsonPath = projectJsonPath,
             ProjectName = root.TryGetProperty("name", out var name) ? name.GetString() ?? "Unknown" : "Unknown",
-            Description = root.TryGetProperty("description", out var desc) ? desc.GetString() : null,
-            MainWorkflow = root.TryGetProperty("main", out var main) ? main.GetString() : null
+            MainWorkflow = mainWorkflow,
+            Dependencies = dependencies,
+            Workflows = workflows
         };
-
-        if (root.TryGetProperty("dependencies", out var deps) && deps.ValueKind == JsonValueKind.Object)
-        {
-            model.Dependencies = deps.EnumerateObject()
-                .Select(p => new DependencyModel { Name = p.Name, Version = p.Value.GetString() ?? "unknown" })
-                .ToList();
-                
-            model.Packages = model.Dependencies.Select(d => new PackageModel { Id = d.Name, Version = d.Version }).ToList();
-        }
-
-        // Discover Workflows
-        var xamlFiles = _filesystem.FindXamlFiles(projectRoot);
-        model.Workflows = xamlFiles.Select(path => new WorkflowModel
-        {
-            FileName = Path.GetFileName(path),
-            FilePath = path,
-            IsMain = Path.GetFileName(path).Equals(model.MainWorkflow, StringComparison.OrdinalIgnoreCase)
-        }).ToList();
-
-        return model;
     }
 }

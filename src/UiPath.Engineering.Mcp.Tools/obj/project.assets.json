@@ -56,7 +56,7 @@
           "buildTransitive/net8.0/_._": {}
         }
       },
-      "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.10": {
+      "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.7": {
         "type": "package",
         "compile": {
           "lib/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
@@ -155,11 +155,11 @@
           "buildTransitive/net8.0/Microsoft.Extensions.Logging.Abstractions.targets": {}
         }
       },
-      "Microsoft.Extensions.Options/10.0.10": {
+      "Microsoft.Extensions.Options/10.0.7": {
         "type": "package",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-          "Microsoft.Extensions.Primitives": "10.0.10"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.7",
+          "Microsoft.Extensions.Primitives": "10.0.7"
         },
         "compile": {
           "lib/net8.0/Microsoft.Extensions.Options.dll": {
@@ -175,7 +175,7 @@
           "buildTransitive/net8.0/Microsoft.Extensions.Options.targets": {}
         }
       },
-      "Microsoft.Extensions.Primitives/10.0.10": {
+      "Microsoft.Extensions.Primitives/10.0.7": {
         "type": "package",
         "compile": {
           "lib/net8.0/Microsoft.Extensions.Primitives.dll": {
@@ -191,12 +191,12 @@
           "buildTransitive/net8.0/_._": {}
         }
       },
-      "ModelContextProtocol/1.4.1": {
+      "ModelContextProtocol/2.0.0-preview.3": {
         "type": "package",
         "dependencies": {
           "Microsoft.Extensions.Caching.Abstractions": "10.0.7",
           "Microsoft.Extensions.Hosting.Abstractions": "10.0.7",
-          "ModelContextProtocol.Core": "1.4.1"
+          "ModelContextProtocol.Core": "2.0.0-preview.3"
         },
         "compile": {
           "lib/net8.0/ModelContextProtocol.dll": {
@@ -209,7 +209,7 @@
           }
         }
       },
-      "ModelContextProtocol.Core/1.4.1": {
+      "ModelContextProtocol.Core/2.0.0-preview.3": {
         "type": "package",
         "dependencies": {
           "Microsoft.Extensions.AI.Abstractions": "10.5.2",
@@ -332,7 +332,7 @@
         "type": "project",
         "framework": ".NETCoreApp,Version=v8.0",
         "dependencies": {
-          "Microsoft.Extensions.Options": "10.0.10",
+          "Microsoft.Extensions.Options": "8.0.2",
           "UiPath.Engineering.Mcp.Core": "1.0.0"
         },
         "compile": {
@@ -426,10 +426,10 @@
         "useSharedDesignerContext.txt"
       ]
     },
-    "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.10": {
-      "sha512": "z/2xXlFw2aLGjHyEm6E0tQ+In6VfzQzTrtArbQ2c0TQE16ZbyDCMGPvaUT9I0s8rgy9sRWlU2P9waW37qV04qA==",
+    "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.7": {
+      "sha512": "Z6mfFEaFcwCfSboxJwOLfu7/31npCY9q70WUamHW/vRQhDvBKOT4Vf9YkZj5J6hLvJpb0oDEYfHunQZj0xxvKw==",
       "type": "package",
-      "path": "microsoft.extensions.dependencyinjection.abstractions/10.0.10",
+      "path": "microsoft.extensions.dependencyinjection.abstractions/10.0.7",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -452,7 +452,7 @@
         "lib/netstandard2.0/Microsoft.Extensions.DependencyInjection.Abstractions.xml",
         "lib/netstandard2.1/Microsoft.Extensions.DependencyInjection.Abstractions.dll",
         "lib/netstandard2.1/Microsoft.Extensions.DependencyInjection.Abstractions.xml",
-        "microsoft.extensions.dependencyinjection.abstractions.10.0.10.nupkg.sha512",
+        "microsoft.extensions.dependencyinjection.abstractions.10.0.7.nupkg.sha512",
         "microsoft.extensions.dependencyinjection.abstractions.nuspec",
         "useSharedDesignerContext.txt"
       ]
@@ -617,10 +617,10 @@
         "useSharedDesignerContext.txt"
       ]
     },
-    "Microsoft.Extensions.Options/10.0.10": {
-      "sha512": "srnhnk7nE8krBiIXp71LvBmKBtraBONWSRzdjJgRv1Ko9Mp8IVNqv4vIS9hGeVteBig8aQkva9ZG+sC+o5sVcA==",
+    "Microsoft.Extensions.Options/10.0.7": {
+      "sha512": "00SHUGTh2jSMvIr6x9Xwd2nE+B5/qFCO/9hDwUDhJsjYRDlADmaBZ7tqehXzBDsfjHSXJzuRHJzPYPPjphBQ7Q==",
       "type": "package",
-      "path": "microsoft.extensions.options/10.0.10",
+      "path": "microsoft.extensions.options/10.0.7",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -658,15 +658,15 @@
         "lib/netstandard2.0/Microsoft.Extensions.Options.xml",
         "lib/netstandard2.1/Microsoft.Extensions.Options.dll",
         "lib/netstandard2.1/Microsoft.Extensions.Options.xml",
-        "microsoft.extensions.options.10.0.10.nupkg.sha512",
+        "microsoft.extensions.options.10.0.7.nupkg.sha512",
         "microsoft.extensions.options.nuspec",
         "useSharedDesignerContext.txt"
       ]
     },
-    "Microsoft.Extensions.Primitives/10.0.10": {
-      "sha512": "5wu/GrYVd8mG2DVUw3vFJzF+O336TyTGg/Kmcgw9bfwYhCoFiV5lR5QeEmKecJyrW4W54nMfD3p3589E8a7czQ==",
+    "Microsoft.Extensions.Primitives/10.0.7": {
+      "sha512": "D5M0Jr551iTgwkZMN9rm0pSkgNLj5quUWQUmQPMZh7k/bnvZTnXRGfE2KuvXf1EEjt/ofD9yw9IumpgdP9QCnw==",
       "type": "package",
-      "path": "microsoft.extensions.primitives/10.0.10",
+      "path": "microsoft.extensions.primitives/10.0.7",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -687,15 +687,15 @@
         "lib/net9.0/Microsoft.Extensions.Primitives.xml",
         "lib/netstandard2.0/Microsoft.Extensions.Primitives.dll",
         "lib/netstandard2.0/Microsoft.Extensions.Primitives.xml",
-        "microsoft.extensions.primitives.10.0.10.nupkg.sha512",
+        "microsoft.extensions.primitives.10.0.7.nupkg.sha512",
         "microsoft.extensions.primitives.nuspec",
         "useSharedDesignerContext.txt"
       ]
     },
-    "ModelContextProtocol/1.4.1": {
-      "sha512": "mP5hvBpoWe5EbWBqHWD09A4Dy6Pq+/vV2dumOV4uegCZcg+yqf8q8wrxtuZ3EQyXEJn9jzsnoiI/qyfJAihlZQ==",
+    "ModelContextProtocol/2.0.0-preview.3": {
+      "sha512": "sYEI/A8ng3MyAB2mML/zKeRUYGSmIfThhncleaI55uZsKBYEWimgBjWRDWfc8TCf2NR3YLO1d/gcFHAY78tAnQ==",
       "type": "package",
-      "path": "modelcontextprotocol/1.4.1",
+      "path": "modelcontextprotocol/2.0.0-preview.3",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -709,14 +709,14 @@
         "lib/netstandard2.0/ModelContextProtocol.dll",
         "lib/netstandard2.0/ModelContextProtocol.xml",
         "logo.png",
-        "modelcontextprotocol.1.4.1.nupkg.sha512",
+        "modelcontextprotocol.2.0.0-preview.3.nupkg.sha512",
         "modelcontextprotocol.nuspec"
       ]
     },
-    "ModelContextProtocol.Core/1.4.1": {
-      "sha512": "G/hOBZkJsvF3MSy0sOvXdxca5uRe2Sb4xk7xRuTWNZI45khVBjOLo6nSzGilctIICavNVxbxUF908fLYI9RxkQ==",
+    "ModelContextProtocol.Core/2.0.0-preview.3": {
+      "sha512": "H5LbL8ONftbUNzCXFHvAdzcDSfeXikzZF+RMAv4lSndqkWaOjkhdLwwccu/xZ3mKpLBeoNENih8QEUUHYoa8lg==",
       "type": "package",
-      "path": "modelcontextprotocol.core/1.4.1",
+      "path": "modelcontextprotocol.core/2.0.0-preview.3",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -731,7 +731,7 @@
         "lib/netstandard2.0/ModelContextProtocol.Core.dll",
         "lib/netstandard2.0/ModelContextProtocol.Core.xml",
         "logo.png",
-        "modelcontextprotocol.core.1.4.1.nupkg.sha512",
+        "modelcontextprotocol.core.2.0.0-preview.3.nupkg.sha512",
         "modelcontextprotocol.core.nuspec"
       ]
     },
@@ -943,50 +943,42 @@
   },
   "projectFileDependencyGroups": {
     "net8.0": [
-      "ModelContextProtocol >= 1.4.1",
+      "ModelContextProtocol >= 2.0.0-preview.3",
       "UiPath.Engineering.Mcp.Core >= 1.0.0",
       "UiPath.Engineering.Mcp.Providers >= 1.0.0"
     ]
   },
   "packageFolders": {
-    "C:\\Users\\arauj\\.nuget\\packages\\": {}
+    "C:\\Users\\viniciusaraujo\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\arauj\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Tools\\UiPath.Engineering.Mcp.Tools.csproj",
+      "projectUniqueName": "C:\\Users\\viniciusaraujo\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Tools\\UiPath.Engineering.Mcp.Tools.csproj",
       "projectName": "UiPath.Engineering.Mcp.Tools",
-      "projectPath": "C:\\Users\\arauj\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Tools\\UiPath.Engineering.Mcp.Tools.csproj",
-      "packagesPath": "C:\\Users\\arauj\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\arauj\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Tools\\obj\\",
+      "projectPath": "C:\\Users\\viniciusaraujo\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Tools\\UiPath.Engineering.Mcp.Tools.csproj",
+      "packagesPath": "C:\\Users\\viniciusaraujo\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\viniciusaraujo\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Tools\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "C:\\Users\\arauj\\AppData\\Roaming\\NuGet\\NuGet.Config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        "C:\\Users\\viniciusaraujo\\AppData\\Roaming\\NuGet\\NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
       ],
       "sources": {
-        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-        "C:\\Users\\arauj\\Documents\\uipath\\rpa-fileandserve-efile\\Packages": {},
-        "C:\\Users\\arauj\\Documents\\uipath\\rpa.benchmark.efile\\Code\\Packages": {},
-        "C:\\Users\\arauj\\Documents\\uipath\\rpa.lakecounty.il.efile\\Objects and Packages\\Packages": {},
-        "C:\\Users\\arauj\\Documents\\uipath\\rpa.odyssey.lib\\Packages": {},
-        "C:\\Users\\arauj\\Documents\\uipath\\rpa.polk.efile\\BuildedPackages": {},
-        "C:\\Users\\arauj\\Documents\\uipath\\rpa.tarrant.tylerlibrary": {},
-        "C:\\Users\\arauj\\Documents\\uipath\\rpa.tyler.efile.objects\\RPA.Efiling.Objects\\Packages": {},
+        "C:\\Users\\viniciusaraujo\\Documents\\LocalCompiledLibs": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "C:\\Users\\arauj\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Core\\UiPath.Engineering.Mcp.Core.csproj": {
-              "projectPath": "C:\\Users\\arauj\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Core\\UiPath.Engineering.Mcp.Core.csproj"
+            "C:\\Users\\viniciusaraujo\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Core\\UiPath.Engineering.Mcp.Core.csproj": {
+              "projectPath": "C:\\Users\\viniciusaraujo\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Core\\UiPath.Engineering.Mcp.Core.csproj"
             },
-            "C:\\Users\\arauj\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Providers\\UiPath.Engineering.Mcp.Providers.csproj": {
-              "projectPath": "C:\\Users\\arauj\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Providers\\UiPath.Engineering.Mcp.Providers.csproj"
+            "C:\\Users\\viniciusaraujo\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Providers\\UiPath.Engineering.Mcp.Providers.csproj": {
+              "projectPath": "C:\\Users\\viniciusaraujo\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Providers\\UiPath.Engineering.Mcp.Providers.csproj"
             }
           }
         }
@@ -1008,7 +1000,7 @@
         "dependencies": {
           "ModelContextProtocol": {
             "target": "Package",
-            "version": "[1.4.1, )"
+            "version": "[2.0.0-preview.3, )"
           }
         },
         "imports": [
@@ -1027,7 +1019,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.204/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Users\\viniciusaraujo\\AppData\\Local\\Microsoft\\dotnet\\sdk\\8.0.406/PortableRuntimeIdentifierGraph.json"
       }
     }
   }
