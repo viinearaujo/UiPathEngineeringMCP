@@ -34,6 +34,15 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
             ("pack", pack)
         };
 
+        // Steps that are not requested, or skipped after an earlier failure, keep
+        // Executed = false so callers can distinguish "not run" from "ran clean".
+        var stepResults = new Dictionary<string, CliStepResult>
+        {
+            ["restore"] = new CliStepResult(),
+            ["analyze"] = new CliStepResult(),
+            ["pack"] = new CliStepResult()
+        };
+
         foreach (var (verb, enabled) in steps)
         {
             if (!enabled)
@@ -42,6 +51,14 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
             }
 
             var stepResult = await RunVerbAsync(verb, projectPath, cancellationToken);
+
+            stepResults[verb] = new CliStepResult
+            {
+                Executed = true,
+                Success = stepResult.Success,
+                Errors = stepResult.Errors,
+                Warnings = stepResult.Warnings
+            };
 
             executedCommands.Add(stepResult.Command);
             errors.AddRange(stepResult.Errors);
@@ -64,6 +81,9 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
             Command = string.Join(" && ", executedCommands),
             ExitCode = lastExitCode,
             Summary = overallSuccess ? "Validation completed." : "Validation failed.",
+            Restore = stepResults["restore"],
+            Analyze = stepResults["analyze"],
+            Pack = stepResults["pack"],
             Errors = errors,
             Warnings = warnings,
             RawOutputLines = _options.IncludeRawOutput ? rawOutput : []
@@ -160,22 +180,13 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
             var stdOut = await stdOutTask;
             var stdErr = await stdErrTask;
 
-            var errors = new List<string>();
-            var warnings = new List<string>();
+            var (errors, warnings) = UiPathCliOutputParser.Parse(verb, stdOut, stdErr);
 
-            if (!string.IsNullOrWhiteSpace(stdErr))
+            if (process.ExitCode != 0 && errors.Count == 0)
             {
-                errors.Add($"[{verb}] {stdErr.Trim()}");
-            }
-
-            if (stdOut.Contains("error", StringComparison.OrdinalIgnoreCase))
-            {
-                errors.Add($"[{verb}] CLI reported errors in output.");
-            }
-
-            if (stdOut.Contains("warning", StringComparison.OrdinalIgnoreCase))
-            {
-                warnings.Add($"[{verb}] CLI reported warnings in output.");
+                // The process failed without emitting any recognizable error line;
+                // still surface a minimal reason instead of a bare "failed".
+                errors.Add($"[{verb}] '{verb}' exited with code {process.ExitCode}.");
             }
 
             var rawLines = new List<string>();
@@ -201,7 +212,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
     private static IEnumerable<string> SplitLines(string text) =>
         string.IsNullOrEmpty(text)
             ? []
-            : text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            : text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
     private static void TryKill(Process process)
     {

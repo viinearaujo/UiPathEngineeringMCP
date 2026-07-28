@@ -1,4 +1,5 @@
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
@@ -11,6 +12,8 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider
     public string? ProjectJsonPath { get; set; }
     public List<string> XamlFiles { get; } = [];
     public Dictionary<string, string> FileContents { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, DateTime> WriteTimesUtc { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public DirectoryTreeNode? DirectoryTree { get; set; }
 
     public bool IsPathAllowed(string requestedPath) => Allowed;
 
@@ -18,8 +21,16 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider
 
     public IReadOnlyList<string> FindXamlFiles(string projectPath) => XamlFiles;
 
+    public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) =>
+        DirectoryTree ?? new DirectoryTreeNode { Name = Path.GetFileName(root) ?? root, Path = root, IsDirectory = true };
+
     public string ReadAllText(string filePath) =>
         FileContents.TryGetValue(filePath, out var content)
             ? content
+            : throw new FileNotFoundException(filePath);
+
+    public DateTime GetLastWriteTimeUtc(string filePath) =>
+        WriteTimesUtc.TryGetValue(filePath, out var timestamp)
+            ? timestamp
             : throw new FileNotFoundException(filePath);
 }

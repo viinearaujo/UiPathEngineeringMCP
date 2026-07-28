@@ -4,12 +4,16 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v1)** milestone. Two tools are implemented:
+This is the **MVP / POC (v3)** milestone. Six tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
-| `analyze_project` | Parses `project.json` + discovers `.xaml` workflows and dependencies, returns structured JSON. |
-| `validate_project` | Runs `uip.exe` (`restore` / `analyze` / `pack`) and returns structured restore/analyze/pack results, errors, and warnings. |
+| `analyze_project` | Parses `project.json` + deep-parses every `.xaml` workflow (arguments, variables, activities, try/catch, invokes, log messages) and returns structured JSON with risks (cycles, orphan workflows). |
+| `validate_project` | Runs `uip.exe` (`restore` / `analyze` / `pack`) and returns structured per-step results (`executed`/`success`/`errors`/`warnings` each) plus recommendations. |
+| `explain_workflow` | Returns the structured breakdown of a single workflow: arguments, variables, activity outline, exception handlers, invoked workflows, log messages. |
+| `generate_documentation` | Returns deterministic structured documentation data for the whole project: metadata, per-workflow summaries, dependency graph (edges, cycles, orphans), risks. |
+| `search_repository` | Searches GitLab issues for the configured project (requires the `GitLab` config section; token is never returned). |
+| `create_work_items` | Creates GitLab issues/work items from a list of `{ title, description, labels? }`, returning created IDs/URLs and per-item failures. |
 
 ---
 
@@ -83,7 +87,8 @@ The fastest functional test of the tools is the official MCP Inspector:
 ```powershell
 npx @modelcontextprotocol/inspector
 # Connect to: http://localhost:5000/sse  (transport: Streamable HTTP)
-# You should see analyze_project and validate_project listed.
+# You should see analyze_project, validate_project, explain_workflow,
+# generate_documentation, search_repository and create_work_items listed.
 ```
 
 ---
@@ -125,7 +130,7 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Tools:** `analyze_project`, `validate_project`
+- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`
 
 ---
 
@@ -139,9 +144,9 @@ The `tests/` folder contains three xUnit projects:
 
 | Project | Covers |
 |---------|--------|
-| `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing (name/main/deps/workflows), `ProjectModelBuilder` (missing vs present project.json). |
-| `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing (root/child allowed, sibling-prefix & unrelated rejected, empty/no-roots rejected), `.xaml` discovery skipping `bin`/`obj`/`.git`, and `UiPathCliProvider` returning a structured error when `uip.exe` is missing. |
-| `UiPath.Engineering.Mcp.Tools.Tests` | `analyze_project` and `validate_project` behavior: path-not-allowed, project.json-not-found, happy path, and structured error propagation (no raw exceptions). |
+| `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder`, `XamlWorkflowParser` (arguments/variables/try-catch/invokes/log messages, malformed xaml), `DependencyGraphBuilder` (chains, cycles, orphans). |
+| `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing (root/child allowed, sibling-prefix & unrelated rejected), `.xaml` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree` (depth/ignore/missing dir), `UiPathCliOutputParser` (analyzer/NuGet/fallback formats), `UiPathCliProvider` per-step results and missing-`uip.exe` error, `GitStatusParser` (porcelain/ahead-behind/not-a-repo), `GitLabProvider` (search/create, token never surfaced). |
+| `UiPath.Engineering.Mcp.Tools.Tests` | All six tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, and structured error propagation (no raw exceptions). |
 
 Tests use hand-written fakes (no Moq) so there are no extra runtime dependencies.
 
@@ -150,16 +155,19 @@ Tests use hand-written fakes (no Moq) so there are no extra runtime dependencies
 ```
 src/
   UiPath.Engineering.Mcp.Server/     # ASP.NET host: DI, config, /health, /sse (MapMcp)
-  UiPath.Engineering.Mcp.Core/       # Models, config options, project.json parsing
-  UiPath.Engineering.Mcp.Providers/  # Filesystem + UiPath CLI providers
-  UiPath.Engineering.Mcp.Tools/      # [McpServerTool] classes (analyze/validate)
+  UiPath.Engineering.Mcp.Core/       # Models, config options, project.json + XAML parsing, dependency graph
+  UiPath.Engineering.Mcp.Providers/  # Filesystem + UiPath CLI providers (structured CLI output parser)
+  UiPath.Engineering.Mcp.Tools/      # [McpServerTool] classes (analyze/validate/explain/document)
 ```
 
-## 7. Notes / known limitations (v1)
+## 7. Notes / known limitations (v2)
 
-- `analyze_project` currently reads `project.json` (name, main, dependencies) and lists
-  `.xaml` file names. Deep XAML parsing (arguments, variables, invoke graph) is a later phase.
+- `analyze_project` deep-parses `.xaml` workflows (arguments, variables, activity outline,
+  try/catch, invokes, log messages) and flags cycles/orphan workflows as risks.
+  Folder-structure output and cross-request model caching are later phases.
 - `validate_project` requires `uip.exe`; on non-Windows / missing CLI it returns a
   structured error instead of crashing.
 - The `/sse` path serves the **Streamable HTTP** transport (not legacy SSE); the name is
   kept only to match the Copilot registration docs.
+- Git/GitLab repository intelligence tools (`search_repository`, `create_work_items`)
+  and the PowerShell provider are planned phases, not yet implemented.

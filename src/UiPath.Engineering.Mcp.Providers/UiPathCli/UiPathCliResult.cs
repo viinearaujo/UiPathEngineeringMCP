@@ -4,6 +4,9 @@ public sealed class UiPathCliResult {
     public string Command { get; init; } = string.Empty;
     public int ExitCode { get; init; }
     public string Summary { get; init; } = string.Empty;
+    public CliStepResult Restore { get; init; } = new();
+    public CliStepResult Analyze { get; init; } = new();
+    public CliStepResult Pack { get; init; } = new();
     public List<string> Errors { get; init; } = [];
     public List<string> Warnings { get; init; } = [];
     public List<string> RawOutputLines { get; init; } = [];

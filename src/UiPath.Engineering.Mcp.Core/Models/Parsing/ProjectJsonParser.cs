@@ -19,18 +19,16 @@ public sealed class ProjectJsonParser
         var mainWorkflow = root.TryGetProperty("main", out var main) ? main.GetString() : null;
 
         var dependencies = new List<string>();
+        var packages = new List<PackageModel>();
         if (root.TryGetProperty("dependencies", out var deps) && deps.ValueKind == JsonValueKind.Object)
         {
-            dependencies = deps.EnumerateObject()
-                .Select(p => $"{p.Name} ({p.Value.GetString() ?? "unknown"})")
-                .ToList();
+            foreach (var p in deps.EnumerateObject())
+            {
+                var version = p.Value.GetString() ?? "unknown";
+                dependencies.Add($"{p.Name} ({version})");
+                packages.Add(new PackageModel { Id = p.Name, Version = version });
+            }
         }
-
-        var workflows = _filesystem.FindXamlFiles(projectRoot)
-            .Select(Path.GetFileName)
-            .Where(f => f is not null)
-            .Cast<string>()
-            .ToList();
 
         return new UiPathProjectModel
         {
@@ -38,8 +36,9 @@ public sealed class ProjectJsonParser
             ProjectJsonPath = projectJsonPath,
             ProjectName = root.TryGetProperty("name", out var name) ? name.GetString() ?? "Unknown" : "Unknown",
             MainWorkflow = mainWorkflow,
+            Description = root.TryGetProperty("description", out var desc) ? desc.GetString() : null,
             Dependencies = dependencies,
-            Workflows = workflows
+            Packages = packages
         };
     }
 }

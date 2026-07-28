@@ -4,7 +4,15 @@ public sealed class UiPathProjectModel {
     public string ProjectName { get; init; } = string.Empty;
     public string? MainWorkflow { get; init; }
     public string? ProjectJsonPath { get; init; }
-    public List<string> Workflows { get; init; } = [];
+    public string? Description { get; set; }
+    public string? ReadmeSummary { get; set; }
+    public DirectoryTreeNode? FolderStructure { get; set; }
+    public List<WorkflowModel> Workflows { get; init; } = [];
+    public List<PackageModel> Packages { get; init; } = [];
+    public List<VariableModel> Variables { get; init; } = [];
+    public List<ArgumentModel> Arguments { get; init; } = [];
+    public List<InvokeWorkflowModel> InvokeWorkflows { get; init; } = [];
+    public List<ExceptionHandlerModel> ExceptionHandlers { get; init; } = [];
     public List<string> Dependencies { get; init; } = [];
     public List<string> Risks { get; init; } = [];
 }

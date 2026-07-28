@@ -40,16 +40,38 @@ public sealed class ValidateProjectTool {
             Status = cliResult.Success ? "success" : "error",
             Summary = cliResult.Summary,
             Data = new {
-                cliResult.Success,
-                Restore = restore,
-                Analyze = analyze,
-                Pack = pack,
-                cliResult.Errors,
-                cliResult.Warnings
+                success = cliResult.Success,
+                restore = StepData(cliResult.Restore),
+                analyze = StepData(cliResult.Analyze),
+                pack = StepData(cliResult.Pack),
+                errors = cliResult.Errors,
+                warnings = cliResult.Warnings,
+                recommendations = BuildRecommendations(cliResult)
             },
             Errors = cliResult.Errors,
             Warnings = cliResult.Warnings,
             DurationMs = sw.ElapsedMilliseconds
         };
+    }
+
+    private static object StepData(CliStepResult step) => new {
+        executed = step.Executed,
+        success = step.Executed && step.Success,
+        errors = step.Errors,
+        warnings = step.Warnings
+    };
+
+    private static List<string> BuildRecommendations(UiPathCliResult result) {
+        var recommendations = new List<string>();
+        AddRecommendation(recommendations, "restore", result.Restore);
+        AddRecommendation(recommendations, "analyze", result.Analyze);
+        AddRecommendation(recommendations, "pack", result.Pack);
+        return recommendations;
+    }
+
+    private static void AddRecommendation(List<string> recommendations, string stepName, CliStepResult step) {
+        if (step.Executed && !step.Success) {
+            recommendations.Add($"Review the {stepName} errors, fix the underlying issues, and re-run validation.");
+        }
     }
 }

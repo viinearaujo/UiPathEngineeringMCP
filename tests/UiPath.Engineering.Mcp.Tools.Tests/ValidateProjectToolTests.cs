@@ -1,3 +1,4 @@
+using System.Text.Json;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -68,5 +69,66 @@ public class ValidateProjectToolTests
         Assert.Equal("error", result.Status);
         Assert.Contains("[restore] boom", result.Errors);
         Assert.Contains("[analyze] heads up", result.Warnings);
+    }
+
+    private static JsonElement SerializeData(object? data) =>
+        JsonSerializer.SerializeToElement(data);
+
+    [Fact]
+    public async Task ValidateProject_WhenCliSucceeds_DataHasPerStepShapeAndNoRecommendations()
+    {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var cli = new FakeUiPathCliProvider
+        {
+            Result = new UiPathCliResult
+            {
+                Success = true,
+                Summary = "Validation completed.",
+                Restore = new CliStepResult { Executed = true, Success = true },
+                Analyze = new CliStepResult { Executed = true, Success = true, Warnings = ["[analyze] heads up"] }
+            }
+        };
+        var tool = new ValidateProjectTool(cli, fs);
+
+        var result = await tool.ValidateProject("/projects/testProcess");
+        var data = SerializeData(result.Data);
+
+        Assert.True(data.GetProperty("success").GetBoolean());
+        Assert.True(data.GetProperty("restore").GetProperty("executed").GetBoolean());
+        Assert.True(data.GetProperty("restore").GetProperty("success").GetBoolean());
+        Assert.True(data.GetProperty("analyze").GetProperty("executed").GetBoolean());
+        // pack was not executed -> distinguishable via executed:false, success:false.
+        Assert.False(data.GetProperty("pack").GetProperty("executed").GetBoolean());
+        Assert.False(data.GetProperty("pack").GetProperty("success").GetBoolean());
+        Assert.Equal(0, data.GetProperty("recommendations").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task ValidateProject_WhenStepFails_DataMarksSkippedStepsAndRecommendsReview()
+    {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var cli = new FakeUiPathCliProvider
+        {
+            Result = new UiPathCliResult
+            {
+                Success = false,
+                Summary = "Validation failed.",
+                Restore = new CliStepResult { Executed = true, Success = false, Errors = ["[restore] boom"] },
+                Errors = ["[restore] boom"]
+            }
+        };
+        var tool = new ValidateProjectTool(cli, fs);
+
+        var result = await tool.ValidateProject("/projects/testProcess");
+        var data = SerializeData(result.Data);
+
+        Assert.False(data.GetProperty("success").GetBoolean());
+        Assert.True(data.GetProperty("restore").GetProperty("executed").GetBoolean());
+        Assert.False(data.GetProperty("restore").GetProperty("success").GetBoolean());
+        Assert.False(data.GetProperty("analyze").GetProperty("executed").GetBoolean());
+
+        var recommendations = data.GetProperty("recommendations");
+        Assert.Single(recommendations.EnumerateArray());
+        Assert.Contains("restore", recommendations[0].GetString());
     }
 }

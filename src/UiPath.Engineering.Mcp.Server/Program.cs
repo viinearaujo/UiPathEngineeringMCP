@@ -3,6 +3,8 @@ using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
+using UiPath.Engineering.Mcp.Providers.Git;
+using UiPath.Engineering.Mcp.Providers.GitLab;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 using UiPath.Engineering.Mcp.Tools;
 
@@ -12,13 +14,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<McpServerOptions>(builder.Configuration.GetSection("McpServer"));
 builder.Services.Configure<ProjectRootOptions>(builder.Configuration.GetSection("Projects"));
 builder.Services.Configure<UiPathCliOptions>(builder.Configuration.GetSection("UiPathCli"));
+builder.Services.Configure<GitLabOptions>(builder.Configuration.GetSection("GitLab"));
 
 // Register providers
 builder.Services.AddSingleton<IFilesystemProvider, FilesystemProvider>();
 builder.Services.AddSingleton<IUiPathCliProvider, UiPathCliProvider>();
+builder.Services.AddSingleton<IGitProvider, GitProvider>();
+builder.Services.AddHttpClient<IGitLabProvider, GitLabProvider>();
 
 // Register parsing services
-builder.Services.AddSingleton<IProjectModelBuilder, ProjectModelBuilder>();
+builder.Services.AddSingleton<ProjectModelBuilder>();
+builder.Services.AddSingleton<IProjectModelBuilder>(sp =>
+    new CachingProjectModelBuilder(
+        sp.GetRequiredService<ProjectModelBuilder>(),
+        sp.GetRequiredService<IFilesystemProvider>()));
 
 // Add health checks and MCP server.
 // IMPORTANT: the tool classes live in the UiPath.Engineering.Mcp.Tools assembly,

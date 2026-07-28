@@ -1818,6 +1818,19 @@ Mitigation:
 
 ## 30. Current Execution Decision
 
+Status update (v2, 2026-07-28):
+
+- Phases 0-2, 4, 5: done and running on Copilot Studio (MVP v1).
+- Phase 3 (PowerShell Provider): deferred — CLI provider executes `uip.exe` directly.
+- Hardening done: structured `UiPathCliOutputParser` (analyzer/NuGet/fallback line parsing, fixture tests), `validate_project` now returns per-step results (`executed`/`success`/`errors`/`warnings` for restore/analyze/pack) plus deterministic recommendations.
+- Phase 6 done: `XamlWorkflowParser` (arguments, variables, activity outline, TryCatch, InvokeWorkflowFile, LogMessage; malformed XAML returns structured parse error). `UiPathProjectModel` enriched (Workflows as `WorkflowModel`, Packages, ReadmeSummary, aggregated sub-models).
+- Phase 7 done: `DependencyGraphBuilder` (edges, cycles, orphans); risks surfaced on the model.
+- Phase 8 done: `explain_workflow` and `generate_documentation` tools implemented with tests.
+- FolderStructure done: `IFilesystemProvider.GetDirectoryTree(root, maxDepth)` implemented (ignore-list aware, depth-capped, tolerant of inaccessible dirs); `UiPathProjectModel.FolderStructure` populated by `ProjectModelBuilder` and serialized by `analyze_project`.
+- Phase 9 done: `GitProvider` (`git status`/`log` via fixed arg templates, allowed-roots validated, never throws on non-repo) + `GitLabProvider` (REST v4 issue search/create, token header-only, never surfaced in errors); `search_repository` and `create_work_items` tools; `GitLab` config section added.
+- Model caching done: `CachingProjectModelBuilder` decorator (fingerprint = file count + max LastWriteTimeUtc; per-key semaphore; stale-on-error, inner exceptions never cached) registered as singleton `IProjectModelBuilder` in Server DI.
+- Remaining: Phase 3 (PowerShell Provider, still deferred — no consumer), tunnel auth hardening for production.
+
 Proceed with the first milestone:
 
 ```text

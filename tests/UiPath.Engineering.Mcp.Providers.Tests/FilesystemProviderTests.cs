@@ -132,6 +132,60 @@ public class FilesystemProviderTests
         Assert.Empty(sut.FindXamlFiles(Path.Combine(Path.GetTempPath(), "does-not-exist-xyz")));
     }
 
+    [Fact]
+    public void GetDirectoryTree_RespectsMaxDepth()
+    {
+        using var temp = new TempDir();
+        var level1 = Directory.CreateDirectory(Path.Combine(temp.Path, "Level1"));
+        var level2 = Directory.CreateDirectory(Path.Combine(level1.FullName, "Level2"));
+        var level3 = Directory.CreateDirectory(Path.Combine(level2.FullName, "Level3"));
+        File.WriteAllText(Path.Combine(level3.FullName, "Deep.xaml"), "<x/>");
+        var sut = CreateSut(temp.Path);
+
+        var tree = sut.GetDirectoryTree(temp.Path, maxDepth: 2);
+
+        Assert.True(tree.IsDirectory);
+        var l1 = Assert.Single(tree.Children, c => c.Name == "Level1");
+        var l2 = Assert.Single(l1.Children, c => c.Name == "Level2");
+        Assert.Empty(l2.Children); // depth limit reached, Level3 not enumerated
+    }
+
+    [Fact]
+    public void GetDirectoryTree_SkipsIgnoredDirectoriesAndIncludesFiles()
+    {
+        using var temp = new TempDir();
+        File.WriteAllText(Path.Combine(temp.Path, "Main.xaml"), "<x/>");
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Sub"));
+        var bin = Directory.CreateDirectory(Path.Combine(temp.Path, "bin"));
+        File.WriteAllText(Path.Combine(bin.FullName, "junk.xaml"), "<x/>");
+        var git = Directory.CreateDirectory(Path.Combine(temp.Path, ".git"));
+        File.WriteAllText(Path.Combine(git.FullName, "junk2.xaml"), "<x/>");
+        var sut = CreateSut(temp.Path);
+
+        var tree = sut.GetDirectoryTree(temp.Path);
+
+        var names = tree.Children.Select(c => c.Name).ToList();
+        Assert.Contains("Main.xaml", names);
+        Assert.Contains("Sub", names);
+        Assert.DoesNotContain("bin", names);
+        Assert.DoesNotContain(".git", names);
+        Assert.False(tree.Children.Single(c => c.Name == "Main.xaml").IsDirectory);
+        Assert.True(tree.Children.Single(c => c.Name == "Sub").IsDirectory);
+    }
+
+    [Fact]
+    public void GetDirectoryTree_NonExistentDirectory_ReturnsEmptyRootNode()
+    {
+        var sut = CreateSut(Path.GetTempPath());
+        var missing = Path.Combine(Path.GetTempPath(), "does-not-exist-xyz");
+
+        var tree = sut.GetDirectoryTree(missing);
+
+        Assert.Equal(missing, tree.Path);
+        Assert.True(tree.IsDirectory);
+        Assert.Empty(tree.Children);
+    }
+
     private sealed class TempDir : IDisposable
     {
         public string Path { get; } =

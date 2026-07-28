@@ -1,12 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "FXO9KNeVbTA=",
+  "dgSpecHash": "FmCdl031uvLUaVvqh4tSC2F3dC94ZFO8MzuHnAr1JrhDExZGUvigDnnlr8MsgRlInDXnrnnMjG9Iu8gtINLvZA==",
   "success": true,
-  "projectFilePath": "C:\\Users\\viniciusaraujo\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Providers\\UiPath.Engineering.Mcp.Providers.csproj",
+  "projectFilePath": "C:\\Users\\arauj\\Documents\\UiPathEngineeringMCP\\src\\UiPath.Engineering.Mcp.Providers\\UiPath.Engineering.Mcp.Providers.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\viniciusaraujo\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.0\\microsoft.extensions.dependencyinjection.abstractions.8.0.0.nupkg.sha512",
-    "C:\\Users\\viniciusaraujo\\.nuget\\packages\\microsoft.extensions.options\\8.0.2\\microsoft.extensions.options.8.0.2.nupkg.sha512",
-    "C:\\Users\\viniciusaraujo\\.nuget\\packages\\microsoft.extensions.primitives\\8.0.0\\microsoft.extensions.primitives.8.0.0.nupkg.sha512"
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.0\\microsoft.extensions.dependencyinjection.abstractions.8.0.0.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.options\\8.0.2\\microsoft.extensions.options.8.0.2.nupkg.sha512",
+    "C:\\Users\\arauj\\.nuget\\packages\\microsoft.extensions.primitives\\8.0.0\\microsoft.extensions.primitives.8.0.0.nupkg.sha512"
   ],
   "logs": []
 }

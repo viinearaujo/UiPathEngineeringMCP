@@ -209,10 +209,7 @@
       },
       "UiPath.Engineering.Mcp.Core/1.0.0": {
         "runtime": {
-          "UiPath.Engineering.Mcp.Core.dll": {
-            "assemblyVersion": "1.0.0",
-            "fileVersion": "1.0.0.0"
-          }
+          "UiPath.Engineering.Mcp.Core.dll": {}
         }
       },
       "UiPath.Engineering.Mcp.Providers/1.0.0": {
@@ -221,10 +218,7 @@
           "UiPath.Engineering.Mcp.Core": "1.0.0"
         },
         "runtime": {
-          "UiPath.Engineering.Mcp.Providers.dll": {
-            "assemblyVersion": "1.0.0",
-            "fileVersion": "1.0.0.0"
-          }
+          "UiPath.Engineering.Mcp.Providers.dll": {}
         }
       }
     }

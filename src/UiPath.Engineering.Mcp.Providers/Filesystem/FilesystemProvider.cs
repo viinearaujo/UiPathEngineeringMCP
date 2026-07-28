@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Providers.Filesystem;
 
@@ -122,5 +123,65 @@ public sealed class FilesystemProvider : IFilesystemProvider
         }
     }
 
+    public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3)
+    {
+        var path = Path.GetFullPath(root);
+        return BuildTree(path, maxDepth, depth: 0);
+    }
+
+    private static DirectoryTreeNode BuildTree(string path, int maxDepth, int depth)
+    {
+        var node = new DirectoryTreeNode
+        {
+            Name = Path.GetFileName(path) is { Length: > 0 } name ? name : path,
+            Path = path,
+            IsDirectory = true
+        };
+
+        if (depth >= maxDepth)
+        {
+            return node;
+        }
+
+        IEnumerable<string> subDirs;
+        IEnumerable<string> files;
+        try
+        {
+            subDirs = Directory.EnumerateDirectories(path);
+            files = Directory.EnumerateFiles(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Inaccessible directory: return the node with no children rather than failing.
+            return node;
+        }
+
+        foreach (var sub in subDirs)
+        {
+            var subName = Path.GetFileName(sub);
+            if (IgnoredDirectories.Contains(subName, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            node.Children.Add(BuildTree(sub, maxDepth, depth + 1));
+        }
+
+        foreach (var file in files)
+        {
+            node.Children.Add(new DirectoryTreeNode
+            {
+                Name = Path.GetFileName(file),
+                Path = file,
+                IsDirectory = false
+            });
+        }
+
+        node.Children.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+        return node;
+    }
+
     public string ReadAllText(string filePath) => File.ReadAllText(filePath);
+
+    public DateTime GetLastWriteTimeUtc(string filePath) => File.GetLastWriteTimeUtc(filePath);
 }

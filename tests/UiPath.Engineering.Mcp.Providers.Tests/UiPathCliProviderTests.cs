@@ -27,6 +27,9 @@ public class UiPathCliProviderTests
         Assert.Equal("Validation completed.", result.Summary);
         Assert.Empty(result.Errors);
         Assert.Equal(string.Empty, result.Command);
+        Assert.False(result.Restore.Executed);
+        Assert.False(result.Analyze.Executed);
+        Assert.False(result.Pack.Executed);
     }
 
     [Fact]
@@ -35,11 +38,28 @@ public class UiPathCliProviderTests
         // A path that cannot be started -> provider must return a structured error, not throw.
         var sut = CreateSut(Path.Combine(Path.GetTempPath(), "definitely-not-a-real-uip-xyz.exe"));
 
-        var result = await sut.ValidateAsync("/some/project", restore: true, analyze: false, pack: false);
+        var result = await sut.ValidateAsync("/some/project", restore: true, analyze: true, pack: false);
 
         Assert.False(result.Success);
         Assert.NotEmpty(result.Errors);
         Assert.Contains(result.Errors, e => e.Contains("UiPath CLI", StringComparison.OrdinalIgnoreCase)
                                              || e.Contains("start", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ValidateAsync_FirstStepFails_LaterStepsAreMarkedNotExecuted()
+    {
+        // Restore fails (missing executable) -> analyze must be skipped, not silently reported as clean.
+        var sut = CreateSut(Path.Combine(Path.GetTempPath(), "definitely-not-a-real-uip-xyz.exe"));
+
+        var result = await sut.ValidateAsync("/some/project", restore: true, analyze: true, pack: true);
+
+        Assert.True(result.Restore.Executed);
+        Assert.False(result.Restore.Success);
+        Assert.NotEmpty(result.Restore.Errors);
+        Assert.False(result.Analyze.Executed);
+        Assert.False(result.Pack.Executed);
+        Assert.Empty(result.Analyze.Errors);
+        Assert.Empty(result.Pack.Errors);
     }
 }

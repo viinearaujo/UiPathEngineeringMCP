@@ -10,6 +10,7 @@ public class ProjectJsonParserTests
     private const string SampleProjectJson = """
     {
       "name": "testProcess",
+      "description": "Blank Process",
       "main": "Main.xaml",
       "dependencies": {
         "UiPath.System.Activities": "22.10.4",
@@ -31,7 +32,7 @@ public class ProjectJsonParserTests
     }
 
     [Fact]
-    public void Parse_ReadsProjectNameAndMainWorkflow()
+    public void Parse_ReadsProjectNameMainWorkflowAndDescription()
     {
         var (parser, _) = CreateSut();
 
@@ -39,6 +40,7 @@ public class ProjectJsonParserTests
 
         Assert.Equal("testProcess", model.ProjectName);
         Assert.Equal("Main.xaml", model.MainWorkflow);
+        Assert.Equal("Blank Process", model.Description);
         Assert.Equal(ProjectRoot, model.ProjectPath);
         Assert.Equal(ProjectJsonPath, model.ProjectJsonPath);
     }
@@ -56,17 +58,15 @@ public class ProjectJsonParserTests
     }
 
     [Fact]
-    public void Parse_ReturnsWorkflowFileNamesOnly()
+    public void Parse_MapsDependenciesToPackages()
     {
         var (parser, _) = CreateSut();
 
         var model = parser.Parse(ProjectJsonPath, ProjectRoot);
 
-        Assert.Equal(2, model.Workflows.Count);
-        Assert.Contains("Main.xaml", model.Workflows);
-        Assert.Contains("Process.xaml", model.Workflows);
-        // Full paths should have been reduced to file names.
-        Assert.DoesNotContain(model.Workflows, w => w.Contains('/'));
+        Assert.Equal(2, model.Packages.Count);
+        Assert.Contains(model.Packages, p => p.Id == "UiPath.System.Activities" && p.Version == "22.10.4");
+        Assert.Contains(model.Packages, p => p.Id == "UiPath.Excel.Activities" && p.Version == "[2.11.4]");
     }
 
     [Fact]
@@ -80,7 +80,9 @@ public class ProjectJsonParserTests
 
         Assert.Equal("Unknown", model.ProjectName);
         Assert.Null(model.MainWorkflow);
+        Assert.Null(model.Description);
         Assert.Empty(model.Dependencies);
+        Assert.Empty(model.Packages);
         Assert.Empty(model.Workflows);
     }
 }
