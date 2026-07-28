@@ -80,6 +80,39 @@ public class CachingProjectModelBuilderTests {
     }
 
     [Fact]
+    public async Task BuildAsync_ChangedCSharpFileTimestamp_TriggersRebuild() {
+        var fs = CreateFilesystem();
+        const string coded = "/projects/testProcess/InvoiceFlow.cs";
+        fs.CSharpFiles.Add(coded);
+        fs.WriteTimesUtc[coded] = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var inner = new CountingProjectModelBuilder();
+        var sut = new CachingProjectModelBuilder(inner, fs);
+
+        await sut.BuildAsync(Root);
+        fs.WriteTimesUtc[coded] = new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        var second = await sut.BuildAsync(Root);
+
+        Assert.Equal(2, inner.CallCount);
+        Assert.Equal("build-2", second.ProjectName);
+    }
+
+    [Fact]
+    public async Task BuildAsync_AddedCSharpFile_TriggersRebuild() {
+        var fs = CreateFilesystem();
+        var inner = new CountingProjectModelBuilder();
+        var sut = new CachingProjectModelBuilder(inner, fs);
+
+        await sut.BuildAsync(Root);
+
+        const string coded = "/projects/testProcess/Helpers.cs";
+        fs.CSharpFiles.Add(coded);
+        fs.WriteTimesUtc[coded] = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        await sut.BuildAsync(Root);
+
+        Assert.Equal(2, inner.CallCount);
+    }
+
+    [Fact]
     public async Task BuildAsync_DifferentProjectPaths_AreCachedIndependently() {
         var fs = CreateFilesystem();
         var inner = new CountingProjectModelBuilder();

@@ -6,6 +6,7 @@ public interface IFilesystemProvider {
     bool IsPathAllowed(string requestedPath);
     string? FindProjectJson(string projectPath);
     IReadOnlyList<string> FindXamlFiles(string projectPath);
+    IReadOnlyList<string> FindCSharpFiles(string projectPath);
     string ReadAllText(string filePath);
     DateTime GetLastWriteTimeUtc(string filePath);
     DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3);

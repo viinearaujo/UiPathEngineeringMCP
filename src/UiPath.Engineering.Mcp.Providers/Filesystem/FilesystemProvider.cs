@@ -65,7 +65,11 @@ public sealed class FilesystemProvider : IFilesystemProvider {
         return File.Exists(jsonPath) ? jsonPath : null;
     }
 
-    public IReadOnlyList<string> FindXamlFiles(string projectPath) {
+    public IReadOnlyList<string> FindXamlFiles(string projectPath) => FindFilesByExtension(projectPath, "*.xaml");
+
+    public IReadOnlyList<string> FindCSharpFiles(string projectPath) => FindFilesByExtension(projectPath, "*.cs");
+
+    private static IReadOnlyList<string> FindFilesByExtension(string projectPath, string pattern) {
         var path = Path.GetFullPath(projectPath);
         if (!Directory.Exists(path)) {
             return [];
@@ -73,13 +77,13 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
         // Enumerate manually so we can skip noise folders (bin/obj/.git/etc.) instead of
         // returning build artifacts and version-control internals as if they were workflows.
-        return EnumerateXaml(path).ToList();
+        return EnumerateFiles(path, pattern).ToList();
     }
 
-    private static IEnumerable<string> EnumerateXaml(string directory) {
+    private static IEnumerable<string> EnumerateFiles(string directory, string pattern) {
         IEnumerable<string> files;
         try {
-            files = Directory.EnumerateFiles(directory, "*.xaml");
+            files = Directory.EnumerateFiles(directory, pattern);
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             files = [];
         }
@@ -101,7 +105,7 @@ public sealed class FilesystemProvider : IFilesystemProvider {
                 continue;
             }
 
-            foreach (var file in EnumerateXaml(sub)) {
+            foreach (var file in EnumerateFiles(sub, pattern)) {
                 yield return file;
             }
         }

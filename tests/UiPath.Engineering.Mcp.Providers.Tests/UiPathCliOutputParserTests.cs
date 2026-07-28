@@ -84,4 +84,87 @@ public class UiPathCliOutputParserTests {
         Assert.Empty(errors);
         Assert.Empty(warnings);
     }
+
+    [Fact]
+    public void Parse_JsonEnvelopeSuccess_ProducesNoErrorsFromStdout() {
+        const string stdOut = """{"Result":"Success","Message":"Validation completed.","Data":{}}""";
+
+        var (errors, warnings) = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Parse_JsonEnvelopeFailure_CapturesMessageAndInstructions() {
+        const string stdOut = """{"Result":"ValidationError","ErrorCode":"invalid_argument","Message":"The project is invalid.","Instructions":"Fix project.json and retry."}""";
+
+        var (errors, warnings) = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        var error = Assert.Single(errors);
+        Assert.Equal("[validate] The project is invalid. Fix project.json and retry.", error);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Parse_JsonEnvelopeFailureWithoutMessage_FallsBackToResultName() {
+        const string stdOut = """{"Result":"ValidationError"}""";
+
+        var (errors, _) = UiPathCliOutputParser.Parse("build", stdOut, "");
+
+        var error = Assert.Single(errors);
+        Assert.Equal("[build] command failed with result 'ValidationError'.", error);
+    }
+
+    [Fact]
+    public void Parse_JsonEnvelopeSuccess_StillReportsStdErrLines() {
+        const string stdOut = """{"Result":"Success"}""";
+
+        var (errors, _) = UiPathCliOutputParser.Parse("validate", stdOut, "some stderr noise");
+
+        Assert.Single(errors);
+        Assert.Equal("[validate] some stderr noise", errors[0]);
+    }
+
+    [Fact]
+    public void Parse_JsonWithoutResultField_FallsBackToLineBasedParsing() {
+        const string stdOut = """{"ErrorCode":"invalid_argument","Message":"error NU1101: boom"}""";
+
+        var (errors, _) = UiPathCliOutputParser.Parse("build", stdOut, "");
+
+        // No "Result" string -> line-based heuristics run on the raw text.
+        Assert.Single(errors);
+        Assert.Contains("NU1101", errors[0]);
+    }
+
+    [Fact]
+    public void Parse_LowercaseSuccessFalse_CapturesErrorMessageOnce() {
+        const string stdOut = """{"success":false,"errorMessage":"IInteropProjectService.OpenProject threw: Helm requires a signed-in user."}""";
+
+        var (errors, _) = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        // Exactly one error: the extracted message, not the raw JSON blob plus a duplicate.
+        var error = Assert.Single(errors);
+        Assert.Equal("[validate] IInteropProjectService.OpenProject threw: Helm requires a signed-in user.", error);
+    }
+
+    [Fact]
+    public void Parse_LowercaseSuccessTrue_ProducesNoErrorsFromStdout() {
+        const string stdOut = """{"success":true,"errorMessage":null}""";
+
+        var (errors, warnings) = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Parse_LowercaseSuccessFalseWithoutErrorMessage_FallsBackToRawJson() {
+        const string stdOut = """{"success":false}""";
+
+        var (errors, _) = UiPathCliOutputParser.Parse("build", stdOut, "");
+
+        var error = Assert.Single(errors);
+        Assert.Equal("""[build] {"success":false}""", error);
+    }
 }

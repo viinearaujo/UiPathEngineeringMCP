@@ -2,6 +2,7 @@ using ModelContextProtocol.AspNetCore;
 using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Parsing;
+using UiPath.Engineering.Mcp.Core.Planning;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
 using UiPath.Engineering.Mcp.Providers.Git;
 using UiPath.Engineering.Mcp.Providers.GitLab;
@@ -28,6 +29,9 @@ builder.Services.AddSingleton<IProjectModelBuilder>(sp =>
     new CachingProjectModelBuilder(
         sp.GetRequiredService<ProjectModelBuilder>(),
         sp.GetRequiredService<IFilesystemProvider>()));
+
+// Implementation-plan persistence (docs/implementation-plan.json inside each project).
+builder.Services.AddSingleton<ImplementationPlanStore>();
 
 // Add health checks and MCP server.
 // IMPORTANT: the tool classes live in the UiPath.Engineering.Mcp.Tools assembly,

@@ -95,6 +95,46 @@ public class ProjectModelBuilderTests {
     }
 
     [Fact]
+    public async Task BuildAsync_ParsesCodedFilesIntoModel() {
+        var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
+        fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";
+        fs.XamlFiles.Add($"{Root}/Main.xaml");
+        fs.FileContents[$"{Root}/Main.xaml"] = MinimalXaml;
+        fs.CSharpFiles.Add($"{Root}/InvoiceFlow.cs");
+        fs.FileContents[$"{Root}/InvoiceFlow.cs"] = """
+            namespace testProcess
+            {
+                public class InvoiceFlow : CodedWorkflow
+                {
+                    [Workflow]
+                    public void Execute() { }
+                }
+            }
+            """;
+
+        var model = await new ProjectModelBuilder(fs).BuildAsync(Root);
+
+        var coded = Assert.Single(model.CodedWorkflows);
+        Assert.Equal("InvoiceFlow.cs", coded.FileName);
+        Assert.True(coded.IsCodedWorkflow);
+        Assert.Equal(["Execute"], coded.EntryMethods);
+        Assert.DoesNotContain(model.Risks, r => r.Contains("InvoiceFlow.cs"));
+    }
+
+    [Fact]
+    public async Task BuildAsync_UnreadableCodedFile_AddsRiskWithoutThrowing() {
+        var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
+        fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";
+        fs.CSharpFiles.Add($"{Root}/Gone.cs"); // no FileContents entry -> ReadAllText throws
+
+        var model = await new ProjectModelBuilder(fs).BuildAsync(Root);
+
+        var coded = Assert.Single(model.CodedWorkflows);
+        Assert.True(coded.HasParseError);
+        Assert.Contains(model.Risks, r => r.Contains("Gone.cs") && r.Contains("C# parse failure"));
+    }
+
+    [Fact]
     public async Task BuildAsync_PopulatesFolderStructureFromFilesystem() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
         fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";

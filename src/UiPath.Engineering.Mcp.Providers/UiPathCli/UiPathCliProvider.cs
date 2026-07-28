@@ -6,17 +6,25 @@ namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 public sealed class UiPathCliProvider : IUiPathCliProvider {
     private readonly UiPathCliOptions _options;
 
-    public UiPathCliProvider(IOptions<UiPathCliOptions> options) => _options = options.Value;
+    // Resolved once (the provider is a singleton); Lazy<> is thread-safe by default.
+    private readonly Lazy<CliExecutableResolver.LaunchSpec?> _launchSpec;
+
+    public UiPathCliProvider(IOptions<UiPathCliOptions> options) {
+        _options = options.Value;
+        _launchSpec = new Lazy<CliExecutableResolver.LaunchSpec?>(
+            () => CliExecutableResolver.Resolve(_options.ExecutablePath));
+    }
 
     public async Task<UiPathCliResult> ValidateAsync(
         string projectPath,
-        bool restore,
-        bool analyze,
+        bool validate,
+        bool build,
         bool pack,
         CancellationToken cancellationToken = default) {
-        // uip.exe accepts exactly ONE verb per invocation. Running "restore analyze pack"
-        // as a single command is invalid, so each requested step is executed sequentially
-        // and the results are aggregated into a single structured response.
+        // The npm CLI (uip 1.x, @uipath/cli) has no restore/analyze verbs: "rpa validate"
+        // returns project diagnostics, "rpa build" is the compile gate (NuGet included),
+        // "rpa pack" produces the package. One verb per invocation, so each requested step
+        // runs sequentially and the results are aggregated into a single structured response.
         var errors = new List<string>();
         var warnings = new List<string>();
         var rawOutput = new List<string>();
@@ -26,16 +34,16 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
 
         var steps = new List<(string Verb, bool Enabled)>
         {
-            ("restore", restore),
-            ("analyze", analyze),
+            ("validate", validate),
+            ("build", build),
             ("pack", pack)
         };
 
         // Steps that are not requested, or skipped after an earlier failure, keep
         // Executed = false so callers can distinguish "not run" from "ran clean".
         var stepResults = new Dictionary<string, CliStepResult> {
-            ["restore"] = new CliStepResult(),
-            ["analyze"] = new CliStepResult(),
+            ["validate"] = new CliStepResult(),
+            ["build"] = new CliStepResult(),
             ["pack"] = new CliStepResult()
         };
 
@@ -61,8 +69,8 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
 
             if (!stepResult.Success) {
                 overallSuccess = false;
-                // Stop the pipeline on the first failing step (e.g. a failed restore
-                // should not be followed by analyze/pack against a broken state).
+                // Stop the pipeline on the first failing step (e.g. a failed validate
+                // should not be followed by build/pack against a broken state).
                 break;
             }
         }
@@ -72,8 +80,8 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             Command = string.Join(" && ", executedCommands),
             ExitCode = lastExitCode,
             Summary = overallSuccess ? "Validation completed." : "Validation failed.",
-            Restore = stepResults["restore"],
-            Analyze = stepResults["analyze"],
+            Validate = stepResults["validate"],
+            Build = stepResults["build"],
             Pack = stepResults["pack"],
             Errors = errors,
             Warnings = warnings,
@@ -81,41 +89,54 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         };
     }
 
-    // Normalize input: uip.exe can take either a project directory or an explicit path
-    // to project.json. We pass the path explicitly and quote it so paths with spaces
+    // Command lines per the uip 1.x rpa surface: validate takes --project-dir, build and
+    // pack take the directory positionally; --output json so the output parser can read
+    // the structured response envelope. Paths are quoted so directories with spaces
     // (e.g. OneDrive folders) work.
-    private string BuildVerbArguments(string verb, string projectPath) {
-        var arguments = $"{verb} \"{projectPath}\"";
-
-        if (verb == "pack" && !string.IsNullOrWhiteSpace(_options.DefaultPackOutputDirectory)) {
-            arguments += $" --output \"{_options.DefaultPackOutputDirectory}\"";
-        }
-
-        return arguments;
-    }
+    internal static string BuildVerbArguments(string verb, string projectPath) => verb switch {
+        "validate" => $"rpa validate --project-dir \"{projectPath}\" --output json",
+        "build" => $"rpa build \"{projectPath}\" --output json",
+        _ => $"rpa pack \"{projectPath}\" --output json"
+    };
 
     public async Task<UiPathCliResult> RunAsync(
         string verb,
         string arguments,
         string? workingDirectory = null,
         CancellationToken cancellationToken = default) {
-        var command = $"{_options.ExecutablePath} {arguments}";
+        var spec = _launchSpec.Value;
+        if (spec is null) {
+            var baseName = Path.GetFileNameWithoutExtension(_options.ExecutablePath);
+            return new UiPathCliResult {
+                Success = false,
+                Command = $"{_options.ExecutablePath} {arguments}",
+                ExitCode = -1,
+                Summary = $"UiPath CLI ('{_options.ExecutablePath}') not found.",
+                Errors =
+                [
+                    $"The UiPath CLI ('{_options.ExecutablePath}') was not found on PATH (searched for {baseName}.exe, {baseName}.cmd, {baseName}.bat, {baseName}.ps1).",
+                    "Install it (npm install -g @uipath/cli) or set UiPathCli:ExecutablePath in appsettings.json."
+                ]
+            };
+        }
+
+        var command = $"{spec.ResolvedPath} {arguments}";
 
         var run = await ProcessRunner.RunAsync(
-            _options.ExecutablePath, arguments, workingDirectory,
+            spec.FileName, spec.ArgumentPrefix + arguments + spec.ArgumentSuffix, workingDirectory,
             TimeSpan.FromSeconds(_options.DefaultTimeoutSeconds), cancellationToken);
 
         if (run.StartError is not null) {
-            // Most common cause: uip.exe not found on PATH / wrong ExecutablePath.
+            // Most common cause: resolved shim or its host (cmd.exe/powershell.exe) failed to start.
             return new UiPathCliResult {
                 Success = false,
                 Command = command,
                 ExitCode = -1,
-                Summary = $"Failed to start '{_options.ExecutablePath}'.",
+                Summary = $"Failed to start '{spec.FileName}'.",
                 Errors =
                 [
-                    $"Could not start the UiPath CLI ('{_options.ExecutablePath}'): {run.StartError}",
-                    "Verify that uip.exe is installed and available on PATH, or set UiPathCli:ExecutablePath in appsettings.json."
+                    $"Could not start the UiPath CLI ('{spec.ResolvedPath}'): {run.StartError}",
+                    "Verify that the UiPath CLI ('uip') is installed (npm install -g @uipath/cli) and available on PATH, or set UiPathCli:ExecutablePath in appsettings.json."
                 ]
             };
         }

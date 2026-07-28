@@ -50,8 +50,8 @@ public class ValidateProjectToolTests {
             Result = new UiPathCliResult {
                 Success = false,
                 Summary = "Validation failed.",
-                Errors = ["[restore] boom"],
-                Warnings = ["[analyze] heads up"]
+                Errors = ["[validate] boom"],
+                Warnings = ["[build] heads up"]
             }
         };
         var tool = new ValidateProjectTool(cli, fs);
@@ -59,8 +59,8 @@ public class ValidateProjectToolTests {
         var result = await tool.ValidateProject("/projects/testProcess");
 
         Assert.Equal("error", result.Status);
-        Assert.Contains("[restore] boom", result.Errors);
-        Assert.Contains("[analyze] heads up", result.Warnings);
+        Assert.Contains("[validate] boom", result.Errors);
+        Assert.Contains("[build] heads up", result.Warnings);
     }
 
     private static JsonElement SerializeData(object? data) =>
@@ -73,8 +73,8 @@ public class ValidateProjectToolTests {
             Result = new UiPathCliResult {
                 Success = true,
                 Summary = "Validation completed.",
-                Restore = new CliStepResult { Executed = true, Success = true },
-                Analyze = new CliStepResult { Executed = true, Success = true, Warnings = ["[analyze] heads up"] }
+                Validate = new CliStepResult { Executed = true, Success = true },
+                Build = new CliStepResult { Executed = true, Success = true, Warnings = ["[build] heads up"] }
             }
         };
         var tool = new ValidateProjectTool(cli, fs);
@@ -83,9 +83,9 @@ public class ValidateProjectToolTests {
         var data = SerializeData(result.Data);
 
         Assert.True(data.GetProperty("success").GetBoolean());
-        Assert.True(data.GetProperty("restore").GetProperty("executed").GetBoolean());
-        Assert.True(data.GetProperty("restore").GetProperty("success").GetBoolean());
-        Assert.True(data.GetProperty("analyze").GetProperty("executed").GetBoolean());
+        Assert.True(data.GetProperty("validate").GetProperty("executed").GetBoolean());
+        Assert.True(data.GetProperty("validate").GetProperty("success").GetBoolean());
+        Assert.True(data.GetProperty("build").GetProperty("executed").GetBoolean());
         // pack was not executed -> distinguishable via executed:false, success:false.
         Assert.False(data.GetProperty("pack").GetProperty("executed").GetBoolean());
         Assert.False(data.GetProperty("pack").GetProperty("success").GetBoolean());
@@ -99,8 +99,8 @@ public class ValidateProjectToolTests {
             Result = new UiPathCliResult {
                 Success = false,
                 Summary = "Validation failed.",
-                Restore = new CliStepResult { Executed = true, Success = false, Errors = ["[restore] boom"] },
-                Errors = ["[restore] boom"]
+                Validate = new CliStepResult { Executed = true, Success = false, Errors = ["[validate] boom"] },
+                Errors = ["[validate] boom"]
             }
         };
         var tool = new ValidateProjectTool(cli, fs);
@@ -109,12 +109,23 @@ public class ValidateProjectToolTests {
         var data = SerializeData(result.Data);
 
         Assert.False(data.GetProperty("success").GetBoolean());
-        Assert.True(data.GetProperty("restore").GetProperty("executed").GetBoolean());
-        Assert.False(data.GetProperty("restore").GetProperty("success").GetBoolean());
-        Assert.False(data.GetProperty("analyze").GetProperty("executed").GetBoolean());
+        Assert.True(data.GetProperty("validate").GetProperty("executed").GetBoolean());
+        Assert.False(data.GetProperty("validate").GetProperty("success").GetBoolean());
+        Assert.False(data.GetProperty("build").GetProperty("executed").GetBoolean());
 
         var recommendations = data.GetProperty("recommendations");
         Assert.Single(recommendations.EnumerateArray());
-        Assert.Contains("restore", recommendations[0].GetString());
+        Assert.Contains("validate", recommendations[0].GetString());
+    }
+
+    [Fact]
+    public async Task ValidateProject_DefaultFlags_ValidateAndBuildOnly() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var cli = new FakeUiPathCliProvider();
+        var tool = new ValidateProjectTool(cli, fs);
+
+        await tool.ValidateProject("/projects/testProcess");
+
+        Assert.Equal((true, true, false), cli.LastValidateFlags);
     }
 }

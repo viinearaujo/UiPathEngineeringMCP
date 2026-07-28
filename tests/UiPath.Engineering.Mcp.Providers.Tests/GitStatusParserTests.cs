@@ -115,6 +115,7 @@ public class GitStatusParserTests {
         public bool IsPathAllowed(string requestedPath) => Allowed;
         public string? FindProjectJson(string projectPath) => null;
         public IReadOnlyList<string> FindXamlFiles(string projectPath) => [];
+        public IReadOnlyList<string> FindCSharpFiles(string projectPath) => [];
         public string ReadAllText(string filePath) => string.Empty;
         public DateTime GetLastWriteTimeUtc(string filePath) => DateTime.UnixEpoch;
         public UiPath.Engineering.Mcp.Core.Models.DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) => new();

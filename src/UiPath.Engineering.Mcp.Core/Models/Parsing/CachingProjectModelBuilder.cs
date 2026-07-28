@@ -7,8 +7,8 @@ namespace UiPath.Engineering.Mcp.Core.Parsing;
 /// <summary>
 /// Decorates an <see cref="IProjectModelBuilder"/> with a cross-request cache keyed by the
 /// normalized project path. Each call recomputes a cheap fingerprint of the project files
-/// (count of project.json + *.xaml files plus their newest write time) and only delegates to
-/// the inner builder when the fingerprint changed.
+/// (count of project.json + *.xaml + *.cs files plus their newest write time) and only
+/// delegates to the inner builder when the fingerprint changed.
 /// </summary>
 public sealed class CachingProjectModelBuilder : IProjectModelBuilder {
     private sealed record CacheEntry(UiPathProjectModel Model, long FileCount, long MaxWriteTicks);
@@ -56,7 +56,9 @@ public sealed class CachingProjectModelBuilder : IProjectModelBuilder {
         fileCount = 0;
         maxWriteTicks = 0;
         try {
-            var files = _filesystem.FindXamlFiles(projectPath).ToList();
+            var files = _filesystem.FindXamlFiles(projectPath)
+                .Concat(_filesystem.FindCSharpFiles(projectPath))
+                .ToList();
             var projectJson = _filesystem.FindProjectJson(projectPath);
             if (projectJson is not null) {
                 files.Add(projectJson);

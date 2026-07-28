@@ -97,6 +97,68 @@ public class ExplainWorkflowToolTests {
         Assert.Contains("Invalid XML at line 5.", result.Warnings[0]);
     }
 
+    [Theory]
+    [InlineData("InvoiceFlow")]
+    [InlineData("InvoiceFlow.cs")]
+    [InlineData("subfolder/InvoiceFlow.cs")]
+    public async Task ExplainWorkflow_CodedWorkflow_MatchedWithOrWithoutSuffixOrPath(string workflowFile) {
+        var model = BuildModel();
+        model.CodedWorkflows.Add(new CodedWorkflowModel {
+            FileName = "InvoiceFlow.cs",
+            FilePath = "/projects/testProcess/InvoiceFlow.cs",
+            ClassName = "InvoiceFlow",
+            Namespace = "testProcess",
+            IsCodedWorkflow = true,
+            EntryMethods = ["Execute"],
+            PublicMethods = ["CalculateTotal"]
+        });
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var tool = new ExplainWorkflowTool(fs, new FakeProjectModelBuilder { Model = model });
+
+        var result = await tool.ExplainWorkflow("/projects/testProcess", workflowFile);
+
+        Assert.Equal("success", result.Status);
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.Contains("\"className\":\"InvoiceFlow\"", json);
+        Assert.Contains("\"isCodedWorkflow\":true", json);
+        Assert.Contains("Execute", json);
+        Assert.Contains("CalculateTotal", json);
+    }
+
+    [Fact]
+    public async Task ExplainWorkflow_CodedWorkflowWithParseError_SurfacesWarningGracefully() {
+        var model = BuildModel();
+        model.CodedWorkflows.Add(new CodedWorkflowModel {
+            FileName = "Broken.cs",
+            HasParseError = true,
+            ParseError = "C# parse failure: no class declaration found."
+        });
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var tool = new ExplainWorkflowTool(fs, new FakeProjectModelBuilder { Model = model });
+
+        var result = await tool.ExplainWorkflow("/projects/testProcess", "Broken.cs");
+
+        Assert.Equal("success", result.Status);
+        Assert.Single(result.Warnings);
+        Assert.Contains("no class declaration found.", result.Warnings[0]);
+    }
+
+    [Fact]
+    public async Task ExplainWorkflow_NotFound_ListsBothXamlAndCodedFiles() {
+        var model = BuildModel();
+        model.CodedWorkflows.Add(new CodedWorkflowModel { FileName = "Helpers.cs" });
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var tool = new ExplainWorkflowTool(fs, new FakeProjectModelBuilder { Model = model });
+
+        var result = await tool.ExplainWorkflow("/projects/testProcess", "Missing.xaml");
+
+        Assert.Equal("error", result.Status);
+        Assert.Equal("Workflow 'Missing.xaml' not found.", result.Summary);
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.Contains("Main.xaml", json);
+        Assert.Contains("Helpers.cs", json);
+    }
+
     [Fact]
     public async Task ExplainWorkflow_WhenProjectJsonMissing_ReturnsStructuredError() {
         var fs = new FakeFilesystemProvider { Allowed = true };

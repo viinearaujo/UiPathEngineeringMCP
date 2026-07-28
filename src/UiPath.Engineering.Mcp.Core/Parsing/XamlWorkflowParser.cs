@@ -41,6 +41,10 @@ public sealed class XamlWorkflowParser {
             return model;
         }
 
+        // Studio surfaces a workflow-level annotation as the description of the workflow.
+        model.Description = doc.Root.Attributes()
+            .FirstOrDefault(a => a.Name.LocalName == "Annotation.AnnotationText")?.Value;
+
         ExtractArguments(doc, model);
         ExtractVariables(doc, model);
         Walk(doc.Root, 0, model);

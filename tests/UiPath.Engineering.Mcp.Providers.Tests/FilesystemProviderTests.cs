@@ -120,6 +120,39 @@ public class FilesystemProviderTests {
     }
 
     [Fact]
+    public void FindCSharpFiles_SkipsBinObjAndVcsFolders() {
+        using var temp = new TempDir();
+
+        // Real coded workflows / source files.
+        File.WriteAllText(Path.Combine(temp.Path, "InvoiceFlow.cs"), "// code");
+        var sub = Directory.CreateDirectory(Path.Combine(temp.Path, "Sub"));
+        File.WriteAllText(Path.Combine(sub.FullName, "Helpers.cs"), "// code");
+
+        // Noise that must be ignored.
+        var obj = Directory.CreateDirectory(Path.Combine(temp.Path, "obj"));
+        File.WriteAllText(Path.Combine(obj.FullName, "Generated.cs"), "// code");
+        var git = Directory.CreateDirectory(Path.Combine(temp.Path, ".git"));
+        File.WriteAllText(Path.Combine(git.FullName, "junk.cs"), "// code");
+
+        var sut = CreateSut(temp.Path);
+
+        var files = sut.FindCSharpFiles(temp.Path).Select(Path.GetFileName).ToList();
+
+        Assert.Equal(2, files.Count);
+        Assert.Contains("InvoiceFlow.cs", files);
+        Assert.Contains("Helpers.cs", files);
+        Assert.DoesNotContain("Generated.cs", files);
+        Assert.DoesNotContain("junk.cs", files);
+    }
+
+    [Fact]
+    public void FindCSharpFiles_NonExistentDirectory_ReturnsEmpty() {
+        var sut = CreateSut(Path.GetTempPath());
+
+        Assert.Empty(sut.FindCSharpFiles(Path.Combine(Path.GetTempPath(), "does-not-exist-xyz")));
+    }
+
+    [Fact]
     public void GetDirectoryTree_RespectsMaxDepth() {
         using var temp = new TempDir();
         var level1 = Directory.CreateDirectory(Path.Combine(temp.Path, "Level1"));

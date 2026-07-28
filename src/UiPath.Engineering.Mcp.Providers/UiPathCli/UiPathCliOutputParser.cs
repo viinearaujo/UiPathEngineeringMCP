@@ -1,13 +1,17 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 /// <summary>
-/// Parses uip.exe stdout/stderr into structured error/warning entries.
-/// Recognizes analyzer-style lines ("Error  ST-USG-010 : message") and
-/// compiler/NuGet-style lines ("error NU1101: message", "warning: message").
-/// Unrecognized lines mentioning a severity keyword are preserved verbatim;
-/// all non-empty stderr lines are treated as errors so nothing is lost.
+/// Parses uip stdout/stderr into structured error/warning entries.
+/// With --output json the CLI emits a response envelope on stdout
+/// ({"Result":"Success|...","Message":"...","Instructions":"..."}); that is read first.
+/// Otherwise falls back to line-based heuristics: analyzer-style lines
+/// ("Error  ST-USG-010 : message") and compiler/NuGet-style lines
+/// ("error NU1101: message", "warning: message"). Unrecognized lines mentioning a
+/// severity keyword are preserved verbatim; all non-empty stderr lines are treated
+/// as errors so nothing is lost.
 /// </summary>
 public static class UiPathCliOutputParser {
     // Analyzer-style lines, e.g. "Error  ST-USG-010 : Some message".
@@ -29,23 +33,25 @@ public static class UiPathCliOutputParser {
         var errors = new List<string>();
         var warnings = new List<string>();
 
-        foreach (var line in SplitLines(stdOut)) {
-            var analyzer = AnalyzerLine.Match(line);
-            if (analyzer.Success) {
-                Add(analyzer, line, verb, errors, warnings);
-                continue;
-            }
+        if (!TryParseJsonEnvelope(verb, stdOut, errors)) {
+            foreach (var line in SplitLines(stdOut)) {
+                var analyzer = AnalyzerLine.Match(line);
+                if (analyzer.Success) {
+                    Add(analyzer, line, verb, errors, warnings);
+                    continue;
+                }
 
-            var prefixed = SeverityPrefixLine.Match(line);
-            if (prefixed.Success) {
-                Add(prefixed, line, verb, errors, warnings);
-                continue;
-            }
+                var prefixed = SeverityPrefixLine.Match(line);
+                if (prefixed.Success) {
+                    Add(prefixed, line, verb, errors, warnings);
+                    continue;
+                }
 
-            var word = SeverityWord.Match(line);
-            if (word.Success) {
-                // Keep the full line so no information is lost.
-                Add(word.Groups["severity"].Value, $"[{verb}] {line}", errors, warnings);
+                var word = SeverityWord.Match(line);
+                if (word.Success) {
+                    // Keep the full line so no information is lost.
+                    Add(word.Groups["severity"].Value, $"[{verb}] {line}", errors, warnings);
+                }
             }
         }
 
@@ -55,6 +61,80 @@ public static class UiPathCliOutputParser {
 
         return (errors, warnings);
     }
+
+    // With --output json the CLI answers with a JSON payload instead of line-based
+    // diagnostics. Two shapes are recognized (in this order):
+    //   1. Response envelope {"Result":"Success|...",...}: "Success" means no errors;
+    //      anything else surfaces Message (and Instructions, when present) as one error.
+    //   2. Lowercase {"success":false,"errorMessage":"..."} (e.g. rpa validate interop
+    //      errors): success=true means no errors; false surfaces errorMessage as one error.
+    // Returns true when stdout matched one of the shapes; false falls back to line-based.
+    private static bool TryParseJsonEnvelope(string verb, string? stdOut, List<string> errors) {
+        if (string.IsNullOrWhiteSpace(stdOut)) {
+            return false;
+        }
+
+        try {
+            using var doc = JsonDocument.Parse(stdOut);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) {
+                return false;
+            }
+
+            if (root.TryGetProperty("Result", out var result) && result.ValueKind == JsonValueKind.String) {
+                if (string.Equals(result.GetString(), "Success", StringComparison.OrdinalIgnoreCase)) {
+                    return true;
+                }
+
+                var message = GetString(root, "Message");
+                var instructions = GetString(root, "Instructions");
+                var text = string.Join(" ", new[] { message, instructions }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                errors.Add(text.Length > 0
+                    ? $"[{verb}] {text}"
+                    : $"[{verb}] command failed with result '{result.GetString()}'.");
+                return true;
+            }
+
+            if (TryGetPropertyIgnoreCase(root, "success", out var success)
+                && success.ValueKind is JsonValueKind.True or JsonValueKind.False) {
+                if (success.GetBoolean()) {
+                    return true;
+                }
+
+                var text = GetStringIgnoreCase(root, "errorMessage")
+                    ?? GetStringIgnoreCase(root, "message")
+                    ?? stdOut.Trim();
+                errors.Add($"[{verb}] {text}");
+                return true;
+            }
+
+            return false;
+        } catch (JsonException) {
+            return false;
+        }
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement root, string name, out JsonElement value) {
+        foreach (var property in root.EnumerateObject()) {
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static string? GetStringIgnoreCase(JsonElement root, string property) =>
+        TryGetPropertyIgnoreCase(root, property, out var element) && element.ValueKind == JsonValueKind.String
+            ? element.GetString()
+            : null;
+
+    private static string? GetString(JsonElement root, string property) =>
+        root.TryGetProperty(property, out var element) && element.ValueKind == JsonValueKind.String
+            ? element.GetString()
+            : null;
 
     private static void Add(Match match, string line, string verb, List<string> errors, List<string> warnings) {
         var severity = match.Groups["severity"].Value;

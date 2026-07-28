@@ -1,7 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\UiPath.Engineering.Mcp.Core\UiPath.Engineering.Mcp.Core.csproj" />
+    <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Providers.Tests" />
   </ItemGroup>
 
   <ItemGroup>

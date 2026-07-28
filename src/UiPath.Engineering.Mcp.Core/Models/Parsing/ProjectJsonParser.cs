@@ -16,6 +16,18 @@ public sealed class ProjectJsonParser {
 
         var mainWorkflow = root.TryGetProperty("main", out var main) ? main.GetString() : null;
 
+        var entryPoints = new List<string>();
+        if (root.TryGetProperty("entryPoints", out var eps) && eps.ValueKind == JsonValueKind.Array) {
+            foreach (var ep in eps.EnumerateArray()) {
+                var filePath = ep.ValueKind == JsonValueKind.Object && ep.TryGetProperty("filePath", out var fp)
+                    ? fp.GetString()
+                    : null;
+                if (!string.IsNullOrWhiteSpace(filePath)) {
+                    entryPoints.Add(filePath);
+                }
+            }
+        }
+
         var dependencies = new List<string>();
         var packages = new List<PackageModel>();
         if (root.TryGetProperty("dependencies", out var deps) && deps.ValueKind == JsonValueKind.Object) {
@@ -31,6 +43,7 @@ public sealed class ProjectJsonParser {
             ProjectJsonPath = projectJsonPath,
             ProjectName = root.TryGetProperty("name", out var name) ? name.GetString() ?? "Unknown" : "Unknown",
             MainWorkflow = mainWorkflow,
+            EntryPoints = entryPoints,
             Description = root.TryGetProperty("description", out var desc) ? desc.GetString() : null,
             Dependencies = dependencies,
             Packages = packages

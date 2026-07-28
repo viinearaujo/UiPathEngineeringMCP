@@ -9,6 +9,7 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
     private readonly IFilesystemProvider _filesystem;
     private readonly ProjectJsonParser _parser;
     private readonly XamlWorkflowParser _xamlParser = new();
+    private readonly CodedSourceFileParser _codedParser = new();
 
     public ProjectModelBuilder(IFilesystemProvider filesystem) {
         _filesystem = filesystem;
@@ -24,6 +25,7 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
         var model = _parser.Parse(projectJsonPath, projectPath);
         TryReadReadme(model, projectPath);
         ParseWorkflows(model, projectPath, cancellationToken);
+        ParseCodedFiles(model, projectPath, cancellationToken);
         model.FolderStructure = _filesystem.GetDirectoryTree(projectPath);
         AppendDependencyGraphRisks(model);
         return Task.FromResult(model);
@@ -67,6 +69,31 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
 
             if (workflow.HasParseError && workflow.ParseError is not null) {
                 model.Risks.Add($"{fileName}: {workflow.ParseError}");
+            }
+        }
+    }
+
+    private void ParseCodedFiles(UiPathProjectModel model, string projectPath, CancellationToken cancellationToken) {
+        foreach (var csPath in _filesystem.FindCSharpFiles(projectPath)) {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var fileName = Path.GetFileName(csPath) ?? csPath;
+            CodedWorkflowModel coded;
+            try {
+                coded = _codedParser.Parse(fileName, csPath, _filesystem.ReadAllText(csPath));
+            } catch (Exception ex) when (ex is FileNotFoundException or IOException or UnauthorizedAccessException) {
+                coded = new CodedWorkflowModel {
+                    FileName = fileName,
+                    FilePath = csPath,
+                    HasParseError = true,
+                    ParseError = $"C# parse failure: could not read file ({ex.Message})"
+                };
+            }
+
+            model.CodedWorkflows.Add(coded);
+
+            if (coded.HasParseError && coded.ParseError is not null) {
+                model.Risks.Add($"{fileName}: {coded.ParseError}");
             }
         }
     }

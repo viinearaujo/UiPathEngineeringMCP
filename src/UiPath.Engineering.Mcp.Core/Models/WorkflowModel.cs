@@ -4,6 +4,7 @@ public sealed class WorkflowModel {
     public string FileName { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
     public bool IsMain { get; set; }
+    public string? Description { get; set; }
     public bool HasParseError { get; set; }
     public string? ParseError { get; set; }
     public List<ArgumentModel> Arguments { get; init; } = [];

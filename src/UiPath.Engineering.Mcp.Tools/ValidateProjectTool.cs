@@ -17,11 +17,11 @@ public sealed class ValidateProjectTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool, Description("Validates a UiPath project using the UiPath CLI and returns structured restore, analyze, pack, error, and warning data.")]
+    [McpServerTool, Description("Validates a UiPath project using the UiPath CLI (uip rpa validate / build / pack) and returns structured per-step results plus recommendations.")]
     public async Task<ToolResult> ValidateProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
-        [Description("Run restore?")] bool restore = true,
-        [Description("Run analyze?")] bool analyze = true,
+        [Description("Run validate (project diagnostics)?")] bool validate = true,
+        [Description("Run build (compile gate)?")] bool build = true,
         [Description("Run pack?")] bool pack = false,
         CancellationToken cancellationToken = default) {
 
@@ -31,15 +31,15 @@ public sealed class ValidateProjectTool {
             return guardFailure;
         }
 
-        var cliResult = await _cliProvider.ValidateAsync(projectPath, restore, analyze, pack, cancellationToken);
+        var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, cancellationToken);
 
         return new ToolResult {
             Status = cliResult.Success ? "success" : "error",
             Summary = cliResult.Summary,
             Data = new {
                 success = cliResult.Success,
-                restore = StepData(cliResult.Restore),
-                analyze = StepData(cliResult.Analyze),
+                validate = StepData(cliResult.Validate),
+                build = StepData(cliResult.Build),
                 pack = StepData(cliResult.Pack),
                 errors = cliResult.Errors,
                 warnings = cliResult.Warnings,
@@ -60,8 +60,8 @@ public sealed class ValidateProjectTool {
 
     private static List<string> BuildRecommendations(UiPathCliResult result) {
         var recommendations = new List<string>();
-        AddRecommendation(recommendations, "restore", result.Restore);
-        AddRecommendation(recommendations, "analyze", result.Analyze);
+        AddRecommendation(recommendations, "validate", result.Validate);
+        AddRecommendation(recommendations, "build", result.Build);
         AddRecommendation(recommendations, "pack", result.Pack);
         return recommendations;
     }

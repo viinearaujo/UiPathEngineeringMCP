@@ -4,13 +4,13 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Eleven tools are implemented:
+This is the **MVP / POC (v4)** milestone. Sixteen tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
-| `analyze_project` | Parses `project.json` + deep-parses every `.xaml` workflow (arguments, variables, activities, try/catch, invokes, log messages) and returns structured JSON with risks (cycles, orphan workflows). |
-| `validate_project` | Runs `uip.exe` (`restore` / `analyze` / `pack`) and returns structured per-step results (`executed`/`success`/`errors`/`warnings` each) plus recommendations. |
-| `explain_workflow` | Returns the structured breakdown of a single workflow: arguments, variables, activity outline, exception handlers, invoked workflows, log messages. |
+| `analyze_project` | Parses `project.json` + deep-parses every `.xaml` workflow (arguments, variables, activities, try/catch, invokes, log messages) and every `.cs` coded workflow/source file (namespace, class, `[Workflow]` entry methods, public methods) and returns structured JSON with risks (cycles, orphan workflows). |
+| `validate_project` | Runs the UiPath CLI (`uip rpa validate` / `build` / `pack` with `--output json`) and returns structured per-step results (`executed`/`success`/`errors`/`warnings` each) plus recommendations. |
+| `explain_workflow` | Returns the structured breakdown of a single workflow: arguments, variables, activity outline, exception handlers, invoked workflows, log messages. Coded (`.cs`) workflows return class name, namespace, entry methods, and public methods. |
 | `generate_documentation` | Returns deterministic structured documentation data for the whole project: metadata, per-workflow summaries, dependency graph (edges, cycles, orphans), risks. |
 | `search_repository` | Searches GitLab issues for the configured project (requires the `GitLab` config section; token is never returned). |
 | `create_work_items` | Creates GitLab issues/work items from a list of `{ title, description, labels? }`, returning created IDs/URLs and per-item failures. |
@@ -19,6 +19,11 @@ This is the **MVP / POC (v4)** milestone. Eleven tools are implemented:
 | `write_workflow_file` | Creates or fully overwrites a `.xaml` or `.cs` file inside a project with caller-supplied content (extension allowlist + path-escape guard). |
 | `edit_workflow_activity` | Activity-level XAML editing: insert an activity fragment into a container, replace, or remove an activity located by `DisplayName` (optional `activityType` disambiguation). Whitespace-preserving; fragments understand unprefixed WF activities plus the `ui:`/`x:` prefixes. |
 | `add_coded_workflow` | Adds a Coded Workflow `.cs` (inherits `CodedWorkflow`, `[Workflow]` entry method, registered in `project.json` `entryPoints`) or a plain coded source file. |
+| `create_implementation_plan` | Creates an implementation plan for a project from a goal + ordered task list; writes `docs/implementation-plan.json` (source of truth) plus a Markdown mirror. Refuses to overwrite unless `overwrite: true`. |
+| `update_plan_task` | Updates a single plan task's status (`pending`/`in_progress`/`done`/`blocked`) and optional notes. |
+| `get_implementation_plan` | Returns the project's implementation plan with derived per-status task counts. |
+| `analyze_project_gaps` | Deterministic hygiene gap analysis over the project model (entry point, orphan workflows, exception handling, logging, descriptions, tests, unresolved invokes) plus plan cross-checks; each gap names the MCP tool that fixes it. |
+| `verify_work` | Rebuilds the model, runs CLI validation (`uip rpa validate` + `build`), checks expected/planned files exist, and marks the given plan tasks `done` or `blocked` accordingly (statuses untouched when the CLI cannot run). |
 
 ---
 
@@ -26,7 +31,10 @@ This is the **MVP / POC (v4)** milestone. Eleven tools are implemented:
 
 - Windows
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- UiPath CLI (`uip.exe`) on `PATH` (only required for `validate_project`)
+- UiPath CLI (`uip`) on `PATH` (only required for `validate_project`): `npm install -g @uipath/cli`.
+  The npm install puts `uip.cmd` / `uip.ps1` shims on `PATH` (no `uip.exe`); the server
+  probes `PATH` for `uip.exe` → `uip.cmd` → `uip.bat` → `uip.ps1` and launches script
+  shims through `cmd.exe` / `powershell.exe` automatically.
 - UiPath CLI RPA tool for `create_project`: `uip tools install @uipath/rpa-tool`
   (the file-authoring tools `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`,
   `edit_workflow_activity` work without any CLI)
@@ -138,7 +146,32 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `edit_workflow_activity`
+- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `edit_workflow_activity`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`
+
+---
+
+## 5a. Autonomous loop (Copilot-driven)
+
+The plan/gap/verify tools let Copilot run a full autonomous development loop. The
+server stays passive — it answers one deterministic tool call at a time and never
+runs a loop itself; Copilot drives the sequence inside a single request, and only
+when you ask for it:
+
+```
+analyze_project → analyze_project_gaps → create_implementation_plan
+   → (authoring tools implement each task) → verify_work → repeat
+```
+
+Example prompt:
+
+> Analyze my UiPath project, create an implementation plan for the remaining work,
+> implement it task by task, and verify each step with `verify_work`.
+
+Plans live inside the target project at `docs/implementation-plan.json` (source of
+truth) plus a regenerated Markdown mirror. `verify_work` re-validates via the UiPath
+CLI and marks plan tasks `done`/`blocked`; when the CLI cannot run it reports the
+error and leaves task statuses unchanged. Stopping the loop = ending the Copilot
+request.
 
 ---
 
@@ -152,9 +185,9 @@ The `tests/` folder contains three xUnit projects:
 
 | Project | Covers |
 |---------|--------|
-| `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder`, `XamlWorkflowParser` (arguments/variables/try-catch/invokes/log messages, malformed xaml), `DependencyGraphBuilder` (chains, cycles, orphans), XAML/C# file templates (x:Class naming, namespace sanitization). |
-| `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing (root/child allowed, sibling-prefix & unrelated rejected), filesystem write guards (writes outside allowed roots throw), `.xaml` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree` (depth/ignore/missing dir), `UiPathCliOutputParser` (analyzer/NuGet/fallback formats), `UiPathCliProvider` per-step results and missing-`uip.exe` error, `GitStatusParser` (porcelain/ahead-behind/not-a-repo), `GitLabProvider` (search/create, token never surfaced). |
-| `UiPath.Engineering.Mcp.Tools.Tests` | All eleven tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing (insert first/last, replace, remove, ambiguous-target and invalid-fragment errors), and structured error propagation (no raw exceptions). |
+| `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder` (xaml + coded `.cs` files), `XamlWorkflowParser` (arguments/variables/try-catch/invokes/log messages, malformed xaml), `CodedSourceFileParser` (namespace/class/`[Workflow]`/public methods, malformed input), `DependencyGraphBuilder` (chains, cycles, orphans), XAML/C# file templates (x:Class naming, namespace sanitization), `ImplementationPlanStore` round-trip, `ProjectGapAnalyzer` rule coverage. |
+| `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing (root/child allowed, sibling-prefix & unrelated rejected), filesystem write guards (writes outside allowed roots throw), `.xaml`/`.cs` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree` (depth/ignore/missing dir), `CliExecutableResolver` (explicit path, exe/cmd/ps1 priority, extension fallback), `UiPathCliOutputParser` (analyzer/NuGet/fallback formats), `UiPathCliProvider` per-step results and CLI-not-found error, `GitStatusParser` (porcelain/ahead-behind/not-a-repo), `GitLabProvider` (search/create, token never surfaced). |
+| `UiPath.Engineering.Mcp.Tools.Tests` | All sixteen tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing (insert first/last, replace, remove, ambiguous-target and invalid-fragment errors), plan create/update/get (overwrite guard, unknown task, no-plan), gap-analysis shape, `verify_work` CLI success/failure/unavailable branches with task status transitions, and structured error propagation (no raw exceptions). |
 
 Tests use hand-written fakes (no Moq) so there are no extra runtime dependencies.
 
@@ -185,10 +218,13 @@ src/
 - Publish/deploy to Orchestrator (`uip solution publish/deploy`) is a separate future phase.
 
 - `analyze_project` deep-parses `.xaml` workflows (arguments, variables, activity outline,
-  try/catch, invokes, log messages), includes the project folder structure, and flags
-  cycles/orphan workflows as risks. Project models are cached across requests
-  (fingerprint: file count + newest write time).
-- `validate_project` requires `uip.exe`; on non-Windows / missing CLI it returns a
+  try/catch, invokes, log messages) and `.cs` coded workflows/source files (namespace,
+  class, `[Workflow]` entry methods, public methods), includes the project folder
+  structure, and flags cycles/orphan workflows as risks. Project models are cached
+  across requests (fingerprint: file count + newest write time, xaml + cs + project.json).
+- `validate_project` requires the UiPath CLI (`uip`, npm `@uipath/cli`); the executable
+  is resolved on PATH among `uip.exe`/`uip.cmd`/`uip.bat`/`uip.ps1` (script shims are
+  launched via `cmd.exe`/`powershell.exe`). On non-Windows / missing CLI it returns a
   structured error instead of crashing.
 - The `/sse` path serves the **Streamable HTTP** transport (not legacy SSE); the name is
   kept only to match the Copilot registration docs.
