@@ -13,20 +13,22 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider
     public string? ProjectJson { get; set; } = "/projects/testProcess/project.json";
     public string ProjectJsonContent { get; set; } = string.Empty;
     public HashSet<string> ExistingFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> FileContents { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> Writes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> CreatedDirectories { get; } = [];
 
     public bool IsPathAllowed(string requestedPath) => Allowed;
     public string? FindProjectJson(string projectPath) => ProjectJson;
     public IReadOnlyList<string> FindXamlFiles(string projectPath) => [];
-    public string ReadAllText(string filePath) => ProjectJsonContent;
+    public string ReadAllText(string filePath) =>
+        FileContents.TryGetValue(filePath, out var content) ? content : ProjectJsonContent;
     public DateTime GetLastWriteTimeUtc(string filePath) => DateTime.UnixEpoch;
     public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) =>
         new() { Name = Path.GetFileName(root) ?? root, Path = root, IsDirectory = true };
 
     public void CreateDirectory(string path) => CreatedDirectories.Add(path);
     public void WriteAllText(string filePath, string content) => Writes[filePath] = content;
-    public bool FileExists(string path) => ExistingFiles.Contains(path) || Writes.ContainsKey(path);
+    public bool FileExists(string path) => ExistingFiles.Contains(path) || FileContents.ContainsKey(path) || Writes.ContainsKey(path);
 }
 
 internal sealed class FakeProjectModelBuilder : IProjectModelBuilder

@@ -4,7 +4,7 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Ten tools are implemented:
+This is the **MVP / POC (v4)** milestone. Eleven tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
@@ -17,6 +17,7 @@ This is the **MVP / POC (v4)** milestone. Ten tools are implemented:
 | `create_project` | Scaffolds a new UiPath project via `uip rpa init` (requires the UiPath CLI RPA tool installed on the host). Detects the documented partial-success case by checking the created files. |
 | `add_xaml_workflow` | Adds a blank `.xaml` workflow to an existing project, with the correct `x:Class` naming (relative path, separators → underscores). |
 | `write_workflow_file` | Creates or fully overwrites a `.xaml` or `.cs` file inside a project with caller-supplied content (extension allowlist + path-escape guard). |
+| `edit_workflow_activity` | Activity-level XAML editing: insert an activity fragment into a container, replace, or remove an activity located by `DisplayName` (optional `activityType` disambiguation). Whitespace-preserving; fragments understand unprefixed WF activities plus the `ui:`/`x:` prefixes. |
 | `add_coded_workflow` | Adds a Coded Workflow `.cs` (inherits `CodedWorkflow`, `[Workflow]` entry method, registered in `project.json` `entryPoints`) or a plain coded source file. |
 
 ---
@@ -27,8 +28,8 @@ This is the **MVP / POC (v4)** milestone. Ten tools are implemented:
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 - UiPath CLI (`uip.exe`) on `PATH` (only required for `validate_project`)
 - UiPath CLI RPA tool for `create_project`: `uip tools install @uipath/rpa-tool`
-  (the file-authoring tools `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`
-  work without any CLI)
+  (the file-authoring tools `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`,
+  `edit_workflow_activity` work without any CLI)
 - [Microsoft Dev Tunnel CLI](https://learn.microsoft.com/azure/developer/dev-tunnels/get-started) (`devtunnel`)
 
 Check your toolchain:
@@ -137,7 +138,7 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`
+- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `edit_workflow_activity`
 
 ---
 
@@ -153,7 +154,7 @@ The `tests/` folder contains three xUnit projects:
 |---------|--------|
 | `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder`, `XamlWorkflowParser` (arguments/variables/try-catch/invokes/log messages, malformed xaml), `DependencyGraphBuilder` (chains, cycles, orphans), XAML/C# file templates (x:Class naming, namespace sanitization). |
 | `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing (root/child allowed, sibling-prefix & unrelated rejected), filesystem write guards (writes outside allowed roots throw), `.xaml` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree` (depth/ignore/missing dir), `UiPathCliOutputParser` (analyzer/NuGet/fallback formats), `UiPathCliProvider` per-step results and missing-`uip.exe` error, `GitStatusParser` (porcelain/ahead-behind/not-a-repo), `GitLabProvider` (search/create, token never surfaced). |
-| `UiPath.Engineering.Mcp.Tools.Tests` | All ten tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, and structured error propagation (no raw exceptions). |
+| `UiPath.Engineering.Mcp.Tools.Tests` | All eleven tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing (insert first/last, replace, remove, ambiguous-target and invalid-fragment errors), and structured error propagation (no raw exceptions). |
 
 Tests use hand-written fakes (no Moq) so there are no extra runtime dependencies.
 
@@ -170,12 +171,15 @@ src/
 ## 7. Notes / known limitations (v4)
 
 - Authoring tools (`create_project`, `add_xaml_workflow`, `write_workflow_file`,
-  `add_coded_workflow`) **write to disk** — they are restricted to `Projects:AllowedRoots`,
-  reject path escapes outside the target project, and only accept `.xaml`/`.cs` content.
+  `add_coded_workflow`, `edit_workflow_activity`) **write to disk** — they are restricted to
+  `Projects:AllowedRoots`, reject path escapes outside the target project, and only accept
+  `.xaml`/`.cs` content.
   `create_project` delegates scaffolding to `uip rpa init` (files are never hand-written);
   `uip rpa init`'s documented partial-success case is detected by checking the created files.
-- `write_workflow_file` is whole-file create/overwrite; activity-level XAML editing is
-  intentionally not in scope.
+- `edit_workflow_activity` matches the target activity by `DisplayName` (exact, case-sensitive);
+  when several activities share a name the edit is rejected and `activityType` must be passed
+  to disambiguate. Inserted fragments are re-indented to match the container; the rest of the
+  file is preserved byte-for-byte.
 - `add_coded_workflow` registers coded workflows in `project.json` `entryPoints` with a
   generated GUID; plain source files are deliberately not registered.
 - Publish/deploy to Orchestrator (`uip solution publish/deploy`) is a separate future phase.
