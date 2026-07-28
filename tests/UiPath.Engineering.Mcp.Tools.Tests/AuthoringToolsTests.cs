@@ -3,66 +3,60 @@ using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
-public class AddXamlWorkflowToolTests
-{
+public class AddXamlWorkflowToolTests {
     private const string ProjectPath = "/projects/testProcess";
 
     [Fact]
-    public async Task AddXamlWorkflow_WhenPathNotAllowed_ReturnsError()
-    {
+    public void AddXamlWorkflow_WhenPathNotAllowed_ReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = false };
         var tool = new AddXamlWorkflowTool(fs);
 
-        var result = await tool.AddXamlWorkflow(ProjectPath, "SendEmail.xaml");
+        var result = tool.AddXamlWorkflow(ProjectPath, "SendEmail.xaml");
 
         Assert.Equal("error", result.Status);
     }
 
     [Fact]
-    public async Task AddXamlWorkflow_WhenProjectJsonMissing_ReturnsError()
-    {
+    public void AddXamlWorkflow_WhenProjectJsonMissing_ReturnsError() {
         var fs = new FakeFilesystemProvider { ProjectJson = null };
         var tool = new AddXamlWorkflowTool(fs);
 
-        var result = await tool.AddXamlWorkflow(ProjectPath, "SendEmail.xaml");
+        var result = tool.AddXamlWorkflow(ProjectPath, "SendEmail.xaml");
 
         Assert.Equal("error", result.Status);
         Assert.Contains("project.json", result.Summary);
     }
 
     [Fact]
-    public async Task AddXamlWorkflow_WhenFileExists_ReturnsError()
-    {
+    public void AddXamlWorkflow_WhenFileExists_ReturnsError() {
         var fs = new FakeFilesystemProvider();
         var tool = new AddXamlWorkflowTool(fs);
         var existing = Path.Combine(Path.GetFullPath(ProjectPath), "SendEmail.xaml");
         fs.ExistingFiles.Add(existing);
 
-        var result = await tool.AddXamlWorkflow(ProjectPath, "SendEmail.xaml");
+        var result = tool.AddXamlWorkflow(ProjectPath, "SendEmail.xaml");
 
         Assert.Equal("error", result.Status);
         Assert.Contains("already exists", result.Summary);
     }
 
     [Fact]
-    public async Task AddXamlWorkflow_WhenPathEscapesProject_ReturnsError()
-    {
+    public void AddXamlWorkflow_WhenPathEscapesProject_ReturnsError() {
         var fs = new FakeFilesystemProvider();
         var tool = new AddXamlWorkflowTool(fs);
 
-        var result = await tool.AddXamlWorkflow(ProjectPath, "../Outside.xaml");
+        var result = tool.AddXamlWorkflow(ProjectPath, "../Outside.xaml");
 
         Assert.Equal("error", result.Status);
         Assert.Empty(fs.Writes);
     }
 
     [Fact]
-    public async Task AddXamlWorkflow_HappyPath_WritesTemplateWithUnderscoredClass()
-    {
+    public void AddXamlWorkflow_HappyPath_WritesTemplateWithUnderscoredClass() {
         var fs = new FakeFilesystemProvider();
         var tool = new AddXamlWorkflowTool(fs);
 
-        var result = await tool.AddXamlWorkflow(ProjectPath, "Workflows/SendEmail.xaml");
+        var result = tool.AddXamlWorkflow(ProjectPath, "Workflows/SendEmail.xaml");
 
         Assert.Equal("success", result.Status);
         var target = Path.Combine(Path.GetFullPath(ProjectPath), "Workflows", "SendEmail.xaml");
@@ -71,41 +65,37 @@ public class AddXamlWorkflowToolTests
     }
 }
 
-public class WriteWorkflowFileToolTests
-{
+public class WriteWorkflowFileToolTests {
     private const string ProjectPath = "/projects/testProcess";
 
     [Fact]
-    public async Task WriteWorkflowFile_RejectsDisallowedExtension()
-    {
+    public void WriteWorkflowFile_RejectsDisallowedExtension() {
         var fs = new FakeFilesystemProvider();
         var tool = new WriteWorkflowFileTool(fs);
 
-        var result = await tool.WriteWorkflowFile(ProjectPath, "notes.txt", "hello");
+        var result = tool.WriteWorkflowFile(ProjectPath, "notes.txt", "hello");
 
         Assert.Equal("error", result.Status);
         Assert.Empty(fs.Writes);
     }
 
     [Fact]
-    public async Task WriteWorkflowFile_RejectsPathOutsideProject()
-    {
+    public void WriteWorkflowFile_RejectsPathOutsideProject() {
         var fs = new FakeFilesystemProvider();
         var tool = new WriteWorkflowFileTool(fs);
 
-        var result = await tool.WriteWorkflowFile(ProjectPath, "../../evil.xaml", "<x/>");
+        var result = tool.WriteWorkflowFile(ProjectPath, "../../evil.xaml", "<x/>");
 
         Assert.Equal("error", result.Status);
         Assert.Empty(fs.Writes);
     }
 
     [Fact]
-    public async Task WriteWorkflowFile_CreatesNewFile()
-    {
+    public void WriteWorkflowFile_CreatesNewFile() {
         var fs = new FakeFilesystemProvider();
         var tool = new WriteWorkflowFileTool(fs);
 
-        var result = await tool.WriteWorkflowFile(ProjectPath, "Main.xaml", "<Activity />");
+        var result = tool.WriteWorkflowFile(ProjectPath, "Main.xaml", "<Activity />");
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
@@ -114,14 +104,13 @@ public class WriteWorkflowFileToolTests
     }
 
     [Fact]
-    public async Task WriteWorkflowFile_OverwritesExistingFile()
-    {
+    public void WriteWorkflowFile_OverwritesExistingFile() {
         var fs = new FakeFilesystemProvider();
         var target = Path.Combine(Path.GetFullPath(ProjectPath), "Main.xaml");
         fs.ExistingFiles.Add(target);
         var tool = new WriteWorkflowFileTool(fs);
 
-        var result = await tool.WriteWorkflowFile(ProjectPath, "Main.xaml", "<Activity />");
+        var result = tool.WriteWorkflowFile(ProjectPath, "Main.xaml", "<Activity />");
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
@@ -129,43 +118,38 @@ public class WriteWorkflowFileToolTests
     }
 }
 
-public class CreateCodedWorkflowToolTests
-{
+public class CreateCodedWorkflowToolTests {
     private const string ProjectPath = "/projects/testProcess";
 
-    private static FakeFilesystemProvider CreateFs() => new()
-    {
+    private static FakeFilesystemProvider CreateFs() => new() {
         ProjectJsonContent = """{ "name": "My Test-Project", "entryPoints": [] }"""
     };
 
     [Fact]
-    public async Task AddCodedWorkflow_RejectsInvalidClassName()
-    {
+    public void AddCodedWorkflow_RejectsInvalidClassName() {
         var tool = new CreateCodedWorkflowTool(CreateFs());
 
-        var result = await tool.AddCodedWorkflow(ProjectPath, "9Invalid");
+        var result = tool.AddCodedWorkflow(ProjectPath, "9Invalid");
 
         Assert.Equal("error", result.Status);
     }
 
     [Fact]
-    public async Task AddCodedWorkflow_RejectsInvalidKind()
-    {
+    public void AddCodedWorkflow_RejectsInvalidKind() {
         var tool = new CreateCodedWorkflowTool(CreateFs());
 
-        var result = await tool.AddCodedWorkflow(ProjectPath, "Flow", "bogus");
+        var result = tool.AddCodedWorkflow(ProjectPath, "Flow", "bogus");
 
         Assert.Equal("error", result.Status);
     }
 
     [Fact]
-    public async Task AddCodedWorkflow_Workflow_WritesFileAndRegistersEntryPoint()
-    {
+    public void AddCodedWorkflow_Workflow_WritesFileAndRegistersEntryPoint() {
         var fs = CreateFs();
         var tool = new CreateCodedWorkflowTool(fs);
         var projectJsonPath = fs.ProjectJson!;
 
-        var result = await tool.AddCodedWorkflow(ProjectPath, "InvoiceFlow");
+        var result = tool.AddCodedWorkflow(ProjectPath, "InvoiceFlow");
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
@@ -182,12 +166,11 @@ public class CreateCodedWorkflowToolTests
     }
 
     [Fact]
-    public async Task AddCodedWorkflow_Source_DoesNotTouchProjectJson()
-    {
+    public void AddCodedWorkflow_Source_DoesNotTouchProjectJson() {
         var fs = CreateFs();
         var tool = new CreateCodedWorkflowTool(fs);
 
-        var result = await tool.AddCodedWorkflow(ProjectPath, "Helpers", "source");
+        var result = tool.AddCodedWorkflow(ProjectPath, "Helpers", "source");
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
@@ -198,11 +181,9 @@ public class CreateCodedWorkflowToolTests
     }
 }
 
-public class CreateProjectToolTests
-{
+public class CreateProjectToolTests {
     [Fact]
-    public async Task CreateProject_WhenParentNotAllowed_ReturnsError()
-    {
+    public async Task CreateProject_WhenParentNotAllowed_ReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = false };
         var tool = new CreateProjectTool(new FakeUiPathCliProvider(), fs);
 
@@ -212,8 +193,7 @@ public class CreateProjectToolTests
     }
 
     [Fact]
-    public async Task CreateProject_PassesExpectedArgumentsToCli()
-    {
+    public async Task CreateProject_PassesExpectedArgumentsToCli() {
         var fs = new FakeFilesystemProvider();
         var cli = new FakeUiPathCliProvider();
         var tool = new CreateProjectTool(cli, fs);
@@ -229,11 +209,9 @@ public class CreateProjectToolTests
     }
 
     [Fact]
-    public async Task CreateProject_CliFailsAndNoProjectCreated_ReturnsError()
-    {
+    public async Task CreateProject_CliFailsAndNoProjectCreated_ReturnsError() {
         var fs = new FakeFilesystemProvider { ProjectJson = null };
-        var cli = new FakeUiPathCliProvider
-        {
+        var cli = new FakeUiPathCliProvider {
             RunResult = new UiPathCliResult { Success = false, Errors = ["unknown command: rpa"] }
         };
         var tool = new CreateProjectTool(cli, fs);
@@ -245,11 +223,9 @@ public class CreateProjectToolTests
     }
 
     [Fact]
-    public async Task CreateProject_CliFailsButProjectJsonExists_ReportsPartialSuccess()
-    {
+    public async Task CreateProject_CliFailsButProjectJsonExists_ReportsPartialSuccess() {
         var fs = new FakeFilesystemProvider(); // ProjectJson set -> artifact exists
-        var cli = new FakeUiPathCliProvider
-        {
+        var cli = new FakeUiPathCliProvider {
             RunResult = new UiPathCliResult { Success = false, Errors = ["some warning-level failure"] }
         };
         var tool = new CreateProjectTool(cli, fs);

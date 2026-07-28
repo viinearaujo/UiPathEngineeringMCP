@@ -3,8 +3,7 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
-public class XamlActivityEditorTests
-{
+public class XamlActivityEditorTests {
     private const string Workflow = """
         <Activity x:Class="Main"
           xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
@@ -17,8 +16,7 @@ public class XamlActivityEditorTests
         """;
 
     [Fact]
-    public void Insert_AppendsFragmentInsideTargetSequence()
-    {
+    public void Insert_AppendsFragmentInsideTargetSequence() {
         var result = XamlActivityEditor.Edit(Workflow, XamlActivityEditor.Insert, "Main",
             fragment: "<ui:LogMessage DisplayName=\"End\" Message=\"done\" />");
 
@@ -31,8 +29,7 @@ public class XamlActivityEditorTests
     }
 
     [Fact]
-    public void Insert_WithPositionFirst_PrependsFragment()
-    {
+    public void Insert_WithPositionFirst_PrependsFragment() {
         var result = XamlActivityEditor.Edit(Workflow, XamlActivityEditor.Insert, "Main",
             fragment: "<ui:LogMessage DisplayName=\"End\" Message=\"done\" />",
             position: XamlActivityEditor.First);
@@ -44,20 +41,19 @@ public class XamlActivityEditorTests
     }
 
     [Fact]
-    public void Insert_UnprefixedFragment_StaysInDefaultNamespace()
-    {
+    public void Insert_UnprefixedFragment_StaysInDefaultNamespace() {
         var result = XamlActivityEditor.Edit(Workflow, XamlActivityEditor.Insert, "Main",
             fragment: "<WriteLine DisplayName=\"Say\" Text=\"hi\" />");
 
         Assert.True(result.Success, result.Error);
         Assert.Contains("<WriteLine DisplayName=\"Say\"", result.UpdatedContent);
+        var updated = result.UpdatedContent!;
         Assert.DoesNotContain("xmlns=\"http://schemas.microsoft.com/netfx/2009/xaml/activities\"",
-            result.UpdatedContent[(result.UpdatedContent.IndexOf("<WriteLine", StringComparison.Ordinal))..]);
+            updated[updated.IndexOf("<WriteLine", StringComparison.Ordinal)..]);
     }
 
     [Fact]
-    public void Replace_SwapsActivityKeepingSurroundings()
-    {
+    public void Replace_SwapsActivityKeepingSurroundings() {
         var result = XamlActivityEditor.Edit(Workflow, XamlActivityEditor.Replace, "Start",
             fragment: "<ui:Comment DisplayName=\"Note\" Text=\"rework\" />");
 
@@ -68,8 +64,7 @@ public class XamlActivityEditorTests
     }
 
     [Fact]
-    public void Remove_DropsActivityWithoutBlankLine()
-    {
+    public void Remove_DropsActivityWithoutBlankLine() {
         var result = XamlActivityEditor.Edit(Workflow, XamlActivityEditor.Remove, "Start");
 
         Assert.True(result.Success, result.Error);
@@ -78,8 +73,7 @@ public class XamlActivityEditorTests
     }
 
     [Fact]
-    public void Insert_WhenTargetLacksUiPrefix_DeclaresItOnFragment()
-    {
+    public void Insert_WhenTargetLacksUiPrefix_DeclaresItOnFragment() {
         // Real UiPath files often declare namespaces only at point of use, not at the root.
         const string noUiRoot = """
             <Activity x:Class="Main"
@@ -100,8 +94,7 @@ public class XamlActivityEditorTests
     }
 
     [Fact]
-    public void Edit_WhenDisplayNameNotFound_ReturnsError()
-    {
+    public void Edit_WhenDisplayNameNotFound_ReturnsError() {
         var result = XamlActivityEditor.Edit(Workflow, XamlActivityEditor.Remove, "Missing");
 
         Assert.False(result.Success);
@@ -109,8 +102,7 @@ public class XamlActivityEditorTests
     }
 
     [Fact]
-    public void Edit_WhenMultipleMatches_ReturnsError()
-    {
+    public void Edit_WhenMultipleMatches_ReturnsError() {
         var duplicated = Workflow.Replace(
             "<ui:LogMessage DisplayName=\"Start\" Message=\"begin\" />",
             "<ui:LogMessage DisplayName=\"Start\" Message=\"a\" />\n    <ui:LogMessage DisplayName=\"Start\" Message=\"b\" />");
@@ -122,8 +114,7 @@ public class XamlActivityEditorTests
     }
 
     [Fact]
-    public void Edit_ActivityTypeNarrowsMatches()
-    {
+    public void Edit_ActivityTypeNarrowsMatches() {
         const string ambiguous = """
             <Activity x:Class="Main"
               xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
@@ -144,8 +135,7 @@ public class XamlActivityEditorTests
     }
 
     [Fact]
-    public void Edit_WhenFragmentInvalid_ReturnsError()
-    {
+    public void Edit_WhenFragmentInvalid_ReturnsError() {
         var result = XamlActivityEditor.Edit(Workflow, XamlActivityEditor.Insert, "Main",
             fragment: "<ui:LogMessage");
 
@@ -154,8 +144,7 @@ public class XamlActivityEditorTests
     }
 
     [Fact]
-    public void Edit_WhenWorkflowMalformed_ReturnsError()
-    {
+    public void Edit_WhenWorkflowMalformed_ReturnsError() {
         var result = XamlActivityEditor.Edit("<Activity", XamlActivityEditor.Remove, "Start");
 
         Assert.False(result.Success);
@@ -163,8 +152,7 @@ public class XamlActivityEditorTests
     }
 }
 
-public class EditWorkflowActivityToolTests
-{
+public class EditWorkflowActivityToolTests {
     private const string ProjectPath = "/projects/testProcess";
 
     private const string Workflow = """
@@ -176,8 +164,7 @@ public class EditWorkflowActivityToolTests
         </Activity>
         """;
 
-    private static (FakeFilesystemProvider Fs, EditWorkflowActivityTool Tool, string Target) CreateTool()
-    {
+    private static (FakeFilesystemProvider Fs, EditWorkflowActivityTool Tool, string Target) CreateTool() {
         var fs = new FakeFilesystemProvider();
         var target = Path.Combine(Path.GetFullPath(ProjectPath), "Main.xaml");
         fs.FileContents[target] = Workflow;
@@ -185,66 +172,60 @@ public class EditWorkflowActivityToolTests
     }
 
     [Fact]
-    public async Task EditWorkflowActivity_WhenPathNotAllowed_ReturnsError()
-    {
+    public void EditWorkflowActivity_WhenPathNotAllowed_ReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = false };
         var tool = new EditWorkflowActivityTool(fs);
 
-        var result = await tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "remove", "Main");
+        var result = tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "remove", "Main");
 
         Assert.Equal("error", result.Status);
     }
 
     [Fact]
-    public async Task EditWorkflowActivity_RejectsNonXamlFile()
-    {
+    public void EditWorkflowActivity_RejectsNonXamlFile() {
         var (_, tool, _) = CreateTool();
 
-        var result = await tool.EditWorkflowActivity(ProjectPath, "Main.cs", "remove", "Main");
+        var result = tool.EditWorkflowActivity(ProjectPath, "Main.cs", "remove", "Main");
 
         Assert.Equal("error", result.Status);
         Assert.Contains(".xaml", result.Summary);
     }
 
     [Fact]
-    public async Task EditWorkflowActivity_RejectsUnknownOperation()
-    {
+    public void EditWorkflowActivity_RejectsUnknownOperation() {
         var (_, tool, _) = CreateTool();
 
-        var result = await tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "mutate", "Main");
+        var result = tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "mutate", "Main");
 
         Assert.Equal("error", result.Status);
         Assert.Contains("insert, replace, or remove", result.Summary);
     }
 
     [Fact]
-    public async Task EditWorkflowActivity_WhenFileMissing_ReturnsError()
-    {
+    public void EditWorkflowActivity_WhenFileMissing_ReturnsError() {
         var fs = new FakeFilesystemProvider();
         var tool = new EditWorkflowActivityTool(fs);
 
-        var result = await tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "remove", "Main");
+        var result = tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "remove", "Main");
 
         Assert.Equal("error", result.Status);
         Assert.Contains("not found", result.Summary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task EditWorkflowActivity_RejectsPathOutsideProject()
-    {
+    public void EditWorkflowActivity_RejectsPathOutsideProject() {
         var (_, tool, target) = CreateTool();
 
-        var result = await tool.EditWorkflowActivity(ProjectPath, "../Main.xaml", "remove", "Main");
+        var result = tool.EditWorkflowActivity(ProjectPath, "../Main.xaml", "remove", "Main");
 
         Assert.Equal("error", result.Status);
     }
 
     [Fact]
-    public async Task EditWorkflowActivity_InsertIntoEmptySequence_WritesUpdatedFile()
-    {
+    public void EditWorkflowActivity_InsertIntoEmptySequence_WritesUpdatedFile() {
         var (fs, tool, target) = CreateTool();
 
-        var result = await tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "insert", "Main",
+        var result = tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "insert", "Main",
             fragment: "<ui:LogMessage DisplayName=\"Hello\" Message=\"hi\" />");
         var data = JsonSerializer.SerializeToElement(result.Data);
 
@@ -258,11 +239,10 @@ public class EditWorkflowActivityToolTests
     }
 
     [Fact]
-    public async Task EditWorkflowActivity_WhenTargetNotFound_DoesNotWrite()
-    {
+    public void EditWorkflowActivity_WhenTargetNotFound_DoesNotWrite() {
         var (fs, tool, target) = CreateTool();
 
-        var result = await tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "remove", "Missing");
+        var result = tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "remove", "Missing");
 
         Assert.Equal("error", result.Status);
         Assert.False(fs.Writes.ContainsKey(target));

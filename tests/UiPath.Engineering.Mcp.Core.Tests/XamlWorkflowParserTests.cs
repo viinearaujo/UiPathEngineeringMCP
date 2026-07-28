@@ -2,8 +2,7 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
-public class XamlWorkflowParserTests
-{
+public class XamlWorkflowParserTests {
     private const string SampleXaml = """
     <Activity x:Class="Main"
               xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
@@ -41,8 +40,7 @@ public class XamlWorkflowParserTests
         new XamlWorkflowParser().Parse("Main.xaml", "/proj/Main.xaml", xaml);
 
     [Fact]
-    public void Parse_ExtractsArgumentsWithDirectionAndType()
-    {
+    public void Parse_ExtractsArgumentsWithDirectionAndType() {
         var model = Parse();
 
         Assert.Equal(3, model.Arguments.Count);
@@ -52,8 +50,7 @@ public class XamlWorkflowParserTests
     }
 
     [Fact]
-    public void Parse_ExtractsVariablesWithTypeScopeAndDefault()
-    {
+    public void Parse_ExtractsVariablesWithTypeScopeAndDefault() {
         var model = Parse();
 
         Assert.Equal(2, model.Variables.Count);
@@ -65,8 +62,7 @@ public class XamlWorkflowParserTests
     }
 
     [Fact]
-    public void Parse_BuildsFlattenedActivityOutlineWithDepth()
-    {
+    public void Parse_BuildsFlattenedActivityOutlineWithDepth() {
         var model = Parse();
 
         Assert.Contains(model.Activities, a => a.Type == "Sequence" && a.DisplayName == "Main Sequence" && a.Depth == 0);
@@ -78,8 +74,7 @@ public class XamlWorkflowParserTests
     }
 
     [Fact]
-    public void Parse_ExtractsTryCatchWithCaughtExceptionTypes()
-    {
+    public void Parse_ExtractsTryCatchWithCaughtExceptionTypes() {
         var model = Parse();
 
         var handler = Assert.Single(model.ExceptionHandlers);
@@ -89,8 +84,7 @@ public class XamlWorkflowParserTests
     }
 
     [Fact]
-    public void Parse_ExtractsInvokeWorkflowFileTarget()
-    {
+    public void Parse_ExtractsInvokeWorkflowFileTarget() {
         var model = Parse();
 
         var invoke = Assert.Single(model.InvokeWorkflows);
@@ -100,8 +94,7 @@ public class XamlWorkflowParserTests
     }
 
     [Fact]
-    public void Parse_ExtractsLogMessages()
-    {
+    public void Parse_ExtractsLogMessages() {
         var model = Parse();
 
         Assert.Equal(2, model.LogMessages.Count);
@@ -110,8 +103,7 @@ public class XamlWorkflowParserTests
     }
 
     [Fact]
-    public void Parse_MalformedXaml_ReturnsParseErrorInsteadOfThrowing()
-    {
+    public void Parse_MalformedXaml_ReturnsParseErrorInsteadOfThrowing() {
         var model = Parse("<Activity><Sequence></Activity>");
 
         Assert.True(model.HasParseError);

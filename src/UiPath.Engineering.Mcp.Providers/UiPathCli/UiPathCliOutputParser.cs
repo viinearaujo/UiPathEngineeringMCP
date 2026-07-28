@@ -9,8 +9,7 @@ namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 /// Unrecognized lines mentioning a severity keyword are preserved verbatim;
 /// all non-empty stderr lines are treated as errors so nothing is lost.
 /// </summary>
-public static class UiPathCliOutputParser
-{
+public static class UiPathCliOutputParser {
     // Analyzer-style lines, e.g. "Error  ST-USG-010 : Some message".
     private static readonly Regex AnalyzerLine = new(
         @"^\s*(?<severity>Error|Warning)\s+(?<code>[A-Z]{2,}(?:-[A-Z0-9]+)+)\s*:\s*(?<message>.*)$",
@@ -26,45 +25,38 @@ public static class UiPathCliOutputParser
         @"\b(?<severity>errors?|warnings?)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public static (List<string> Errors, List<string> Warnings) Parse(string verb, string? stdOut, string? stdErr)
-    {
+    public static (List<string> Errors, List<string> Warnings) Parse(string verb, string? stdOut, string? stdErr) {
         var errors = new List<string>();
         var warnings = new List<string>();
 
-        foreach (var line in SplitLines(stdOut))
-        {
+        foreach (var line in SplitLines(stdOut)) {
             var analyzer = AnalyzerLine.Match(line);
-            if (analyzer.Success)
-            {
+            if (analyzer.Success) {
                 Add(analyzer, line, verb, errors, warnings);
                 continue;
             }
 
             var prefixed = SeverityPrefixLine.Match(line);
-            if (prefixed.Success)
-            {
+            if (prefixed.Success) {
                 Add(prefixed, line, verb, errors, warnings);
                 continue;
             }
 
             var word = SeverityWord.Match(line);
-            if (word.Success)
-            {
+            if (word.Success) {
                 // Keep the full line so no information is lost.
                 Add(word.Groups["severity"].Value, $"[{verb}] {line}", errors, warnings);
             }
         }
 
-        foreach (var line in SplitLines(stdErr))
-        {
+        foreach (var line in SplitLines(stdErr)) {
             errors.Add($"[{verb}] {line}");
         }
 
         return (errors, warnings);
     }
 
-    private static void Add(Match match, string line, string verb, List<string> errors, List<string> warnings)
-    {
+    private static void Add(Match match, string line, string verb, List<string> errors, List<string> warnings) {
         var severity = match.Groups["severity"].Value;
         var code = match.Groups["code"].Value;
         var message = match.Groups["message"].Value.Trim();
@@ -76,14 +68,10 @@ public static class UiPathCliOutputParser
         Add(severity, entry, errors, warnings);
     }
 
-    private static void Add(string severity, string entry, List<string> errors, List<string> warnings)
-    {
-        if (severity.StartsWith("warn", StringComparison.OrdinalIgnoreCase))
-        {
+    private static void Add(string severity, string entry, List<string> errors, List<string> warnings) {
+        if (severity.StartsWith("warn", StringComparison.OrdinalIgnoreCase)) {
             warnings.Add(entry);
-        }
-        else
-        {
+        } else {
             errors.Add(entry);
         }
     }

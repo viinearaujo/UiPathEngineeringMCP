@@ -2,8 +2,7 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
-public class ProjectModelBuilderTests
-{
+public class ProjectModelBuilderTests {
     private const string Root = "/projects/testProcess";
     private const string Json = "/projects/testProcess/project.json";
 
@@ -18,8 +17,7 @@ public class ProjectModelBuilderTests
     """;
 
     [Fact]
-    public async Task BuildAsync_WhenProjectJsonMissing_ThrowsFileNotFound()
-    {
+    public async Task BuildAsync_WhenProjectJsonMissing_ThrowsFileNotFound() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = null };
         var builder = new ProjectModelBuilder(fs);
 
@@ -28,8 +26,7 @@ public class ProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_WhenProjectJsonPresent_ReturnsPopulatedModel()
-    {
+    public async Task BuildAsync_WhenProjectJsonPresent_ReturnsPopulatedModel() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
         fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";
         fs.XamlFiles.Add($"{Root}/Main.xaml");
@@ -48,8 +45,7 @@ public class ProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_ReadsReadmeSummaryWhenPresent()
-    {
+    public async Task BuildAsync_ReadsReadmeSummaryWhenPresent() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
         fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";
         fs.FileContents[$"{Root}/README.md"] = "  # Test Process\n\nDoes things.  ";
@@ -60,8 +56,7 @@ public class ProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_MissingReadme_LeavesSummaryNull()
-    {
+    public async Task BuildAsync_MissingReadme_LeavesSummaryNull() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
         fs.FileContents[Json] = """{ "name": "testProcess" }""";
 
@@ -71,8 +66,7 @@ public class ProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_ReportsOrphanAndUnresolvedInvokeRisks()
-    {
+    public async Task BuildAsync_ReportsOrphanAndUnresolvedInvokeRisks() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
         fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";
         fs.XamlFiles.Add($"{Root}/Main.xaml");
@@ -87,8 +81,7 @@ public class ProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_MalformedXaml_AddsRiskWithoutThrowing()
-    {
+    public async Task BuildAsync_MalformedXaml_AddsRiskWithoutThrowing() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
         fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";
         fs.XamlFiles.Add($"{Root}/Main.xaml");
@@ -102,12 +95,10 @@ public class ProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_PopulatesFolderStructureFromFilesystem()
-    {
+    public async Task BuildAsync_PopulatesFolderStructureFromFilesystem() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
         fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";
-        fs.DirectoryTree = new UiPath.Engineering.Mcp.Core.Models.DirectoryTreeNode
-        {
+        fs.DirectoryTree = new UiPath.Engineering.Mcp.Core.Models.DirectoryTreeNode {
             Name = "testProcess",
             Path = Root,
             IsDirectory = true,

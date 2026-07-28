@@ -1,7 +1,6 @@
 namespace UiPath.Engineering.Mcp.Core.Models;
 
-public sealed class WorkflowModel
-{
+public sealed class WorkflowModel {
     public string FileName { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
     public bool IsMain { get; set; }

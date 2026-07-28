@@ -1,11 +1,9 @@
-using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using UiPath.Engineering.Mcp.Core.Configuration;
 
 namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 
-public sealed class UiPathCliProvider : IUiPathCliProvider
-{
+public sealed class UiPathCliProvider : IUiPathCliProvider {
     private readonly UiPathCliOptions _options;
 
     public UiPathCliProvider(IOptions<UiPathCliOptions> options) => _options = options.Value;
@@ -15,8 +13,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
         bool restore,
         bool analyze,
         bool pack,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default) {
         // uip.exe accepts exactly ONE verb per invocation. Running "restore analyze pack"
         // as a single command is invalid, so each requested step is executed sequentially
         // and the results are aggregated into a single structured response.
@@ -36,24 +33,20 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
 
         // Steps that are not requested, or skipped after an earlier failure, keep
         // Executed = false so callers can distinguish "not run" from "ran clean".
-        var stepResults = new Dictionary<string, CliStepResult>
-        {
+        var stepResults = new Dictionary<string, CliStepResult> {
             ["restore"] = new CliStepResult(),
             ["analyze"] = new CliStepResult(),
             ["pack"] = new CliStepResult()
         };
 
-        foreach (var (verb, enabled) in steps)
-        {
-            if (!enabled)
-            {
+        foreach (var (verb, enabled) in steps) {
+            if (!enabled) {
                 continue;
             }
 
             var stepResult = await RunAsync(verb, BuildVerbArguments(verb, projectPath), null, cancellationToken);
 
-            stepResults[verb] = new CliStepResult
-            {
+            stepResults[verb] = new CliStepResult {
                 Executed = true,
                 Success = stepResult.Success,
                 Errors = stepResult.Errors,
@@ -66,8 +59,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
             rawOutput.AddRange(stepResult.RawOutputLines);
             lastExitCode = stepResult.ExitCode;
 
-            if (!stepResult.Success)
-            {
+            if (!stepResult.Success) {
                 overallSuccess = false;
                 // Stop the pipeline on the first failing step (e.g. a failed restore
                 // should not be followed by analyze/pack against a broken state).
@@ -75,8 +67,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
             }
         }
 
-        return new UiPathCliResult
-        {
+        return new UiPathCliResult {
             Success = overallSuccess,
             Command = string.Join(" && ", executedCommands),
             ExitCode = lastExitCode,
@@ -93,12 +84,10 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
     // Normalize input: uip.exe can take either a project directory or an explicit path
     // to project.json. We pass the path explicitly and quote it so paths with spaces
     // (e.g. OneDrive folders) work.
-    private string BuildVerbArguments(string verb, string projectPath)
-    {
+    private string BuildVerbArguments(string verb, string projectPath) {
         var arguments = $"{verb} \"{projectPath}\"";
 
-        if (verb == "pack" && !string.IsNullOrWhiteSpace(_options.DefaultPackOutputDirectory))
-        {
+        if (verb == "pack" && !string.IsNullOrWhiteSpace(_options.DefaultPackOutputDirectory)) {
             arguments += $" --output \"{_options.DefaultPackOutputDirectory}\"";
         }
 
@@ -109,130 +98,60 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
         string verb,
         string arguments,
         string? workingDirectory = null,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default) {
         var command = $"{_options.ExecutablePath} {arguments}";
 
-        var psi = new ProcessStartInfo
-        {
-            FileName = _options.ExecutablePath,
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = workingDirectory ?? string.Empty
-        };
+        var run = await ProcessRunner.RunAsync(
+            _options.ExecutablePath, arguments, workingDirectory,
+            TimeSpan.FromSeconds(_options.DefaultTimeoutSeconds), cancellationToken);
 
-        Process? process;
-        try
-        {
-            process = Process.Start(psi);
-        }
-        catch (Exception ex)
-        {
+        if (run.StartError is not null) {
             // Most common cause: uip.exe not found on PATH / wrong ExecutablePath.
-            return new UiPathCliResult
-            {
+            return new UiPathCliResult {
                 Success = false,
                 Command = command,
                 ExitCode = -1,
                 Summary = $"Failed to start '{_options.ExecutablePath}'.",
                 Errors =
                 [
-                    $"Could not start the UiPath CLI ('{_options.ExecutablePath}'): {ex.Message}",
+                    $"Could not start the UiPath CLI ('{_options.ExecutablePath}'): {run.StartError}",
                     "Verify that uip.exe is installed and available on PATH, or set UiPathCli:ExecutablePath in appsettings.json."
                 ]
             };
         }
 
-        if (process is null)
-        {
-            return new UiPathCliResult
-            {
+        if (run.TimedOut) {
+            return new UiPathCliResult {
                 Success = false,
                 Command = command,
                 ExitCode = -1,
-                Summary = $"Failed to start '{_options.ExecutablePath}'.",
-                Errors = ["Process start returned null."]
+                Summary = $"CLI '{verb}' execution timed out.",
+                Errors = [$"'{verb}' exceeded the {_options.DefaultTimeoutSeconds}s timeout."]
             };
         }
 
-        using (process)
-        using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-        {
-            cts.CancelAfter(TimeSpan.FromSeconds(_options.DefaultTimeoutSeconds));
+        var (errors, warnings) = UiPathCliOutputParser.Parse(verb, run.StdOut, run.StdErr);
 
-            // Read streams concurrently with the wait to avoid deadlocks on large output.
-            var stdOutTask = process.StandardOutput.ReadToEndAsync();
-            var stdErrTask = process.StandardError.ReadToEndAsync();
-
-            try
-            {
-                await process.WaitForExitAsync(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                TryKill(process);
-                return new UiPathCliResult
-                {
-                    Success = false,
-                    Command = command,
-                    ExitCode = -1,
-                    Summary = $"CLI '{verb}' execution timed out.",
-                    Errors = [$"'{verb}' exceeded the {_options.DefaultTimeoutSeconds}s timeout."]
-                };
-            }
-
-            var stdOut = await stdOutTask;
-            var stdErr = await stdErrTask;
-
-            var (errors, warnings) = UiPathCliOutputParser.Parse(verb, stdOut, stdErr);
-
-            if (process.ExitCode != 0 && errors.Count == 0)
-            {
-                // The process failed without emitting any recognizable error line;
-                // still surface a minimal reason instead of a bare "failed".
-                errors.Add($"[{verb}] '{verb}' exited with code {process.ExitCode}.");
-            }
-
-            var rawLines = new List<string>();
-            if (_options.IncludeRawOutput)
-            {
-                rawLines.AddRange(SplitLines(stdOut));
-                rawLines.AddRange(SplitLines(stdErr));
-            }
-
-            return new UiPathCliResult
-            {
-                Success = process.ExitCode == 0,
-                Command = command,
-                ExitCode = process.ExitCode,
-                Summary = process.ExitCode == 0 ? $"'{verb}' completed." : $"'{verb}' failed.",
-                Errors = errors,
-                Warnings = warnings,
-                RawOutputLines = rawLines
-            };
+        if (run.ExitCode != 0 && errors.Count == 0) {
+            // The process failed without emitting any recognizable error line;
+            // still surface a minimal reason instead of a bare "failed".
+            errors.Add($"[{verb}] '{verb}' exited with code {run.ExitCode}.");
         }
-    }
 
-    private static IEnumerable<string> SplitLines(string text) =>
-        string.IsNullOrEmpty(text)
-            ? []
-            : text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var rawLines = new List<string>();
+        if (_options.IncludeRawOutput) {
+            rawLines.AddRange(ProcessRunner.SplitLines(run.StdOut));
+            rawLines.AddRange(ProcessRunner.SplitLines(run.StdErr));
+        }
 
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch
-        {
-            // Best-effort cleanup; nothing actionable if the kill fails.
-        }
+        return new UiPathCliResult {
+            Success = run.ExitCode == 0,
+            Command = command,
+            ExitCode = run.ExitCode,
+            Summary = run.ExitCode == 0 ? $"'{verb}' completed." : $"'{verb}' failed.",
+            Errors = errors,
+            Warnings = warnings,
+            RawOutputLines = rawLines
+        };
     }
 }

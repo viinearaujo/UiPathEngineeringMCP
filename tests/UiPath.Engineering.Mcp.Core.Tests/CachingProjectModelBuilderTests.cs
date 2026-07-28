@@ -3,22 +3,18 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
-public class CachingProjectModelBuilderTests
-{
+public class CachingProjectModelBuilderTests {
     private const string Root = "/projects/testProcess";
     private const string Json = "/projects/testProcess/project.json";
     private const string MainXaml = "/projects/testProcess/Main.xaml";
 
-    private sealed class CountingProjectModelBuilder : IProjectModelBuilder
-    {
+    private sealed class CountingProjectModelBuilder : IProjectModelBuilder {
         public int CallCount { get; private set; }
         public Exception? ToThrow { get; set; }
 
-        public Task<UiPathProjectModel> BuildAsync(string projectPath, CancellationToken cancellationToken = default)
-        {
+        public Task<UiPathProjectModel> BuildAsync(string projectPath, CancellationToken cancellationToken = default) {
             CallCount++;
-            if (ToThrow is not null)
-            {
+            if (ToThrow is not null) {
                 return Task.FromException<UiPathProjectModel>(ToThrow);
             }
 
@@ -26,8 +22,7 @@ public class CachingProjectModelBuilderTests
         }
     }
 
-    private static FakeFilesystemProvider CreateFilesystem()
-    {
+    private static FakeFilesystemProvider CreateFilesystem() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
         fs.XamlFiles.Add(MainXaml);
         fs.WriteTimesUtc[Json] = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -36,8 +31,7 @@ public class CachingProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_UnchangedFiles_ReturnsCachedModelAndBuildsOnce()
-    {
+    public async Task BuildAsync_UnchangedFiles_ReturnsCachedModelAndBuildsOnce() {
         var fs = CreateFilesystem();
         var inner = new CountingProjectModelBuilder();
         var sut = new CachingProjectModelBuilder(inner, fs);
@@ -50,8 +44,7 @@ public class CachingProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_ChangedFileTimestamp_TriggersRebuild()
-    {
+    public async Task BuildAsync_ChangedFileTimestamp_TriggersRebuild() {
         var fs = CreateFilesystem();
         var inner = new CountingProjectModelBuilder();
         var sut = new CachingProjectModelBuilder(inner, fs);
@@ -65,8 +58,7 @@ public class CachingProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_AddedOrRemovedXamlFile_TriggersRebuild()
-    {
+    public async Task BuildAsync_AddedOrRemovedXamlFile_TriggersRebuild() {
         var fs = CreateFilesystem();
         var inner = new CountingProjectModelBuilder();
         var sut = new CachingProjectModelBuilder(inner, fs);
@@ -88,8 +80,7 @@ public class CachingProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_DifferentProjectPaths_AreCachedIndependently()
-    {
+    public async Task BuildAsync_DifferentProjectPaths_AreCachedIndependently() {
         var fs = CreateFilesystem();
         var inner = new CountingProjectModelBuilder();
         var sut = new CachingProjectModelBuilder(inner, fs);
@@ -104,8 +95,7 @@ public class CachingProjectModelBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_InnerBuilderThrows_ExceptionIsNotCached()
-    {
+    public async Task BuildAsync_InnerBuilderThrows_ExceptionIsNotCached() {
         var fs = CreateFilesystem();
         var inner = new CountingProjectModelBuilder { ToThrow = new FileNotFoundException("boom") };
         var sut = new CachingProjectModelBuilder(inner, fs);

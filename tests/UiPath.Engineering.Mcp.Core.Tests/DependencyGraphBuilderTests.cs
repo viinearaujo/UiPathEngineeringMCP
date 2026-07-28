@@ -3,10 +3,8 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
-public class DependencyGraphBuilderTests
-{
-    private static WorkflowModel Wf(string fileName, params string[] targets) => new()
-    {
+public class DependencyGraphBuilderTests {
+    private static WorkflowModel Wf(string fileName, params string[] targets) => new() {
         FileName = fileName,
         InvokeWorkflows = targets
             .Select(t => new InvokeWorkflowModel { SourceWorkflow = fileName, TargetWorkflow = t })
@@ -14,8 +12,7 @@ public class DependencyGraphBuilderTests
     };
 
     [Fact]
-    public void Build_LinearChain_ResolvesAllEdgesAndNoOrphansOrCycles()
-    {
+    public void Build_LinearChain_ResolvesAllEdgesAndNoOrphansOrCycles() {
         var workflows = new[] { Wf("Main.xaml", "A.xaml"), Wf("A.xaml", "B.xaml"), Wf("B.xaml") };
 
         var result = DependencyGraphBuilder.Build(workflows, "Main.xaml");
@@ -27,8 +24,7 @@ public class DependencyGraphBuilderTests
     }
 
     [Fact]
-    public void Build_DetectsCycle()
-    {
+    public void Build_DetectsCycle() {
         var workflows = new[] { Wf("Main.xaml", "A.xaml"), Wf("A.xaml", "B.xaml"), Wf("B.xaml", "A.xaml") };
 
         var result = DependencyGraphBuilder.Build(workflows, "Main.xaml");
@@ -39,8 +35,7 @@ public class DependencyGraphBuilderTests
     }
 
     [Fact]
-    public void Build_FindsOrphanWorkflowsNotReachableFromMain()
-    {
+    public void Build_FindsOrphanWorkflowsNotReachableFromMain() {
         var workflows = new[] { Wf("Main.xaml", "A.xaml"), Wf("A.xaml"), Wf("Unused.xaml") };
 
         var result = DependencyGraphBuilder.Build(workflows, "Main.xaml");
@@ -49,8 +44,7 @@ public class DependencyGraphBuilderTests
     }
 
     [Fact]
-    public void Build_UnresolvedTarget_ProducesUnresolvedEdgeWithoutThrowing()
-    {
+    public void Build_UnresolvedTarget_ProducesUnresolvedEdgeWithoutThrowing() {
         var workflows = new[] { Wf("Main.xaml", "Missing.xaml") };
 
         var result = DependencyGraphBuilder.Build(workflows, "Main.xaml");
@@ -62,8 +56,7 @@ public class DependencyGraphBuilderTests
     }
 
     [Fact]
-    public void Build_MatchesFileNamesCaseInsensitively()
-    {
+    public void Build_MatchesFileNamesCaseInsensitively() {
         var workflows = new[] { Wf("Main.xaml", "child.XAML"), Wf("Child.xaml") };
 
         var result = DependencyGraphBuilder.Build(workflows, "Main.xaml");

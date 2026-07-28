@@ -15,37 +15,25 @@ public sealed class SearchRepositoryTool {
     [McpServerTool, Description("Searches GitLab issues in the configured project and returns matching issue summaries.")]
     public async Task<ToolResult> SearchRepository(
         [Description("Search text matched against issue titles and descriptions.")] string query,
-        [Description("Maximum number of issues to return (1-100).")] int maxResults = 10) {
+        [Description("Maximum number of issues to return (1-100).")] int maxResults = 10,
+        CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
 
         if (string.IsNullOrWhiteSpace(query)) {
-            return new ToolResult {
-                Status = "error",
-                Summary = "Query is required.",
-                Data = new { success = false, results = Array.Empty<object>(), errors = new[] { "Provide a non-empty search query." }, warnings = Array.Empty<string>() },
-                Errors = ["Provide a non-empty search query."],
-                DurationMs = sw.ElapsedMilliseconds
-            };
+            return ToolResults.Failure("Query is required.", "Provide a non-empty search query.", sw);
         }
 
-        var result = await _gitLab.SearchIssuesAsync(query, maxResults);
+        var result = await _gitLab.SearchIssuesAsync(query, maxResults, cancellationToken);
 
         if (!result.Success) {
-            return new ToolResult {
-                Status = "error",
-                Summary = "Repository search failed.",
-                Data = new { success = false, results = Array.Empty<object>(), errors = result.Errors, warnings = Array.Empty<string>() },
-                Errors = result.Errors,
-                DurationMs = sw.ElapsedMilliseconds
-            };
+            return ToolResults.Failure("Repository search failed.", result.Errors, sw);
         }
 
-        return new ToolResult {
-            Status = "success",
-            Summary = $"Found {result.Issues.Count} issue(s).",
-            Data = new {
-                success = true,
+        // The envelope already carries status/errors/warnings; Data holds only the payload.
+        return ToolResults.Ok(
+            $"Found {result.Issues.Count} issue(s).",
+            new {
                 results = result.Issues.Select(i => new {
                     iid = i.Iid,
                     title = i.Title,
@@ -53,11 +41,7 @@ public sealed class SearchRepositoryTool {
                     webUrl = i.WebUrl,
                     labels = i.Labels,
                     updatedAt = i.UpdatedAt
-                }).ToList(),
-                errors = Array.Empty<string>(),
-                warnings = Array.Empty<string>()
-            },
-            DurationMs = sw.ElapsedMilliseconds
-        };
+                }).ToList()
+            }, sw);
     }
 }

@@ -2,10 +2,8 @@ using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
-public class GenerateDocumentationToolTests
-{
-    private static UiPathProjectModel BuildModel() => new()
-    {
+public class GenerateDocumentationToolTests {
+    private static UiPathProjectModel BuildModel() => new() {
         ProjectName = "testProcess",
         ProjectPath = "/projects/testProcess",
         MainWorkflow = "Main.xaml",
@@ -15,8 +13,7 @@ public class GenerateDocumentationToolTests
         Risks = ["Cycle detected: Main.xaml -> Sub.xaml -> Main.xaml"],
         Workflows =
         [
-            new WorkflowModel
-            {
+            new WorkflowModel {
                 FileName = "Main.xaml",
                 IsMain = true,
                 Arguments = [new ArgumentModel { Name = "in_Config", Direction = "In", Type = "Dictionary" }],
@@ -25,8 +22,7 @@ public class GenerateDocumentationToolTests
                 InvokeWorkflows = [new InvokeWorkflowModel { SourceWorkflow = "Main.xaml", TargetWorkflow = "Sub.xaml" }],
                 LogMessages = [new LogMessageModel { DisplayName = "Log", Level = "Info", Message = "hi" }]
             },
-            new WorkflowModel
-            {
+            new WorkflowModel {
                 FileName = "Sub.xaml",
                 InvokeWorkflows = [new InvokeWorkflowModel { SourceWorkflow = "Sub.xaml", TargetWorkflow = "Main.xaml" }]
             }
@@ -34,8 +30,7 @@ public class GenerateDocumentationToolTests
     };
 
     [Fact]
-    public async Task GenerateDocumentation_WhenPathNotAllowed_ReturnsError()
-    {
+    public async Task GenerateDocumentation_WhenPathNotAllowed_ReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = false };
         var tool = new GenerateDocumentationTool(fs, new FakeProjectModelBuilder());
 
@@ -47,8 +42,7 @@ public class GenerateDocumentationToolTests
     }
 
     [Fact]
-    public async Task GenerateDocumentation_HappyPath_ReturnsStructuredData()
-    {
+    public async Task GenerateDocumentation_HappyPath_ReturnsStructuredData() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var tool = new GenerateDocumentationTool(fs, new FakeProjectModelBuilder { Model = BuildModel() });
 
@@ -67,8 +61,7 @@ public class GenerateDocumentationToolTests
     }
 
     [Fact]
-    public async Task GenerateDocumentation_IncludesDependencyGraphEdgesAndCycles()
-    {
+    public async Task GenerateDocumentation_IncludesDependencyGraphEdgesAndCycles() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var tool = new GenerateDocumentationTool(fs, new FakeProjectModelBuilder { Model = BuildModel() });
 
@@ -83,8 +76,7 @@ public class GenerateDocumentationToolTests
     }
 
     [Fact]
-    public async Task GenerateDocumentation_WhenWorkflowHasParseError_IncludedInOutput()
-    {
+    public async Task GenerateDocumentation_WhenWorkflowHasParseError_IncludedInOutput() {
         var model = BuildModel();
         model.Workflows[1].HasParseError = true;
         model.Workflows[1].ParseError = "Invalid XML at line 5.";
@@ -99,8 +91,7 @@ public class GenerateDocumentationToolTests
     }
 
     [Fact]
-    public async Task GenerateDocumentation_WhenProjectJsonMissing_ReturnsStructuredError()
-    {
+    public async Task GenerateDocumentation_WhenProjectJsonMissing_ReturnsStructuredError() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder { ToThrow = new FileNotFoundException("project.json not found.") };
         var tool = new GenerateDocumentationTool(fs, builder);
@@ -112,8 +103,7 @@ public class GenerateDocumentationToolTests
     }
 
     [Fact]
-    public async Task GenerateDocumentation_WhenUnexpectedError_DoesNotThrowAndReturnsError()
-    {
+    public async Task GenerateDocumentation_WhenUnexpectedError_DoesNotThrowAndReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder { ToThrow = new InvalidOperationException("boom") };
         var tool = new GenerateDocumentationTool(fs, builder);

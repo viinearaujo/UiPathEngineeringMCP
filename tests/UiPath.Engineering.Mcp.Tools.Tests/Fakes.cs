@@ -7,8 +7,7 @@ using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
-internal sealed class FakeFilesystemProvider : IFilesystemProvider
-{
+internal sealed class FakeFilesystemProvider : IFilesystemProvider {
     public bool Allowed { get; set; } = true;
     public string? ProjectJson { get; set; } = "/projects/testProcess/project.json";
     public string ProjectJsonContent { get; set; } = string.Empty;
@@ -31,15 +30,12 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider
     public bool FileExists(string path) => ExistingFiles.Contains(path) || FileContents.ContainsKey(path) || Writes.ContainsKey(path);
 }
 
-internal sealed class FakeProjectModelBuilder : IProjectModelBuilder
-{
+internal sealed class FakeProjectModelBuilder : IProjectModelBuilder {
     public UiPathProjectModel? Model { get; set; }
     public Exception? ToThrow { get; set; }
 
-    public Task<UiPathProjectModel> BuildAsync(string projectPath, CancellationToken cancellationToken = default)
-    {
-        if (ToThrow is not null)
-        {
+    public Task<UiPathProjectModel> BuildAsync(string projectPath, CancellationToken cancellationToken = default) {
+        if (ToThrow is not null) {
             return Task.FromException<UiPathProjectModel>(ToThrow);
         }
 
@@ -47,8 +43,7 @@ internal sealed class FakeProjectModelBuilder : IProjectModelBuilder
     }
 }
 
-internal sealed class FakeUiPathCliProvider : IUiPathCliProvider
-{
+internal sealed class FakeUiPathCliProvider : IUiPathCliProvider {
     public UiPathCliResult Result { get; set; } = new() { Success = true, Summary = "Validation completed." };
     public UiPathCliResult RunResult { get; set; } = new() { Success = true, Summary = "Completed." };
     public string? LastVerb { get; private set; }
@@ -59,16 +54,14 @@ internal sealed class FakeUiPathCliProvider : IUiPathCliProvider
         => Task.FromResult(Result);
 
     public Task<UiPathCliResult> RunAsync(
-        string verb, string arguments, string? workingDirectory = null, CancellationToken cancellationToken = default)
-    {
+        string verb, string arguments, string? workingDirectory = null, CancellationToken cancellationToken = default) {
         LastVerb = verb;
         LastArguments = arguments;
         return Task.FromResult(RunResult);
     }
 }
 
-internal sealed class FakeGitProvider : IGitProvider
-{
+internal sealed class FakeGitProvider : IGitProvider {
     public GitStatusResult StatusResult { get; set; } = new() { IsRepository = true, Branch = "main" };
     public GitLogResult LogResult { get; set; } = new() { IsRepository = true };
 
@@ -79,8 +72,7 @@ internal sealed class FakeGitProvider : IGitProvider
         => Task.FromResult(LogResult);
 }
 
-internal sealed class FakeGitLabProvider : IGitLabProvider
-{
+internal sealed class FakeGitLabProvider : IGitLabProvider {
     public GitLabIssueListResult SearchResult { get; set; } = new() { Success = true };
     public Func<string, string, IReadOnlyList<string>, GitLabIssueResult>? CreateHandler { get; set; }
     public List<(string Title, string Description)> CreatedIssues { get; } = [];
@@ -88,12 +80,10 @@ internal sealed class FakeGitLabProvider : IGitLabProvider
     public Task<GitLabIssueListResult> SearchIssuesAsync(string query, int maxResults, CancellationToken cancellationToken = default)
         => Task.FromResult(SearchResult);
 
-    public Task<GitLabIssueResult> CreateIssueAsync(string title, string description, IReadOnlyList<string> labels, CancellationToken cancellationToken = default)
-    {
+    public Task<GitLabIssueResult> CreateIssueAsync(string title, string description, IReadOnlyList<string> labels, CancellationToken cancellationToken = default) {
         CreatedIssues.Add((title, description));
         var result = CreateHandler?.Invoke(title, description, labels)
-            ?? new GitLabIssueResult
-            {
+            ?? new GitLabIssueResult {
                 Success = true,
                 Issue = new GitLabIssueSummary { Iid = CreatedIssues.Count, Title = title, WebUrl = $"https://gitlab.example.com/p/-/issues/{CreatedIssues.Count}" }
             };

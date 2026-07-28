@@ -16,22 +16,18 @@ public sealed class AddXamlWorkflowTool {
     }
 
     [McpServerTool, Description("Adds a new blank XAML workflow file to an existing UiPath project, with the correct x:Class naming for its location.")]
-    public Task<ToolResult> AddXamlWorkflow(
+    public ToolResult AddXamlWorkflow(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Workflow file name or relative path within the project, e.g. 'SendEmail.xaml' or 'Workflows/SendEmail.xaml'.")] string fileName) {
 
         var sw = Stopwatch.StartNew();
 
-        if (!_filesystem.IsPathAllowed(projectPath)) {
-            return Error("Path not allowed: project path is outside the allowed roots.", sw);
-        }
-
-        if (_filesystem.FindProjectJson(projectPath) == null) {
-            return Error("project.json not found: not a valid UiPath project directory.", sw);
+        if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } guardFailure) {
+            return guardFailure;
         }
 
         if (string.IsNullOrWhiteSpace(fileName)) {
-            return Error("fileName is required.", sw);
+            return ToolResults.Failure("fileName is required.", sw);
         }
 
         var relative = fileName.Replace('\\', '/').Trim('/');
@@ -39,13 +35,12 @@ public sealed class AddXamlWorkflowTool {
             relative += ".xaml";
         }
 
-        var targetPath = Path.Combine(Path.GetFullPath(projectPath), relative.Replace('/', Path.DirectorySeparatorChar));
-        if (!PathGuard.IsWithinDirectory(projectPath, targetPath)) {
-            return Error("fileName must resolve to a location inside the project directory.", sw);
+        if (!ToolResults.TryResolveWithinProject(projectPath, relative, out var targetPath)) {
+            return ToolResults.Failure("fileName must resolve to a location inside the project directory.", sw);
         }
 
         if (_filesystem.FileExists(targetPath)) {
-            return Error($"File already exists: {targetPath}", sw);
+            return ToolResults.Failure($"File already exists: {targetPath}", sw);
         }
 
         var content = XamlWorkflowTemplates.BlankWorkflow(XamlWorkflowTemplates.ToXamlClassName(relative));
@@ -54,21 +49,11 @@ public sealed class AddXamlWorkflowTool {
         _filesystem.CreateDirectory(directory);
         _filesystem.WriteAllText(targetPath, content);
 
-        return Task.FromResult(new ToolResult {
-            Status = "success",
-            Summary = $"Workflow '{relative}' added to the project.",
-            Data = new {
+        return ToolResults.Ok(
+            $"Workflow '{relative}' added to the project.",
+            new {
                 filePath = targetPath,
                 xamlClass = XamlWorkflowTemplates.ToXamlClassName(relative)
-            },
-            DurationMs = sw.ElapsedMilliseconds
-        });
+            }, sw);
     }
-
-    private static Task<ToolResult> Error(string message, Stopwatch sw) => Task.FromResult(new ToolResult {
-        Status = "error",
-        Summary = message,
-        Errors = [message],
-        DurationMs = sw.ElapsedMilliseconds
-    });
 }

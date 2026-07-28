@@ -3,11 +3,9 @@ using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
-public class ValidateProjectToolTests
-{
+public class ValidateProjectToolTests {
     [Fact]
-    public async Task ValidateProject_WhenPathNotAllowed_ReturnsError()
-    {
+    public async Task ValidateProject_WhenPathNotAllowed_ReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = false };
         var cli = new FakeUiPathCliProvider();
         var tool = new ValidateProjectTool(cli, fs);
@@ -19,8 +17,7 @@ public class ValidateProjectToolTests
     }
 
     [Fact]
-    public async Task ValidateProject_WhenProjectJsonMissing_ReturnsError()
-    {
+    public async Task ValidateProject_WhenProjectJsonMissing_ReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = true, ProjectJson = null };
         var cli = new FakeUiPathCliProvider();
         var tool = new ValidateProjectTool(cli, fs);
@@ -32,11 +29,9 @@ public class ValidateProjectToolTests
     }
 
     [Fact]
-    public async Task ValidateProject_WhenCliSucceeds_ReturnsSuccess()
-    {
+    public async Task ValidateProject_WhenCliSucceeds_ReturnsSuccess() {
         var fs = new FakeFilesystemProvider { Allowed = true };
-        var cli = new FakeUiPathCliProvider
-        {
+        var cli = new FakeUiPathCliProvider {
             Result = new UiPathCliResult { Success = true, Summary = "Validation completed." }
         };
         var tool = new ValidateProjectTool(cli, fs);
@@ -49,13 +44,10 @@ public class ValidateProjectToolTests
     }
 
     [Fact]
-    public async Task ValidateProject_WhenCliFails_PropagatesErrorsAndWarnings()
-    {
+    public async Task ValidateProject_WhenCliFails_PropagatesErrorsAndWarnings() {
         var fs = new FakeFilesystemProvider { Allowed = true };
-        var cli = new FakeUiPathCliProvider
-        {
-            Result = new UiPathCliResult
-            {
+        var cli = new FakeUiPathCliProvider {
+            Result = new UiPathCliResult {
                 Success = false,
                 Summary = "Validation failed.",
                 Errors = ["[restore] boom"],
@@ -75,13 +67,10 @@ public class ValidateProjectToolTests
         JsonSerializer.SerializeToElement(data);
 
     [Fact]
-    public async Task ValidateProject_WhenCliSucceeds_DataHasPerStepShapeAndNoRecommendations()
-    {
+    public async Task ValidateProject_WhenCliSucceeds_DataHasPerStepShapeAndNoRecommendations() {
         var fs = new FakeFilesystemProvider { Allowed = true };
-        var cli = new FakeUiPathCliProvider
-        {
-            Result = new UiPathCliResult
-            {
+        var cli = new FakeUiPathCliProvider {
+            Result = new UiPathCliResult {
                 Success = true,
                 Summary = "Validation completed.",
                 Restore = new CliStepResult { Executed = true, Success = true },
@@ -104,13 +93,10 @@ public class ValidateProjectToolTests
     }
 
     [Fact]
-    public async Task ValidateProject_WhenStepFails_DataMarksSkippedStepsAndRecommendsReview()
-    {
+    public async Task ValidateProject_WhenStepFails_DataMarksSkippedStepsAndRecommendsReview() {
         var fs = new FakeFilesystemProvider { Allowed = true };
-        var cli = new FakeUiPathCliProvider
-        {
-            Result = new UiPathCliResult
-            {
+        var cli = new FakeUiPathCliProvider {
+            Result = new UiPathCliResult {
                 Success = false,
                 Summary = "Validation failed.",
                 Restore = new CliStepResult { Executed = true, Success = false, Errors = ["[restore] boom"] },

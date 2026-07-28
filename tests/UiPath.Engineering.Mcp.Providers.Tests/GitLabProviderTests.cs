@@ -6,14 +6,11 @@ using UiPath.Engineering.Mcp.Providers.GitLab;
 
 namespace UiPath.Engineering.Mcp.Providers.Tests;
 
-public class GitLabProviderTests
-{
+public class GitLabProviderTests {
     private const string Token = "super-secret-token-123";
 
-    private static GitLabProvider CreateSut(HttpMessageHandler handler, GitLabOptions? options = null)
-    {
-        var opts = options ?? new GitLabOptions
-        {
+    private static GitLabProvider CreateSut(HttpMessageHandler handler, GitLabOptions? options = null) {
+        var opts = options ?? new GitLabOptions {
             BaseUrl = "https://gitlab.example.com",
             ProjectId = "42",
             AccessToken = Token,
@@ -22,22 +19,19 @@ public class GitLabProviderTests
         return new GitLabProvider(new HttpClient(handler), Options.Create(opts));
     }
 
-    private sealed class FakeHttpMessageHandler : HttpMessageHandler
-    {
+    private sealed class FakeHttpMessageHandler : HttpMessageHandler {
         public HttpStatusCode StatusCode { get; set; } = HttpStatusCode.OK;
         public string ResponseBody { get; set; } = "[]";
         public HttpRequestMessage? LastRequest { get; private set; }
         public string? LastRequestBody { get; private set; }
 
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
             LastRequest = request;
             LastRequestBody = request.Content is null
                 ? null
                 : await request.Content.ReadAsStringAsync(cancellationToken);
 
-            return new HttpResponseMessage(StatusCode)
-            {
+            return new HttpResponseMessage(StatusCode) {
                 Content = new StringContent(ResponseBody, Encoding.UTF8, "application/json"),
                 RequestMessage = request
             };
@@ -45,10 +39,8 @@ public class GitLabProviderTests
     }
 
     [Fact]
-    public async Task SearchIssuesAsync_MapsIssueFields()
-    {
-        var handler = new FakeHttpMessageHandler
-        {
+    public async Task SearchIssuesAsync_MapsIssueFields() {
+        var handler = new FakeHttpMessageHandler {
             ResponseBody = """
                 [{"iid":7,"title":"Fix reconciliation","state":"opened","web_url":"https://gitlab.example.com/p/-/issues/7","labels":["bug","finance"],"updated_at":"2026-07-01T10:00:00.000Z"}]
                 """
@@ -68,8 +60,7 @@ public class GitLabProviderTests
     }
 
     [Fact]
-    public async Task SearchIssuesAsync_SendsTokenHeaderAndSearchQuery()
-    {
+    public async Task SearchIssuesAsync_SendsTokenHeaderAndSearchQuery() {
         var handler = new FakeHttpMessageHandler();
         var sut = CreateSut(handler);
 
@@ -84,10 +75,8 @@ public class GitLabProviderTests
     }
 
     [Fact]
-    public async Task CreateIssueAsync_PostsCorrectPayload()
-    {
-        var handler = new FakeHttpMessageHandler
-        {
+    public async Task CreateIssueAsync_PostsCorrectPayload() {
+        var handler = new FakeHttpMessageHandler {
             StatusCode = HttpStatusCode.Created,
             ResponseBody = """{"iid":11,"title":"New item","state":"opened","web_url":"https://gitlab.example.com/p/-/issues/11","labels":["auto"],"updated_at":"2026-07-28T00:00:00.000Z"}"""
         };
@@ -107,10 +96,8 @@ public class GitLabProviderTests
     }
 
     [Fact]
-    public async Task SearchIssuesAsync_NonSuccessStatus_ReturnsSanitizedErrorWithoutToken()
-    {
-        var handler = new FakeHttpMessageHandler
-        {
+    public async Task SearchIssuesAsync_NonSuccessStatus_ReturnsSanitizedErrorWithoutToken() {
+        var handler = new FakeHttpMessageHandler {
             StatusCode = HttpStatusCode.Unauthorized,
             ResponseBody = """{"message":"401 Unauthorized"}"""
         };
@@ -125,10 +112,8 @@ public class GitLabProviderTests
     }
 
     [Fact]
-    public async Task CreateIssueAsync_ServerError_DoesNotLeakTokenOrBody()
-    {
-        var handler = new FakeHttpMessageHandler
-        {
+    public async Task CreateIssueAsync_ServerError_DoesNotLeakTokenOrBody() {
+        var handler = new FakeHttpMessageHandler {
             StatusCode = HttpStatusCode.InternalServerError,
             ResponseBody = "stack trace with token super-secret-token-123 inside"
         };
@@ -141,8 +126,7 @@ public class GitLabProviderTests
     }
 
     [Fact]
-    public async Task SearchIssuesAsync_NotConfigured_FailsFastWithoutHttpCall()
-    {
+    public async Task SearchIssuesAsync_NotConfigured_FailsFastWithoutHttpCall() {
         var handler = new FakeHttpMessageHandler();
         var sut = CreateSut(handler, new GitLabOptions { BaseUrl = "", ProjectId = "" });
 

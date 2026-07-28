@@ -2,8 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace UiPath.Engineering.Mcp.Providers.GitLab;
 
-public sealed class GitLabIssueSummary
-{
+public sealed class GitLabIssueSummary {
     [JsonPropertyName("iid")]
     public int Iid { get; init; }
 
@@ -23,15 +22,13 @@ public sealed class GitLabIssueSummary
     public string UpdatedAt { get; init; } = string.Empty;
 }
 
-public sealed class GitLabIssueListResult
-{
+public sealed class GitLabIssueListResult {
     public bool Success { get; init; }
     public List<GitLabIssueSummary> Issues { get; init; } = [];
     public List<string> Errors { get; init; } = [];
 }
 
-public sealed class GitLabIssueResult
-{
+public sealed class GitLabIssueResult {
     public bool Success { get; init; }
     public GitLabIssueSummary? Issue { get; init; }
     public List<string> Errors { get; init; } = [];

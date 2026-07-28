@@ -2,8 +2,7 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
-public class ProjectJsonParserTests
-{
+public class ProjectJsonParserTests {
     private const string ProjectRoot = "/projects/testProcess";
     private const string ProjectJsonPath = "/projects/testProcess/project.json";
 
@@ -19,10 +18,8 @@ public class ProjectJsonParserTests
     }
     """;
 
-    private static (ProjectJsonParser parser, FakeFilesystemProvider fs) CreateSut()
-    {
-        var fs = new FakeFilesystemProvider
-        {
+    private static (ProjectJsonParser parser, FakeFilesystemProvider fs) CreateSut() {
+        var fs = new FakeFilesystemProvider {
             ProjectJsonPath = ProjectJsonPath
         };
         fs.FileContents[ProjectJsonPath] = SampleProjectJson;
@@ -32,8 +29,7 @@ public class ProjectJsonParserTests
     }
 
     [Fact]
-    public void Parse_ReadsProjectNameMainWorkflowAndDescription()
-    {
+    public void Parse_ReadsProjectNameMainWorkflowAndDescription() {
         var (parser, _) = CreateSut();
 
         var model = parser.Parse(ProjectJsonPath, ProjectRoot);
@@ -46,8 +42,7 @@ public class ProjectJsonParserTests
     }
 
     [Fact]
-    public void Parse_FormatsDependenciesAsNameAndVersion()
-    {
+    public void Parse_FormatsDependenciesAsNameAndVersion() {
         var (parser, _) = CreateSut();
 
         var model = parser.Parse(ProjectJsonPath, ProjectRoot);
@@ -58,8 +53,7 @@ public class ProjectJsonParserTests
     }
 
     [Fact]
-    public void Parse_MapsDependenciesToPackages()
-    {
+    public void Parse_MapsDependenciesToPackages() {
         var (parser, _) = CreateSut();
 
         var model = parser.Parse(ProjectJsonPath, ProjectRoot);
@@ -70,8 +64,7 @@ public class ProjectJsonParserTests
     }
 
     [Fact]
-    public void Parse_MissingOptionalFields_UsesSafeDefaults()
-    {
+    public void Parse_MissingOptionalFields_UsesSafeDefaults() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = ProjectJsonPath };
         fs.FileContents[ProjectJsonPath] = "{ }";
         var parser = new ProjectJsonParser(fs);

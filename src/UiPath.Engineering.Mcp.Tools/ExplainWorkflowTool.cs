@@ -8,13 +8,11 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 namespace UiPath.Engineering.Mcp.Tools;
 
 [McpServerToolType]
-public sealed class ExplainWorkflowTool
-{
+public sealed class ExplainWorkflowTool {
     private readonly IFilesystemProvider _filesystem;
     private readonly IProjectModelBuilder _modelBuilder;
 
-    public ExplainWorkflowTool(IFilesystemProvider filesystem, IProjectModelBuilder modelBuilder)
-    {
+    public ExplainWorkflowTool(IFilesystemProvider filesystem, IProjectModelBuilder modelBuilder) {
         _filesystem = filesystem;
         _modelBuilder = modelBuilder;
     }
@@ -23,39 +21,27 @@ public sealed class ExplainWorkflowTool
     public async Task<ToolResult> ExplainWorkflow(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Workflow file to explain (file name, with or without .xaml, or a path).")] string workflowFile,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default) {
         var sw = Stopwatch.StartNew();
 
-        if (!_filesystem.IsPathAllowed(projectPath))
-        {
-            return new ToolResult
-            {
-                Status = "error",
-                Summary = "Path not allowed.",
-                Errors = ["The requested path is outside the allowed project roots."],
-                DurationMs = sw.ElapsedMilliseconds
-            };
+        if (ToolResults.GuardAllowedPath(_filesystem, projectPath, sw) is { } guardFailure) {
+            return guardFailure;
         }
 
-        try
-        {
+        try {
             var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
 
             var requestedName = Path.GetFileName(workflowFile);
-            if (!requestedName.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))
-            {
+            if (!requestedName.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)) {
                 requestedName += ".xaml";
             }
 
             var workflow = model.Workflows.FirstOrDefault(w =>
                 string.Equals(w.FileName, requestedName, StringComparison.OrdinalIgnoreCase));
 
-            if (workflow is null)
-            {
+            if (workflow is null) {
                 var available = model.Workflows.Select(w => w.FileName).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
-                return new ToolResult
-                {
+                return new ToolResult {
                     Status = "error",
                     Summary = $"Workflow '{requestedName}' not found.",
                     Errors = [$"Workflow '{requestedName}' was not found in project '{model.ProjectName}'."],
@@ -64,8 +50,7 @@ public sealed class ExplainWorkflowTool
                 };
             }
 
-            var data = new
-            {
+            var data = new {
                 workflow.FileName,
                 workflow.FilePath,
                 workflow.IsMain,
@@ -83,46 +68,14 @@ public sealed class ExplainWorkflowTool
                 ? new List<string> { $"Workflow could not be fully parsed: {workflow.ParseError}" }
                 : [];
 
-            return new ToolResult
-            {
-                Summary = $"Workflow '{workflow.FileName}': {workflow.Arguments.Count} arguments, " +
-                          $"{workflow.Variables.Count} variables, {workflow.Activities.Count} activities, " +
-                          $"{workflow.ExceptionHandlers.Count} exception handlers, invokes {workflow.InvokeWorkflows.Count} workflows.",
-                Data = data,
-                Warnings = warnings,
-                DurationMs = sw.ElapsedMilliseconds
-            };
-        }
-        catch (FileNotFoundException ex)
-        {
-            return new ToolResult
-            {
-                Status = "error",
-                Summary = "project.json not found.",
-                Errors = [ex.Message],
-                DurationMs = sw.ElapsedMilliseconds
-            };
-        }
-        catch (System.Text.Json.JsonException ex)
-        {
-            return new ToolResult
-            {
-                Status = "error",
-                Summary = "project.json could not be parsed.",
-                Errors = [$"Invalid JSON in project.json: {ex.Message}"],
-                DurationMs = sw.ElapsedMilliseconds
-            };
-        }
-        catch (Exception ex)
-        {
+            return ToolResults.Ok(
+                $"Workflow '{workflow.FileName}': {workflow.Arguments.Count} arguments, " +
+                $"{workflow.Variables.Count} variables, {workflow.Activities.Count} activities, " +
+                $"{workflow.ExceptionHandlers.Count} exception handlers, invokes {workflow.InvokeWorkflows.Count} workflows.",
+                data, sw, warnings);
+        } catch (Exception ex) {
             // Never surface a raw exception/stack trace to the MCP client.
-            return new ToolResult
-            {
-                Status = "error",
-                Summary = "Workflow explanation failed.",
-                Errors = [ex.Message],
-                DurationMs = sw.ElapsedMilliseconds
-            };
+            return ToolResults.FromException(ex, "Workflow explanation failed.", sw);
         }
     }
 }

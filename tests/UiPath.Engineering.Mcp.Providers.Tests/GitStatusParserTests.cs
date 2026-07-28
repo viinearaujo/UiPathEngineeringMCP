@@ -2,13 +2,11 @@ using UiPath.Engineering.Mcp.Providers.Git;
 
 namespace UiPath.Engineering.Mcp.Providers.Tests;
 
-public class GitStatusParserTests
-{
+public class GitStatusParserTests {
     private const string Repo = "/repos/sample";
 
     [Fact]
-    public void Parse_CleanWorkingTree_ReturnsBranchAndNoChanges()
-    {
+    public void Parse_CleanWorkingTree_ReturnsBranchAndNoChanges() {
         var output = "## main...origin/main\n";
 
         var result = GitStatusParser.Parse(Repo, output);
@@ -22,8 +20,7 @@ public class GitStatusParserTests
     }
 
     [Fact]
-    public void Parse_ModifiedAndUntrackedFiles_ListsChangedFiles()
-    {
+    public void Parse_ModifiedAndUntrackedFiles_ListsChangedFiles() {
         var output = "## main...origin/main\n M src/Workflow.xaml\n?? docs/notes.md\n";
 
         var result = GitStatusParser.Parse(Repo, output);
@@ -34,8 +31,7 @@ public class GitStatusParserTests
     }
 
     [Fact]
-    public void Parse_AheadAndBehind_ParsesCounts()
-    {
+    public void Parse_AheadAndBehind_ParsesCounts() {
         var output = "## feature/x...origin/feature/x [ahead 2, behind 3]\n";
 
         var result = GitStatusParser.Parse(Repo, output);
@@ -46,8 +42,7 @@ public class GitStatusParserTests
     }
 
     [Fact]
-    public void Parse_AheadOnly_ParsesAheadWithoutBehind()
-    {
+    public void Parse_AheadOnly_ParsesAheadWithoutBehind() {
         var output = "## main...origin/main [ahead 1]\n";
 
         var result = GitStatusParser.Parse(Repo, output);
@@ -57,8 +52,7 @@ public class GitStatusParserTests
     }
 
     [Fact]
-    public void Parse_NoCommitsYet_ReturnsBranchWithoutTracking()
-    {
+    public void Parse_NoCommitsYet_ReturnsBranchWithoutTracking() {
         var output = "## No commits yet on main\n?? new-file.txt\n";
 
         var result = GitStatusParser.Parse(Repo, output);
@@ -68,8 +62,7 @@ public class GitStatusParserTests
     }
 
     [Fact]
-    public void Parse_RenamedFile_KeepsDestinationPath()
-    {
+    public void Parse_RenamedFile_KeepsDestinationPath() {
         var output = "## main\nR  old.xaml -> new.xaml\n";
 
         var result = GitStatusParser.Parse(Repo, output);
@@ -79,8 +72,7 @@ public class GitStatusParserTests
     }
 
     [Fact]
-    public void Parse_EmptyOutput_ReturnsIsolatedDefaults()
-    {
+    public void Parse_EmptyOutput_ReturnsIsolatedDefaults() {
         var result = GitStatusParser.Parse(Repo, string.Empty);
 
         Assert.True(result.IsRepository);
@@ -89,13 +81,11 @@ public class GitStatusParserTests
     }
 
     [Fact]
-    public async Task GetStatusAsync_NotARepository_ReturnsIsRepositoryFalseWithoutThrowing()
-    {
+    public async Task GetStatusAsync_NotARepository_ReturnsIsRepositoryFalseWithoutThrowing() {
         // Real git against a temp directory that is not a repository.
         var tempDir = Path.Combine(Path.GetTempPath(), "not-a-repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
-        try
-        {
+        try {
             var fs = new FakeFilesystemProviderForGit();
             var sut = new GitProvider(fs);
 
@@ -104,16 +94,13 @@ public class GitStatusParserTests
             Assert.False(result.IsRepository);
             Assert.NotEmpty(result.Errors);
             Assert.Contains(result.Errors, e => e.Contains("not a git repository", StringComparison.OrdinalIgnoreCase));
-        }
-        finally
-        {
+        } finally {
             Directory.Delete(tempDir, recursive: true);
         }
     }
 
     [Fact]
-    public async Task GetStatusAsync_PathNotAllowed_ReturnsErrorWithoutRunningGit()
-    {
+    public async Task GetStatusAsync_PathNotAllowed_ReturnsErrorWithoutRunningGit() {
         var fs = new FakeFilesystemProviderForGit { Allowed = false };
         var sut = new GitProvider(fs);
 
@@ -123,8 +110,7 @@ public class GitStatusParserTests
         Assert.Contains(result.Errors, e => e.Contains("allowed roots", StringComparison.OrdinalIgnoreCase));
     }
 
-    private sealed class FakeFilesystemProviderForGit : UiPath.Engineering.Mcp.Core.Abstractions.IFilesystemProvider
-    {
+    private sealed class FakeFilesystemProviderForGit : UiPath.Engineering.Mcp.Core.Abstractions.IFilesystemProvider {
         public bool Allowed { get; set; } = true;
         public bool IsPathAllowed(string requestedPath) => Allowed;
         public string? FindProjectJson(string projectPath) => null;

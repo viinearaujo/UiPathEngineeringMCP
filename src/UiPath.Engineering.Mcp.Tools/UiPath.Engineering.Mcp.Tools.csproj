@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\UiPath.Engineering.Mcp.Core\UiPath.Engineering.Mcp.Core.csproj" />
@@ -13,6 +13,10 @@
       which risks binary-incompatible attribute types across the 1.x -> 2.x reorg.
     -->
     <PackageReference Include="ModelContextProtocol" Version="2.0.0-preview.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Tools.Tests" />
   </ItemGroup>
 
   <PropertyGroup>

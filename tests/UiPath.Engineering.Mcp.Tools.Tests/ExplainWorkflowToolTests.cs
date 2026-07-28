@@ -2,16 +2,13 @@ using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
-public class ExplainWorkflowToolTests
-{
-    private static UiPathProjectModel BuildModel() => new()
-    {
+public class ExplainWorkflowToolTests {
+    private static UiPathProjectModel BuildModel() => new() {
         ProjectName = "testProcess",
         MainWorkflow = "Main.xaml",
         Workflows =
         [
-            new WorkflowModel
-            {
+            new WorkflowModel {
                 FileName = "Main.xaml",
                 FilePath = "/projects/testProcess/Main.xaml",
                 IsMain = true,
@@ -31,8 +28,7 @@ public class ExplainWorkflowToolTests
     };
 
     [Fact]
-    public async Task ExplainWorkflow_WhenPathNotAllowed_ReturnsError()
-    {
+    public async Task ExplainWorkflow_WhenPathNotAllowed_ReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = false };
         var tool = new ExplainWorkflowTool(fs, new FakeProjectModelBuilder());
 
@@ -44,8 +40,7 @@ public class ExplainWorkflowToolTests
     }
 
     [Fact]
-    public async Task ExplainWorkflow_HappyPath_ReturnsWorkflowDetails()
-    {
+    public async Task ExplainWorkflow_HappyPath_ReturnsWorkflowDetails() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var tool = new ExplainWorkflowTool(fs, new FakeProjectModelBuilder { Model = BuildModel() });
 
@@ -61,8 +56,7 @@ public class ExplainWorkflowToolTests
     [InlineData("main")]
     [InlineData("MAIN.XAML")]
     [InlineData("subfolder/Main.xaml")]
-    public async Task ExplainWorkflow_MatchesCaseInsensitiveWithoutExtensionOrPath(string workflowFile)
-    {
+    public async Task ExplainWorkflow_MatchesCaseInsensitiveWithoutExtensionOrPath(string workflowFile) {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var tool = new ExplainWorkflowTool(fs, new FakeProjectModelBuilder { Model = BuildModel() });
 
@@ -72,8 +66,7 @@ public class ExplainWorkflowToolTests
     }
 
     [Fact]
-    public async Task ExplainWorkflow_WhenWorkflowNotFound_ReturnsErrorWithAvailableWorkflows()
-    {
+    public async Task ExplainWorkflow_WhenWorkflowNotFound_ReturnsErrorWithAvailableWorkflows() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var tool = new ExplainWorkflowTool(fs, new FakeProjectModelBuilder { Model = BuildModel() });
 
@@ -87,11 +80,9 @@ public class ExplainWorkflowToolTests
     }
 
     [Fact]
-    public async Task ExplainWorkflow_WhenWorkflowHasParseError_SurfacesWarningGracefully()
-    {
+    public async Task ExplainWorkflow_WhenWorkflowHasParseError_SurfacesWarningGracefully() {
         var model = BuildModel();
-        model.Workflows.Add(new WorkflowModel
-        {
+        model.Workflows.Add(new WorkflowModel {
             FileName = "Broken.xaml",
             HasParseError = true,
             ParseError = "Invalid XML at line 5."
@@ -107,8 +98,7 @@ public class ExplainWorkflowToolTests
     }
 
     [Fact]
-    public async Task ExplainWorkflow_WhenProjectJsonMissing_ReturnsStructuredError()
-    {
+    public async Task ExplainWorkflow_WhenProjectJsonMissing_ReturnsStructuredError() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder { ToThrow = new FileNotFoundException("project.json not found.") };
         var tool = new ExplainWorkflowTool(fs, builder);
@@ -120,8 +110,7 @@ public class ExplainWorkflowToolTests
     }
 
     [Fact]
-    public async Task ExplainWorkflow_WhenUnexpectedError_DoesNotThrowAndReturnsError()
-    {
+    public async Task ExplainWorkflow_WhenUnexpectedError_DoesNotThrowAndReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder { ToThrow = new InvalidOperationException("boom") };
         var tool = new ExplainWorkflowTool(fs, builder);

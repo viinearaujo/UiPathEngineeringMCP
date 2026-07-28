@@ -28,24 +28,26 @@ public sealed class CreateProjectTool {
         var sw = Stopwatch.StartNew();
 
         if (string.IsNullOrWhiteSpace(name)) {
-            return Error("Project name is required.", sw);
+            return ToolResults.Failure("Project name is required.", sw);
         }
 
         if (expressionLanguage is not ("CSharp" or "VisualBasic")) {
-            return Error("expressionLanguage must be 'CSharp' or 'VisualBasic'.", sw);
+            return ToolResults.Failure("expressionLanguage must be 'CSharp' or 'VisualBasic'.", sw);
         }
 
         if (targetFramework is not ("Windows" or "Portable")) {
-            return Error("targetFramework must be 'Windows' or 'Portable'.", sw);
+            return ToolResults.Failure("targetFramework must be 'Windows' or 'Portable'.", sw);
         }
 
         if (!_filesystem.IsPathAllowed(parentDirectory)) {
-            return Error("Path not allowed: parent directory is outside the allowed roots.", sw);
+            return ToolResults.Failure("Path not allowed: parent directory is outside the allowed roots.", sw);
         }
 
+        // Deliberate exception to the provider seam: this checks a directory that does
+        // not exist yet (the CLI creates it), so it goes straight to System.IO.
         var targetDirectory = Path.Combine(Path.GetFullPath(parentDirectory), name);
         if (Directory.Exists(targetDirectory) && Directory.EnumerateFileSystemEntries(targetDirectory).Any()) {
-            return Error($"Target directory already exists and is not empty: {targetDirectory}", sw);
+            return ToolResults.Failure($"Target directory already exists and is not empty: {targetDirectory}", sw);
         }
 
         var arguments = $"init --name \"{name}\" --location \"{Path.GetFullPath(parentDirectory)}\" " +
@@ -78,11 +80,4 @@ public sealed class CreateProjectTool {
             DurationMs = sw.ElapsedMilliseconds
         };
     }
-
-    private static ToolResult Error(string message, Stopwatch sw) => new() {
-        Status = "error",
-        Summary = message,
-        Errors = [message],
-        DurationMs = sw.ElapsedMilliseconds
-    };
 }

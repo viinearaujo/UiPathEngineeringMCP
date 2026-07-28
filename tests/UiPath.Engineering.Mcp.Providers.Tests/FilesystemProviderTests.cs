@@ -4,20 +4,16 @@ using UiPath.Engineering.Mcp.Providers.Filesystem;
 
 namespace UiPath.Engineering.Mcp.Providers.Tests;
 
-public class FilesystemProviderTests
-{
-    private static FilesystemProvider CreateSut(params string[] roots)
-    {
-        var options = Options.Create(new ProjectRootOptions
-        {
+public class FilesystemProviderTests {
+    private static FilesystemProvider CreateSut(params string[] roots) {
+        var options = Options.Create(new ProjectRootOptions {
             AllowedRoots = roots.ToList()
         });
         return new FilesystemProvider(options);
     }
 
     [Fact]
-    public void IsPathAllowed_RootItself_IsAllowed()
-    {
+    public void IsPathAllowed_RootItself_IsAllowed() {
         var root = Path.Combine(Path.GetTempPath(), "mcp-root");
         var sut = CreateSut(root);
 
@@ -25,8 +21,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void IsPathAllowed_ChildPath_IsAllowed()
-    {
+    public void IsPathAllowed_ChildPath_IsAllowed() {
         var root = Path.Combine(Path.GetTempPath(), "mcp-root");
         var child = Path.Combine(root, "projectA", "project.json");
         var sut = CreateSut(root);
@@ -35,8 +30,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void IsPathAllowed_SiblingWithSharedPrefix_IsRejected()
-    {
+    public void IsPathAllowed_SiblingWithSharedPrefix_IsRejected() {
         // Guard against the classic prefix bug: "mcp-root" must NOT allow "mcp-root-evil".
         var root = Path.Combine(Path.GetTempPath(), "mcp-root");
         var sibling = Path.Combine(Path.GetTempPath(), "mcp-root-evil", "project.json");
@@ -46,8 +40,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void IsPathAllowed_UnrelatedPath_IsRejected()
-    {
+    public void IsPathAllowed_UnrelatedPath_IsRejected() {
         var root = Path.Combine(Path.GetTempPath(), "mcp-root");
         var sut = CreateSut(root);
 
@@ -57,24 +50,21 @@ public class FilesystemProviderTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public void IsPathAllowed_EmptyOrWhitespace_IsRejected(string path)
-    {
+    public void IsPathAllowed_EmptyOrWhitespace_IsRejected(string path) {
         var sut = CreateSut(Path.GetTempPath());
 
         Assert.False(sut.IsPathAllowed(path));
     }
 
     [Fact]
-    public void IsPathAllowed_NoRootsConfigured_RejectsEverything()
-    {
+    public void IsPathAllowed_NoRootsConfigured_RejectsEverything() {
         var sut = CreateSut();
 
         Assert.False(sut.IsPathAllowed(Path.GetTempPath()));
     }
 
     [Fact]
-    public void FindProjectJson_LocatesFileInDirectory()
-    {
+    public void FindProjectJson_LocatesFileInDirectory() {
         using var temp = new TempDir();
         File.WriteAllText(Path.Combine(temp.Path, "project.json"), "{}");
         var sut = CreateSut(temp.Path);
@@ -86,8 +76,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void FindProjectJson_ReturnsNullWhenMissing()
-    {
+    public void FindProjectJson_ReturnsNullWhenMissing() {
         using var temp = new TempDir();
         var sut = CreateSut(temp.Path);
 
@@ -95,8 +84,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void FindXamlFiles_SkipsBinObjAndVcsFolders()
-    {
+    public void FindXamlFiles_SkipsBinObjAndVcsFolders() {
         using var temp = new TempDir();
 
         // Real workflows.
@@ -125,16 +113,14 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void FindXamlFiles_NonExistentDirectory_ReturnsEmpty()
-    {
+    public void FindXamlFiles_NonExistentDirectory_ReturnsEmpty() {
         var sut = CreateSut(Path.GetTempPath());
 
         Assert.Empty(sut.FindXamlFiles(Path.Combine(Path.GetTempPath(), "does-not-exist-xyz")));
     }
 
     [Fact]
-    public void GetDirectoryTree_RespectsMaxDepth()
-    {
+    public void GetDirectoryTree_RespectsMaxDepth() {
         using var temp = new TempDir();
         var level1 = Directory.CreateDirectory(Path.Combine(temp.Path, "Level1"));
         var level2 = Directory.CreateDirectory(Path.Combine(level1.FullName, "Level2"));
@@ -151,8 +137,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void GetDirectoryTree_SkipsIgnoredDirectoriesAndIncludesFiles()
-    {
+    public void GetDirectoryTree_SkipsIgnoredDirectoriesAndIncludesFiles() {
         using var temp = new TempDir();
         File.WriteAllText(Path.Combine(temp.Path, "Main.xaml"), "<x/>");
         Directory.CreateDirectory(Path.Combine(temp.Path, "Sub"));
@@ -174,8 +159,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void GetDirectoryTree_NonExistentDirectory_ReturnsEmptyRootNode()
-    {
+    public void GetDirectoryTree_NonExistentDirectory_ReturnsEmptyRootNode() {
         var sut = CreateSut(Path.GetTempPath());
         var missing = Path.Combine(Path.GetTempPath(), "does-not-exist-xyz");
 
@@ -187,8 +171,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void WriteAllText_InsideAllowedRoot_WritesFile()
-    {
+    public void WriteAllText_InsideAllowedRoot_WritesFile() {
         using var temp = new TempDir();
         var sut = CreateSut(temp.Path);
         var target = Path.Combine(temp.Path, "Main.xaml");
@@ -200,8 +183,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void WriteAllText_OutsideAllowedRoot_Throws()
-    {
+    public void WriteAllText_OutsideAllowedRoot_Throws() {
         using var temp = new TempDir();
         var sut = CreateSut(temp.Path);
         var outside = Path.Combine(Path.GetTempPath(), "outside-" + Guid.NewGuid().ToString("N"), "Main.xaml");
@@ -210,8 +192,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void CreateDirectory_OutsideAllowedRoot_Throws()
-    {
+    public void CreateDirectory_OutsideAllowedRoot_Throws() {
         using var temp = new TempDir();
         var sut = CreateSut(temp.Path);
         var outside = Path.Combine(Path.GetTempPath(), "outside-" + Guid.NewGuid().ToString("N"));
@@ -220,8 +201,7 @@ public class FilesystemProviderTests
     }
 
     [Fact]
-    public void CreateDirectory_InsideAllowedRoot_CreatesDirectory()
-    {
+    public void CreateDirectory_InsideAllowedRoot_CreatesDirectory() {
         using var temp = new TempDir();
         var sut = CreateSut(temp.Path);
         var target = Path.Combine(temp.Path, "Workflows", "Nested");
@@ -231,17 +211,14 @@ public class FilesystemProviderTests
         Assert.True(Directory.Exists(target));
     }
 
-    private sealed class TempDir : IDisposable
-    {
+    private sealed class TempDir : IDisposable {
         public string Path { get; } =
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mcp-tests-" + Guid.NewGuid().ToString("N"));
 
         public TempDir() => Directory.CreateDirectory(Path);
 
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, recursive: true); }
-            catch { /* best effort */ }
+        public void Dispose() {
+            try { Directory.Delete(Path, recursive: true); } catch { /* best effort */ }
         }
     }
 }

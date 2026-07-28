@@ -10,26 +10,13 @@ namespace UiPath.Engineering.Mcp.Core.Parsing;
 /// of the file stay byte-identical; edits never throw, failures come back as
 /// <see cref="XamlEditResult.Error"/>.
 /// </summary>
-public static class XamlActivityEditor
-{
+public static class XamlActivityEditor {
     public const string Insert = "insert";
     public const string Replace = "replace";
     public const string Remove = "remove";
 
     public const string First = "first";
     public const string Last = "last";
-
-    // Same idea as XamlWorkflowParser.NonActivityElements: these are XAML
-    // infrastructure, not matchable activities.
-    private static readonly HashSet<string> NonActivityElements = new(StringComparer.Ordinal)
-    {
-        "Activity", "ActivityBuilder", "Members", "Property", "Variable", "Reference",
-        "Collection", "Dictionary", "Array", "Key", "AssemblyReference",
-        "InArgument", "OutArgument", "InOutArgument", "Literal",
-        "DelegateInArgument", "DelegateOutArgument", "DelegateInReference", "DelegateOutReference",
-        "ActivityAction", "Catch", "String", "Boolean", "Int32", "Int64", "Double",
-        "Object", "Null", "VisualBasicValue", "VisualBasicReference", "CSharpValue", "CSharpReference"
-    };
 
     // Namespaces commonly used inside UiPath workflow bodies, so fragments can use
     // unprefixed WF activities plus the ui:/x: prefixes without repeating declarations.
@@ -47,32 +34,25 @@ public static class XamlActivityEditor
         string displayName,
         string? activityType = null,
         string? fragment = null,
-        string position = Last)
-    {
-        if (string.IsNullOrWhiteSpace(displayName))
-        {
+        string position = Last) {
+        if (string.IsNullOrWhiteSpace(displayName)) {
             return XamlEditResult.Failure("displayName is required to locate the target activity.");
         }
 
         XDocument doc;
-        try
-        {
+        try {
             doc = XDocument.Parse(xamlContent, LoadOptions.PreserveWhitespace);
-        }
-        catch (Exception ex) when (ex is XmlException or InvalidOperationException)
-        {
+        } catch (Exception ex) when (ex is XmlException or InvalidOperationException) {
             return XamlEditResult.Failure($"XAML parse failure: {ex.Message}");
         }
 
         var matches = FindMatches(doc, displayName, activityType);
-        if (matches.Count == 0)
-        {
+        if (matches.Count == 0) {
             return XamlEditResult.Failure(
                 $"No activity found with DisplayName '{displayName}'" +
                 (activityType is null ? "." : $" of type '{activityType}'."));
         }
-        if (matches.Count > 1)
-        {
+        if (matches.Count > 1) {
             return XamlEditResult.Failure(
                 $"Found {matches.Count} activities with DisplayName '{displayName}'. " +
                 "Pass activityType to disambiguate, or make display names unique.");
@@ -80,8 +60,7 @@ public static class XamlActivityEditor
 
         var target = matches[0];
 
-        switch (operation)
-        {
+        switch (operation) {
             case Remove:
                 RemoveElement(target);
                 break;
@@ -89,16 +68,12 @@ public static class XamlActivityEditor
             case Insert:
             case Replace:
                 var nodes = ParseFragment(fragment, out var fragmentError);
-                if (nodes is null)
-                {
+                if (nodes is null) {
                     return XamlEditResult.Failure(fragmentError!);
                 }
-                if (operation == Insert)
-                {
+                if (operation == Insert) {
                     InsertInto(target, nodes, position == First);
-                }
-                else
-                {
+                } else {
                     target.ReplaceWith(nodes);
                 }
                 break;
@@ -110,26 +85,22 @@ public static class XamlActivityEditor
         return XamlEditResult.Ok(Serialize(doc), matches.Count);
     }
 
-    private static List<XElement> FindMatches(XDocument doc, string displayName, string? activityType)
-    {
+    private static List<XElement> FindMatches(XDocument doc, string displayName, string? activityType) {
         return doc.Descendants()
             .Where(e => !e.Name.LocalName.Contains('.')
-                && !NonActivityElements.Contains(e.Name.LocalName)
+                && !XamlWorkflowParser.NonActivityElements.Contains(e.Name.LocalName)
                 && string.Equals(e.Attribute("DisplayName")?.Value, displayName, StringComparison.Ordinal)
                 && (activityType is null || string.Equals(e.Name.LocalName, activityType, StringComparison.OrdinalIgnoreCase)))
             .ToList();
     }
 
-    private static List<XElement>? ParseFragment(string? fragment, out string? error)
-    {
-        if (string.IsNullOrWhiteSpace(fragment))
-        {
+    private static List<XElement>? ParseFragment(string? fragment, out string? error) {
+        if (string.IsNullOrWhiteSpace(fragment)) {
             error = "fragment is required for insert and replace operations.";
             return null;
         }
 
-        try
-        {
+        try {
             var wrapped = XDocument.Parse($"<Wrapper {FragmentWrapperNamespaces}>{fragment}</Wrapper>",
                 LoadOptions.PreserveWhitespace);
 
@@ -142,21 +113,17 @@ public static class XamlActivityEditor
                 .ToDictionary(a => (XNamespace)a.Value, a => a.Name.LocalName);
 
             var nodes = wrapped.Root!.Elements().ToList();
-            if (nodes.Count == 0)
-            {
+            if (nodes.Count == 0) {
                 error = "fragment did not contain any activity element.";
                 return null;
             }
-            foreach (var node in nodes)
-            {
+            foreach (var node in nodes) {
                 node.Remove();
                 ApplyFragmentPrefixes(node, prefixes);
             }
             error = null;
             return nodes;
-        }
-        catch (Exception ex) when (ex is XmlException or InvalidOperationException)
-        {
+        } catch (Exception ex) when (ex is XmlException or InvalidOperationException) {
             error = $"fragment is not valid XAML: {ex.Message}";
             return null;
         }
@@ -167,8 +134,7 @@ public static class XamlActivityEditor
     // namespace with its conventional prefix (e.g. xmlns:ui="...") on the fragment root.
     // Redundant declarations (prefix already in scope in the target document) are dropped
     // by the serializer.
-    private static void ApplyFragmentPrefixes(XElement node, Dictionary<XNamespace, string> prefixes)
-    {
+    private static void ApplyFragmentPrefixes(XElement node, Dictionary<XNamespace, string> prefixes) {
         var used = node.DescendantsAndSelf()
             .SelectMany(e => e.Attributes()
                 .Where(a => !a.IsNamespaceDeclaration)
@@ -177,84 +143,68 @@ public static class XamlActivityEditor
             .Where(ns => ns != XNamespace.None)
             .Distinct();
 
-        foreach (var ns in used)
-        {
-            if (!prefixes.TryGetValue(ns, out var prefix) || prefix.Length == 0)
-            {
+        foreach (var ns in used) {
+            if (!prefixes.TryGetValue(ns, out var prefix) || prefix.Length == 0) {
                 continue; // default WF namespace resolves against the target document root
             }
             node.SetAttributeValue(XNamespace.Xmlns + prefix, ns.NamespaceName);
         }
     }
 
-    private static void InsertInto(XElement target, List<XElement> nodes, bool first)
-    {
+    private static void InsertInto(XElement target, List<XElement> nodes, bool first) {
         var ownIndent = GetIndent(target);
         var childIndent = DetectChildIndent(target) ?? ownIndent + "  ";
 
-        if (first && target.FirstNode is not null)
-        {
+        if (first && target.FirstNode is not null) {
             var anchor = target.FirstNode;
-            foreach (var node in nodes)
-            {
+            foreach (var node in nodes) {
                 anchor.AddBeforeSelf(new XText("\n" + childIndent), node);
             }
             return;
         }
 
         // Append: drop the whitespace that currently pads the closing tag, then rebuild it.
-        if (target.LastNode is XText trailing && string.IsNullOrWhiteSpace(trailing.Value))
-        {
+        if (target.LastNode is XText trailing && string.IsNullOrWhiteSpace(trailing.Value)) {
             trailing.Remove();
         }
-        foreach (var node in nodes)
-        {
+        foreach (var node in nodes) {
             target.Add(new XText("\n" + childIndent), node);
         }
         target.Add(new XText("\n" + ownIndent));
     }
 
-    private static void RemoveElement(XElement element)
-    {
+    private static void RemoveElement(XElement element) {
         // Also drop the indentation text in front of the element so no blank line remains.
-        if (element.PreviousNode is XText leading && string.IsNullOrWhiteSpace(leading.Value))
-        {
+        if (element.PreviousNode is XText leading && string.IsNullOrWhiteSpace(leading.Value)) {
             leading.Remove();
         }
         element.Remove();
     }
 
-    private static string GetIndent(XElement element)
-    {
-        if (element.PreviousNode is XText text)
-        {
+    private static string GetIndent(XElement element) {
+        if (element.PreviousNode is XText text) {
             var value = text.Value;
             var lastNewline = value.LastIndexOf('\n');
-            if (lastNewline >= 0)
-            {
+            if (lastNewline >= 0) {
                 return value[(lastNewline + 1)..];
             }
         }
         return string.Empty;
     }
 
-    private static string? DetectChildIndent(XElement target)
-    {
+    private static string? DetectChildIndent(XElement target) {
         var firstChild = target.Elements().FirstOrDefault();
         return firstChild is null ? null : GetIndent(firstChild);
     }
 
-    private static string Serialize(XDocument doc)
-    {
-        var settings = new XmlWriterSettings
-        {
+    private static string Serialize(XDocument doc) {
+        var settings = new XmlWriterSettings {
             Indent = false,
             OmitXmlDeclaration = doc.Declaration is null,
             Encoding = System.Text.Encoding.UTF8
         };
         using var writer = new StringWriterWithEncoding(System.Text.Encoding.UTF8);
-        using (var xml = XmlWriter.Create(writer, settings))
-        {
+        using (var xml = XmlWriter.Create(writer, settings)) {
             doc.Save(xml);
         }
         return writer.ToString();
@@ -262,16 +212,14 @@ public static class XamlActivityEditor
 
     // XmlWriter picks the encoding from the TextWriter; StringWriter reports UTF-16,
     // which would rewrite the declaration to utf-16 while callers write UTF-8 files.
-    private sealed class StringWriterWithEncoding : StringWriter
-    {
+    private sealed class StringWriterWithEncoding : StringWriter {
         private readonly System.Text.Encoding _encoding;
         public StringWriterWithEncoding(System.Text.Encoding encoding) => _encoding = encoding;
         public override System.Text.Encoding Encoding => _encoding;
     }
 }
 
-public sealed record XamlEditResult(bool Success, string? UpdatedContent, string? Error, int MatchCount)
-{
+public sealed record XamlEditResult(bool Success, string? UpdatedContent, string? Error, int MatchCount) {
     public static XamlEditResult Ok(string content, int matchCount) => new(true, content, null, matchCount);
     public static XamlEditResult Failure(string error) => new(false, null, error, 0);
 }

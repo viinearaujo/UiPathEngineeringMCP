@@ -22,19 +22,16 @@ public sealed class ValidateProjectTool {
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Run restore?")] bool restore = true,
         [Description("Run analyze?")] bool analyze = true,
-        [Description("Run pack?")] bool pack = false) {
-        
+        [Description("Run pack?")] bool pack = false,
+        CancellationToken cancellationToken = default) {
+
         var sw = Stopwatch.StartNew();
 
-        if (!_filesystem.IsPathAllowed(projectPath)) {
-            return new ToolResult { Status = "error", Summary = "Path not allowed.", Errors = ["Path outside allowed roots."], DurationMs = sw.ElapsedMilliseconds };
+        if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } guardFailure) {
+            return guardFailure;
         }
 
-        if (_filesystem.FindProjectJson(projectPath) == null) {
-            return new ToolResult { Status = "error", Summary = "project.json not found.", Errors = ["Invalid UiPath project directory."], DurationMs = sw.ElapsedMilliseconds };
-        }
-
-        var cliResult = await _cliProvider.ValidateAsync(projectPath, restore, analyze, pack);
+        var cliResult = await _cliProvider.ValidateAsync(projectPath, restore, analyze, pack, cancellationToken);
 
         return new ToolResult {
             Status = cliResult.Success ? "success" : "error",

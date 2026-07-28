@@ -2,8 +2,7 @@ using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Providers.Tests;
 
-public class UiPathCliOutputParserTests
-{
+public class UiPathCliOutputParserTests {
     private const string CleanRestoreOutput = """
         Restoring packages for C:\projects\testProcess\project.json...
         Installed UiPath.System.Activities 24.10.3 from https://pkgs.dev.azure.com/uipath/nuget/v3/index.json
@@ -18,8 +17,7 @@ public class UiPathCliOutputParserTests
         """;
 
     [Fact]
-    public void Parse_CleanOutput_ProducesNoEntries()
-    {
+    public void Parse_CleanOutput_ProducesNoEntries() {
         var (errors, warnings) = UiPathCliOutputParser.Parse("restore", CleanRestoreOutput, "");
 
         Assert.Empty(errors);
@@ -27,8 +25,7 @@ public class UiPathCliOutputParserTests
     }
 
     [Fact]
-    public void Parse_AnalyzerErrorAndWarningLines_ExtractsStructuredEntries()
-    {
+    public void Parse_AnalyzerErrorAndWarningLines_ExtractsStructuredEntries() {
         var (errors, warnings) = UiPathCliOutputParser.Parse("analyze", AnalyzeWithIssuesOutput, "");
 
         Assert.Equal(2, errors.Count);
@@ -38,8 +35,7 @@ public class UiPathCliOutputParserTests
     }
 
     [Fact]
-    public void Parse_NuGetStyleErrorLine_ExtractsCodeAndMessage()
-    {
+    public void Parse_NuGetStyleErrorLine_ExtractsCodeAndMessage() {
         var stdOut = "error NU1101: Unable to find package UiPath.Fake.Package. No packages exist with this id.";
 
         var (errors, warnings) = UiPathCliOutputParser.Parse("restore", stdOut, "");
@@ -50,8 +46,7 @@ public class UiPathCliOutputParserTests
     }
 
     [Fact]
-    public void Parse_LowercaseWarningPrefix_GoesToWarnings()
-    {
+    public void Parse_LowercaseWarningPrefix_GoesToWarnings() {
         var stdOut = "warning: The project uses a legacy dependency format.";
 
         var (errors, warnings) = UiPathCliOutputParser.Parse("restore", stdOut, "");
@@ -62,8 +57,7 @@ public class UiPathCliOutputParserTests
     }
 
     [Fact]
-    public void Parse_UnrecognizedLineMentioningError_IsPreservedVerbatim()
-    {
+    public void Parse_UnrecognizedLineMentioningError_IsPreservedVerbatim() {
         var stdOut = "The operation completed with 3 unexpected errors.";
 
         var (errors, warnings) = UiPathCliOutputParser.Parse("pack", stdOut, "");
@@ -73,8 +67,7 @@ public class UiPathCliOutputParserTests
     }
 
     [Fact]
-    public void Parse_StdErrLines_BecomeErrors()
-    {
+    public void Parse_StdErrLines_BecomeErrors() {
         var stdErr = "System.IO.IOException: The process cannot access the file.";
 
         var (errors, warnings) = UiPathCliOutputParser.Parse("analyze", "", stdErr);
@@ -85,8 +78,7 @@ public class UiPathCliOutputParserTests
     }
 
     [Fact]
-    public void Parse_EmptyOutput_ReturnsEmptyLists()
-    {
+    public void Parse_EmptyOutput_ReturnsEmptyLists() {
         var (errors, warnings) = UiPathCliOutputParser.Parse("restore", "", null);
 
         Assert.Empty(errors);

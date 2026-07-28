@@ -25,18 +25,13 @@ public sealed class CreateWorkItemsTool {
 
     [McpServerTool, Description("Creates GitLab issues (work items) in the configured project and reports which ones were created and which failed.")]
     public async Task<ToolResult> CreateWorkItems(
-        [Description("Array of work items to create, each with title, description, and optional labels.")] List<WorkItemInput> items) {
+        [Description("Array of work items to create, each with title, description, and optional labels.")] List<WorkItemInput> items,
+        CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
 
         if (items is null || items.Count == 0) {
-            return new ToolResult {
-                Status = "error",
-                Summary = "No work items provided.",
-                Data = new { success = false, created = Array.Empty<object>(), failed = Array.Empty<object>(), errors = new[] { "Provide at least one work item." }, warnings = Array.Empty<string>() },
-                Errors = ["Provide at least one work item."],
-                DurationMs = sw.ElapsedMilliseconds
-            };
+            return ToolResults.Failure("No work items provided.", "Provide at least one work item.", sw);
         }
 
         var created = new List<object>();
@@ -50,12 +45,11 @@ public sealed class CreateWorkItemsTool {
                 continue;
             }
 
-            var result = await _gitLab.CreateIssueAsync(item.Title, item.Description ?? string.Empty, item.Labels ?? []);
+            var result = await _gitLab.CreateIssueAsync(item.Title, item.Description ?? string.Empty, item.Labels ?? [], cancellationToken);
 
             if (result.Success && result.Issue is not null) {
                 created.Add(new { iid = result.Issue.Iid, title = result.Issue.Title, webUrl = result.Issue.WebUrl });
-            }
-            else {
+            } else {
                 var error = string.Join(" ", result.Errors);
                 failed.Add(new { title = item.Title, error });
                 errors.Add(error);
@@ -64,16 +58,11 @@ public sealed class CreateWorkItemsTool {
 
         var success = failed.Count == 0;
 
+        // The envelope carries status/errors; Data holds only the per-item payload.
         return new ToolResult {
             Status = success ? "success" : "error",
             Summary = $"Created {created.Count} work item(s), {failed.Count} failed.",
-            Data = new {
-                success,
-                created,
-                failed,
-                errors,
-                warnings = Array.Empty<string>()
-            },
+            Data = new { created, failed },
             Errors = errors,
             DurationMs = sw.ElapsedMilliseconds
         };

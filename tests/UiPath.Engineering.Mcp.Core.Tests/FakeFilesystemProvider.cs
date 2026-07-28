@@ -6,8 +6,7 @@ namespace UiPath.Engineering.Mcp.Core.Tests;
 /// <summary>
 /// In-memory <see cref="IFilesystemProvider"/> so Core parsing can be tested without touching disk.
 /// </summary>
-internal sealed class FakeFilesystemProvider : IFilesystemProvider
-{
+internal sealed class FakeFilesystemProvider : IFilesystemProvider {
     public bool Allowed { get; set; } = true;
     public string? ProjectJsonPath { get; set; }
     public List<string> XamlFiles { get; } = [];

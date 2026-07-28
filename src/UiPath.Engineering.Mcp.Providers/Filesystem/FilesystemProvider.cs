@@ -5,31 +5,32 @@ using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Providers.Filesystem;
 
-public sealed class FilesystemProvider : IFilesystemProvider
-{
+public sealed class FilesystemProvider : IFilesystemProvider {
     private static readonly string[] IgnoredDirectories =
     [
-        ".git", ".local", ".settings", ".objects", "bin", "obj", "node_modules", ".vs"
+        ".git",
+        ".local",
+        ".settings",
+        ".objects",
+        "bin",
+        "obj",
+        "node_modules",
+        ".vs"
     ];
 
     private readonly ProjectRootOptions _options;
 
     public FilesystemProvider(IOptions<ProjectRootOptions> options) => _options = options.Value;
 
-    public bool IsPathAllowed(string requestedPath)
-    {
-        if (string.IsNullOrWhiteSpace(requestedPath))
-        {
+    public bool IsPathAllowed(string requestedPath) {
+        if (string.IsNullOrWhiteSpace(requestedPath)) {
             return false;
         }
 
         string fullPath;
-        try
-        {
+        try {
             fullPath = Path.GetFullPath(requestedPath);
-        }
-        catch
-        {
+        } catch {
             return false;
         }
 
@@ -41,13 +42,11 @@ public sealed class FilesystemProvider : IFilesystemProvider
 
     // Ensures the requested path is the root itself or a child of it, guarding against
     // prefix false-positives like root "C:\foo" incorrectly allowing "C:\foobar".
-    private static bool IsWithin(string root, string candidate)
-    {
+    private static bool IsWithin(string root, string candidate) {
         var normalizedRoot = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var normalizedCandidate = candidate.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-        if (string.Equals(normalizedRoot, normalizedCandidate, StringComparison.OrdinalIgnoreCase))
-        {
+        if (string.Equals(normalizedRoot, normalizedCandidate, StringComparison.OrdinalIgnoreCase)) {
             return true;
         }
 
@@ -56,11 +55,9 @@ public sealed class FilesystemProvider : IFilesystemProvider
             StringComparison.OrdinalIgnoreCase);
     }
 
-    public string? FindProjectJson(string projectPath)
-    {
+    public string? FindProjectJson(string projectPath) {
         var path = Path.GetFullPath(projectPath);
-        if (File.Exists(path) && Path.GetFileName(path).Equals("project.json", StringComparison.OrdinalIgnoreCase))
-        {
+        if (File.Exists(path) && Path.GetFileName(path).Equals("project.json", StringComparison.OrdinalIgnoreCase)) {
             return path;
         }
 
@@ -68,11 +65,9 @@ public sealed class FilesystemProvider : IFilesystemProvider
         return File.Exists(jsonPath) ? jsonPath : null;
     }
 
-    public IReadOnlyList<string> FindXamlFiles(string projectPath)
-    {
+    public IReadOnlyList<string> FindXamlFiles(string projectPath) {
         var path = Path.GetFullPath(projectPath);
-        if (!Directory.Exists(path))
-        {
+        if (!Directory.Exists(path)) {
             return [];
         }
 
@@ -81,96 +76,74 @@ public sealed class FilesystemProvider : IFilesystemProvider
         return EnumerateXaml(path).ToList();
     }
 
-    private static IEnumerable<string> EnumerateXaml(string directory)
-    {
+    private static IEnumerable<string> EnumerateXaml(string directory) {
         IEnumerable<string> files;
-        try
-        {
+        try {
             files = Directory.EnumerateFiles(directory, "*.xaml");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             files = [];
         }
 
-        foreach (var file in files)
-        {
+        foreach (var file in files) {
             yield return file;
         }
 
         IEnumerable<string> subDirs;
-        try
-        {
+        try {
             subDirs = Directory.EnumerateDirectories(directory);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             yield break;
         }
 
-        foreach (var sub in subDirs)
-        {
+        foreach (var sub in subDirs) {
             var name = Path.GetFileName(sub);
-            if (IgnoredDirectories.Contains(name, StringComparer.OrdinalIgnoreCase))
-            {
+            if (IgnoredDirectories.Contains(name, StringComparer.OrdinalIgnoreCase)) {
                 continue;
             }
 
-            foreach (var file in EnumerateXaml(sub))
-            {
+            foreach (var file in EnumerateXaml(sub)) {
                 yield return file;
             }
         }
     }
 
-    public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3)
-    {
+    public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) {
         var path = Path.GetFullPath(root);
         return BuildTree(path, maxDepth, depth: 0);
     }
 
-    private static DirectoryTreeNode BuildTree(string path, int maxDepth, int depth)
-    {
-        var node = new DirectoryTreeNode
-        {
+    private static DirectoryTreeNode BuildTree(string path, int maxDepth, int depth) {
+        var node = new DirectoryTreeNode {
             Name = Path.GetFileName(path) is { Length: > 0 } name ? name : path,
             Path = path,
             IsDirectory = true
         };
 
-        if (depth >= maxDepth)
-        {
+        if (depth >= maxDepth) {
             return node;
         }
 
         IEnumerable<string> subDirs;
         IEnumerable<string> files;
-        try
-        {
+        try {
             subDirs = Directory.EnumerateDirectories(path);
             files = Directory.EnumerateFiles(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             // Inaccessible directory: return the node with no children rather than failing.
             return node;
         }
 
-        foreach (var sub in subDirs)
-        {
+        foreach (var sub in subDirs) {
             var subName = Path.GetFileName(sub);
-            if (IgnoredDirectories.Contains(subName, StringComparer.OrdinalIgnoreCase))
-            {
+            if (IgnoredDirectories.Contains(subName, StringComparer.OrdinalIgnoreCase)) {
                 continue;
             }
 
             node.Children.Add(BuildTree(sub, maxDepth, depth + 1));
         }
 
-        foreach (var file in files)
-        {
-            node.Children.Add(new DirectoryTreeNode
-            {
+        foreach (var file in files) {
+            node.Children.Add(new DirectoryTreeNode {
                 Name = Path.GetFileName(file),
                 Path = file,
                 IsDirectory = false
@@ -185,24 +158,20 @@ public sealed class FilesystemProvider : IFilesystemProvider
 
     public DateTime GetLastWriteTimeUtc(string filePath) => File.GetLastWriteTimeUtc(filePath);
 
-    public void CreateDirectory(string path)
-    {
+    public void CreateDirectory(string path) {
         EnsureAllowed(path);
         Directory.CreateDirectory(Path.GetFullPath(path));
     }
 
-    public void WriteAllText(string filePath, string content)
-    {
+    public void WriteAllText(string filePath, string content) {
         EnsureAllowed(filePath);
         File.WriteAllText(Path.GetFullPath(filePath), content);
     }
 
     public bool FileExists(string path) => File.Exists(Path.GetFullPath(path));
 
-    private void EnsureAllowed(string path)
-    {
-        if (!IsPathAllowed(path))
-        {
+    private void EnsureAllowed(string path) {
+        if (!IsPathAllowed(path)) {
             throw new UnauthorizedAccessException($"Path is outside the configured allowed roots: {path}");
         }
     }

@@ -4,12 +4,9 @@ using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Providers.Tests;
 
-public class UiPathCliProviderTests
-{
-    private static UiPathCliProvider CreateSut(string executablePath)
-    {
-        var options = Options.Create(new UiPathCliOptions
-        {
+public class UiPathCliProviderTests {
+    private static UiPathCliProvider CreateSut(string executablePath) {
+        var options = Options.Create(new UiPathCliOptions {
             ExecutablePath = executablePath,
             DefaultTimeoutSeconds = 5
         });
@@ -17,8 +14,7 @@ public class UiPathCliProviderTests
     }
 
     [Fact]
-    public async Task ValidateAsync_NoStepsRequested_SucceedsWithoutRunningAnything()
-    {
+    public async Task ValidateAsync_NoStepsRequested_SucceedsWithoutRunningAnything() {
         var sut = CreateSut("uip.exe");
 
         var result = await sut.ValidateAsync("/some/project", restore: false, analyze: false, pack: false);
@@ -33,8 +29,7 @@ public class UiPathCliProviderTests
     }
 
     [Fact]
-    public async Task ValidateAsync_MissingExecutable_ReturnsStructuredError()
-    {
+    public async Task ValidateAsync_MissingExecutable_ReturnsStructuredError() {
         // A path that cannot be started -> provider must return a structured error, not throw.
         var sut = CreateSut(Path.Combine(Path.GetTempPath(), "definitely-not-a-real-uip-xyz.exe"));
 
@@ -47,8 +42,7 @@ public class UiPathCliProviderTests
     }
 
     [Fact]
-    public async Task ValidateAsync_FirstStepFails_LaterStepsAreMarkedNotExecuted()
-    {
+    public async Task ValidateAsync_FirstStepFails_LaterStepsAreMarkedNotExecuted() {
         // Restore fails (missing executable) -> analyze must be skipped, not silently reported as clean.
         var sut = CreateSut(Path.Combine(Path.GetTempPath(), "definitely-not-a-real-uip-xyz.exe"));
 

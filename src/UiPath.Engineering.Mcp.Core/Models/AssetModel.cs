@@ -1,7 +1,6 @@
 namespace UiPath.Engineering.Mcp.Core.Models;
 
-public sealed class AssetModel
-{
+public sealed class AssetModel {
     public string Name { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
 }

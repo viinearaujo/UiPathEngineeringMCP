@@ -3,11 +3,9 @@ using UiPath.Engineering.Mcp.Core.Templates;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
-public class TemplatesTests
-{
+public class TemplatesTests {
     [Fact]
-    public void BlankWorkflow_ProducesWellFormedXmlWithXamlClass()
-    {
+    public void BlankWorkflow_ProducesWellFormedXmlWithXamlClass() {
         var xaml = XamlWorkflowTemplates.BlankWorkflow("Workflows_SendEmail");
 
         var doc = XDocument.Parse(xaml);
@@ -20,14 +18,12 @@ public class TemplatesTests
     [InlineData("Workflows/SendEmail.xaml", "Workflows_SendEmail")]
     [InlineData("Workflows\\Nested\\SendEmail.xaml", "Workflows_Nested_SendEmail")]
     [InlineData("SendEmail", "SendEmail")]
-    public void ToXamlClassName_MapsRelativePathToUnderscoredClass(string relative, string expected)
-    {
+    public void ToXamlClassName_MapsRelativePathToUnderscoredClass(string relative, string expected) {
         Assert.Equal(expected, XamlWorkflowTemplates.ToXamlClassName(relative));
     }
 
     [Fact]
-    public void CodedWorkflow_ContainsBaseClassWorkflowAttributeAndNamespace()
-    {
+    public void CodedWorkflow_ContainsBaseClassWorkflowAttributeAndNamespace() {
         var code = CodedWorkflowTemplates.CodedWorkflow("My_Project", "InvoiceFlow");
 
         Assert.Contains("class InvoiceFlow : CodedWorkflow", code);
@@ -37,8 +33,7 @@ public class TemplatesTests
     }
 
     [Fact]
-    public void CodedSourceFile_HasNoWorkflowAttributeOrBaseClass()
-    {
+    public void CodedSourceFile_HasNoWorkflowAttributeOrBaseClass() {
         var code = CodedWorkflowTemplates.CodedSourceFile("My_Project", "Helpers");
 
         Assert.Contains("class Helpers", code);
@@ -51,8 +46,7 @@ public class TemplatesTests
     [InlineData("my-project", "my_project")]
     [InlineData("123Project", "_123Project")]
     [InlineData("a.b c-d", "a_bc_d")]
-    public void SanitizeNamespace_ProducesValidIdentifier(string projectName, string expected)
-    {
+    public void SanitizeNamespace_ProducesValidIdentifier(string projectName, string expected) {
         Assert.Equal(expected, CodedWorkflowTemplates.SanitizeNamespace(projectName));
     }
 
@@ -62,8 +56,7 @@ public class TemplatesTests
     [InlineData("9Lives", false)]
     [InlineData("Has Space", false)]
     [InlineData("", false)]
-    public void IsValidClassName_ValidatesIdentifiers(string name, bool expected)
-    {
+    public void IsValidClassName_ValidatesIdentifiers(string name, bool expected) {
         Assert.Equal(expected, CodedWorkflowTemplates.IsValidClassName(name));
     }
 }
