@@ -1829,7 +1829,17 @@ Status update (v2, 2026-07-28):
 - FolderStructure done: `IFilesystemProvider.GetDirectoryTree(root, maxDepth)` implemented (ignore-list aware, depth-capped, tolerant of inaccessible dirs); `UiPathProjectModel.FolderStructure` populated by `ProjectModelBuilder` and serialized by `analyze_project`.
 - Phase 9 done: `GitProvider` (`git status`/`log` via fixed arg templates, allowed-roots validated, never throws on non-repo) + `GitLabProvider` (REST v4 issue search/create, token header-only, never surfaced in errors); `search_repository` and `create_work_items` tools; `GitLab` config section added.
 - Model caching done: `CachingProjectModelBuilder` decorator (fingerprint = file count + max LastWriteTimeUtc; per-key semaphore; stale-on-error, inner exceptions never cached) registered as singleton `IProjectModelBuilder` in Server DI.
-- Remaining: Phase 3 (PowerShell Provider, still deferred — no consumer), tunnel auth hardening for production.
+Status update (v3, 2026-07-28):
+
+- UiPath official AI skills installed into the repo (`uip skills install --agent codex --local` → `.agents/skills/`, 24 skills) as the authoritative reference for CLI verb syntax and project/coded-workflow file shapes.
+- Phase 10 (authoring) done:
+  - `IUiPathCliProvider.RunAsync(verb, arguments, workingDirectory?)` generalizes the CLI provider; `ValidateAsync` behavior unchanged.
+  - `IFilesystemProvider` gains guarded write support: `CreateDirectory`/`WriteAllText` (throw outside AllowedRoots) + `FileExists`.
+  - Core templates: `XamlWorkflowTemplates` (blank workflow, x:Class = relative path with separators → underscores) and `CodedWorkflowTemplates` (`CodedWorkflow` + `[Workflow]`, plain source file, namespace sanitization per UiPath rules).
+  - New tools: `create_project` (`uip rpa init`, partial-success detected by checking created files), `add_xaml_workflow`, `write_workflow_file` (whole-file create/overwrite, `.xaml`/`.cs` allowlist, path-escape guard), `add_coded_workflow` (workflow registers `project.json` entryPoints with generated GUID; source does not).
+  - Decision: no hand-written `project.json` scaffolding fallback — UiPath's own skills explicitly forbid hand-scaffolding; CLI-only.
+- Tests: 136 total green (was 99); hand-written fakes updated for new interface members.
+- Remaining: Phase 3 (PowerShell Provider, still deferred — no consumer), publish/deploy to Orchestrator (`uip solution publish/deploy`, needs `uip login`), activity-level XAML editing, tunnel auth hardening for production.
 
 Proceed with the first milestone:
 

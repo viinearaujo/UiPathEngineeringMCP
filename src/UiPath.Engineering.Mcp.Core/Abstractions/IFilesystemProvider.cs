@@ -10,4 +10,10 @@ public interface IFilesystemProvider
     string ReadAllText(string filePath);
     DateTime GetLastWriteTimeUtc(string filePath);
     DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3);
+
+    // Write operations. Both throw UnauthorizedAccessException when the resolved
+    // path is outside the configured AllowedRoots.
+    void CreateDirectory(string path);
+    void WriteAllText(string filePath, string content);
+    bool FileExists(string path);
 }

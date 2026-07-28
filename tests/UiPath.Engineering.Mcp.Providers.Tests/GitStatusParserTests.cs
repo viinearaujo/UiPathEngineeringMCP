@@ -132,5 +132,8 @@ public class GitStatusParserTests
         public string ReadAllText(string filePath) => string.Empty;
         public DateTime GetLastWriteTimeUtc(string filePath) => DateTime.UnixEpoch;
         public UiPath.Engineering.Mcp.Core.Models.DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) => new();
+        public void CreateDirectory(string path) { }
+        public void WriteAllText(string filePath, string content) { }
+        public bool FileExists(string path) => false;
     }
 }

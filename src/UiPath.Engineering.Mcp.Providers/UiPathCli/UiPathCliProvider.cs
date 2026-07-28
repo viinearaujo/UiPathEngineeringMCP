@@ -50,7 +50,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
                 continue;
             }
 
-            var stepResult = await RunVerbAsync(verb, projectPath, cancellationToken);
+            var stepResult = await RunAsync(verb, BuildVerbArguments(verb, projectPath), null, cancellationToken);
 
             stepResults[verb] = new CliStepResult
             {
@@ -90,14 +90,11 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
         };
     }
 
-    private async Task<UiPathCliResult> RunVerbAsync(
-        string verb,
-        string projectPath,
-        CancellationToken cancellationToken)
+    // Normalize input: uip.exe can take either a project directory or an explicit path
+    // to project.json. We pass the path explicitly and quote it so paths with spaces
+    // (e.g. OneDrive folders) work.
+    private string BuildVerbArguments(string verb, string projectPath)
     {
-        // Normalize input: uip.exe can take either a project directory or an explicit path
-        // to project.json. We pass the path explicitly and quote it so paths with spaces
-        // (e.g. OneDrive folders) work.
         var arguments = $"{verb} \"{projectPath}\"";
 
         if (verb == "pack" && !string.IsNullOrWhiteSpace(_options.DefaultPackOutputDirectory))
@@ -105,6 +102,15 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
             arguments += $" --output \"{_options.DefaultPackOutputDirectory}\"";
         }
 
+        return arguments;
+    }
+
+    public async Task<UiPathCliResult> RunAsync(
+        string verb,
+        string arguments,
+        string? workingDirectory = null,
+        CancellationToken cancellationToken = default)
+    {
         var command = $"{_options.ExecutablePath} {arguments}";
 
         var psi = new ProcessStartInfo
@@ -114,7 +120,8 @@ public sealed class UiPathCliProvider : IUiPathCliProvider
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory ?? string.Empty
         };
 
         Process? process;

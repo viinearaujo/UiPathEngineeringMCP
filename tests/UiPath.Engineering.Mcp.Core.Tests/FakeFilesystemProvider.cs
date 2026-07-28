@@ -33,4 +33,10 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider
         WriteTimesUtc.TryGetValue(filePath, out var timestamp)
             ? timestamp
             : throw new FileNotFoundException(filePath);
+
+    public void CreateDirectory(string path) { }
+
+    public void WriteAllText(string filePath, string content) => FileContents[filePath] = content;
+
+    public bool FileExists(string path) => FileContents.ContainsKey(path);
 }

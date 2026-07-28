@@ -1,0 +1,417 @@
+# Operations Guide
+
+Detailed step-by-step procedures for all operations on UiPath coded workflow projects.
+
+## Initialize a New Coded Project
+
+Use this procedure ONLY when the user explicitly asked for a coded project ("coded", ".cs", "C# workflow"). For ambiguous "create a workflow" / "automate X" requests, default to XAML — see [../coded-vs-xaml-guide.md](../coded-vs-xaml-guide.md).
+
+There is no "create a coded project" command. `init` always scaffolds XAML; coded mode is a post-scaffold step (add `.cs` files, update `entryPoints`). For the canonical `init` documentation — flag semantics, scaffolding behavior, how `--expression-language` works — see [../environment-setup.md § Step 0.3: Creating a New Project](../environment-setup.md#step-03-creating-a-new-project).
+
+### Steps
+
+**1. Scaffold the project** following [../environment-setup.md § Step 0.3](../environment-setup.md#step-03-creating-a-new-project). The command is the same as for an XAML project — the scaffolding is XAML either way. The result is a project with `project.json`, `project.uiproj`, the template's XAML root file (`Main.xaml` / `TestCase.xaml`), and all required metadata directories.
+
+**2. Read the scaffolded files — do NOT overwrite blindly:**
+
+After `init` succeeds, read the generated files to understand the defaults:
+```
+Read: <PROJECT_DIR>/project.json
+Read: <PROJECT_DIR>/Main.xaml          # or TestCase.xaml for test projects
+```
+`project.json` contains valid defaults (correct schema version, runtime options, dependencies) that you should build on rather than replace. Leave the scaffolded XAML in place — `.xaml` and `.cs` workflows coexist freely in the same project.
+
+**3. Analyze the task and plan the file structure:**
+- How many workflow files? (one per logical step or responsibility)
+- Are there shared data models or helpers? (create Coded Source Files)
+- Is this a test project? (create test cases with Given/When/Then structure, optionally add Before/After hooks)
+- See [../project-structure-guide.md](../project-structure-guide.md) for guidelines
+
+**4. Add required dependencies to `project.json`** based on the Service-to-Package mapping. Edit the existing `project.json` — do NOT rewrite the entire file.
+
+**5. Add `.cs` workflow / test case / source files:**
+- Generate `.cs` files (workflows, test cases, source files)
+- For each `.cs` **workflow** file, add an entry to `entryPoints` in `project.json` (**Process projects only** — Tests and Library projects do NOT use `entryPoints`). The existing scaffolded XAML entry can stay alongside.
+- For each `.cs` **test case** file, add an entry to `designOptions.fileInfoCollection` in `project.json` with `editingStatus: "InProgress"`, `testCaseType: "TestCase"`, `publishAsTestCase: true`. Test cases do NOT go in `entryPoints` regardless of project type.
+- If test project and shared setup is needed, create a `partial class CodedWorkflow` source file that implements `IBeforeAfterRun` (see before-after-hooks-template.md)
+
+**6. Validate each file** (Critical Rule #14) — run the validation loop on every `.cs` file until it compiles cleanly
+
+> **Why `init` instead of manual files?** It generates correct schema versions, metadata directories, and default dependencies — manual creation risks subtle errors. See [json-template.md](../../assets/json-template.md) for reference-only templates.
+
+## Add a Workflow File to Existing Project
+
+**Steps:**
+1. Read existing `project.json` to get project name (for namespace), `outputType`, and current entry points
+2. Create the new `.cs` file:
+   - Use the project name as namespace
+   - Class name = file name (without .cs)
+   - Inherit from `CodedWorkflow`
+   - Add `[Workflow]` attribute on the entry-point method. Method name does not have to be `Execute` — any name works. `Execute` is convention; keep it unless the user asks otherwise
+   - Add appropriate `using` statements based on which activities are needed
+3. Argument direction is determined by the entry-point method signature. Single-return OutArgument is named **`"Output"`**. Tuple returns produce one OutArgument per element, named after the element. A tuple element name matching an input parameter name — or, for single returns, an input parameter literally named `"Output"` — collapses into one **`InOutArgument`**:
+
+   | Signature | Example | Argument directions |
+   |-----------|---------|---------------------|
+   | Single return | `public string Execute(int a, int b)` | `a` = In, `b` = In, return = Out named `"Output"` |
+   | Tuple return | `public (string Test, int A) Execute()` | `Test` = Out, `A` = Out |
+   | Tuple + name collision | `public (string a, string b) Execute(string b, int c)` | `a` = Out, `b` = InOut (same name in input and tuple), `c` = In |
+   | Single return + `Output` input | `public string Execute(string Output, int c)` | `Output` = InOut (input named `"Output"` collides with implicit return name), `c` = In |
+   | No return | `public void Execute(string input)` | `input` = In |
+
+   > **NEVER use C# `out` or `ref` keywords** on `Execute` parameters — the auto-generated `*+Activity.cs` wrapper does not handle them correctly. Symptoms: compile error `CS1620`, or runtime `Using 'out' and 'ref' modifiers is not allowed for Coded Workflows executions.` Studio regenerates the wrapper on every save, so manual fixes are reverted. Use return values or tuples for outputs instead.
+4. Update `project.json` (**Process projects only** — skip `entryPoints` for Tests and Library projects):
+   - Add new entry to `entryPoints` array with `filePath`, unique `uniqueId`, `input`, and `output` definitions
+   - If the workflow has parameters, define them in `input`/`output` with `name`, `type`, and `required`
+5. **Validate the file** — Run the validation loop (Critical Rule #14) until the file compiles cleanly before proceeding
+
+## Add a Test Case File
+
+Coded test cases automate and validate application behavior using a structured **Given-When-Then** (Arrange/Act/Assert) pattern. They inherit from `CodedWorkflow` just like workflows, but use the `[TestCase]` attribute.
+
+**Test cases can exist in any project type** — not just `"Tests"` projects. It's common to add test cases directly inside a `"Process"` project for testing purposes.
+
+**Steps:**
+1. Read existing `project.json` to get project name, `outputType`, and current entry points
+2. Create the `.cs` file following the same rules as workflows, but with:
+   - `[TestCase]` attribute instead of `[Workflow]` on the entry-point method (method name does not have to be `Execute` — any name works; keep `Execute` unless the user asks otherwise)
+   - Structured code in three phases: **Arrange**, **Act**, **Assert**
+3. Update `project.json`:
+   - Add entry to `entryPoints` array (**Process projects only** — skip `entryPoints` for Tests and Library projects)
+   - Add entry to `designOptions.fileInfoCollection` with `editingStatus: "InProgress"`, `testCaseType: "TestCase"`, `publishAsTestCase: true`
+4. For data-driven tests, add default parameter values: `public void Execute(string browser = "chrome.exe")`
+   - Optionally create `.variations/` data file for parameterized test data
+   - For CLI-based data sources (variations files, Test Data Queues, Data Service), see [../testing-guide.md § Data-Driven Testing](../testing-guide.md)
+5. **Validate the file** — Run the validation loop (Critical Rule #14) until the file compiles cleanly before proceeding
+6. **Update `editingStatus`** — When the user asks to mark a test case as ready/publishable, update its `editingStatus` in `fileInfoCollection` from `"InProgress"` to `"Publishable"`. Do NOT change this automatically — only when explicitly requested
+
+**Test case structure — Given/When/Then:**
+
+For test cases that validate non-UI logic (most common — call workflows and assert on results):
+```csharp
+using System;
+using UiPath.CodedWorkflows;
+
+namespace MyTestProject
+{
+    public class TestInvoiceCreation : CodedWorkflow
+    {
+        [TestCase]
+        public void Execute()
+        {
+            // GIVEN (Arrange) — set up test data
+            string invoiceId = "INV-001";
+            decimal amount = 1500.00m;
+            Log($"Testing invoice creation for {invoiceId}");
+
+            // WHEN (Act) — call the workflow under test
+            var result = workflows.CreateInvoice(invoiceId: invoiceId, amount: amount);
+
+            // THEN (Assert) — verify expected results
+            testing.VerifyExpression(result.success, "Invoice creation should succeed");
+            testing.VerifyAreEqual("POSTED", result.status, "Invoice should be in POSTED status");
+        }
+    }
+}
+```
+
+For test cases that validate UI behavior (requires descriptors from the Object Repository — read `ObjectRepository.cs` first and add `using <ProjectNamespace>.ObjectRepository;`):
+```csharp
+using System;
+using UiPath.CodedWorkflows;
+using UiPath.UIAutomationNext.API.Contracts;
+using MyTestProject.ObjectRepository;
+
+namespace MyTestProject
+{
+    public class TestInvoiceFormUI : CodedWorkflow
+    {
+        [TestCase]
+        public void Execute()
+        {
+            // GIVEN (Arrange) — open the application to the invoice form
+            // uiAutomation.Open() returns a screen handle; all interactions go through it
+            var formScreen = uiAutomation.Open(Descriptors.InvoiceApp.CreateInvoiceForm);
+            Log("Navigated to invoice creation form");
+
+            // WHEN (Act) — fill in details and submit
+            formScreen.TypeInto(Descriptors.InvoiceApp.CreateInvoiceForm.InvoiceNumberField, "INV-001");
+            formScreen.TypeInto(Descriptors.InvoiceApp.CreateInvoiceForm.AmountField, "1500.00");
+            formScreen.Click(Descriptors.InvoiceApp.CreateInvoiceForm.SubmitButton);
+
+            // THEN (Assert) — attach to confirmation screen and verify message
+            var confirmScreen = uiAutomation.Attach(Descriptors.InvoiceApp.ConfirmationScreen);
+            string message = confirmScreen.GetText(Descriptors.InvoiceApp.ConfirmationScreen.MessageLabel);
+            testing.VerifyExpression(message.Contains("successfully"), "Confirmation message should indicate success");
+        }
+    }
+}
+```
+
+**Assertion methods (via `testing` service):**
+- `testing.VerifyExpression(bool condition, string outputMessage = null)` — assert a boolean condition is true
+- `testing.VerifyAreEqual<T>(T expected, T actual, string outputMessage = null)` — assert equality
+- `testing.VerifyAreNotEqual<T>(T notExpected, T actual, string outputMessage = null)` — assert inequality
+- `testing.VerifyContains(string full, string part, string outputMessage = null)` — assert string containment
+- `testing.VerifyRange(double value, double min, double max, string outputMessage = null)` — assert value in range
+- `testing.SetTestDataQueueItems(...)` — set up test data from data queues
+- `testing.GetTestDataQueueItem(...)` — get next test data item
+
+**Test cases can invoke other workflows:**
+```csharp
+[TestCase]
+public void Execute()
+{
+    // Arrange — call a setup workflow using strongly-typed invocation
+    var setupResult = workflows.SetupTestData(environment: "staging");
+
+    // Act — call the workflow under test
+    var result = workflows.ProcessInvoice(invoiceId: "INV-001");
+
+    // Assert — verify the result with type-safe property access
+    testing.VerifyExpression(result.success, "Invoice processing should succeed");
+    testing.VerifyAreEqual("POSTED", result.status, "Invoice should be posted");
+}
+```
+
+**Shared Before/After hooks for all test cases:**
+Create a Coded Source File (e.g. `CodedWorkflowHooks.cs`) with `public partial class CodedWorkflow : IBeforeAfterRun` — the compiler merges it with the auto-generated CodedWorkflow partial, so all workflows and test cases get the hooks automatically. See `assets/before-after-hooks-template.md` for the full template.
+
+## Add a Coded Source File (Helper Class / Model / Utility)
+
+Coded Source Files are plain `.cs` files that contain reusable classes, models, enums, or utility methods. They are **not** entry points — they cannot be executed independently. Workflows and test cases consume them.
+
+**Key differences from workflow files:**
+- **NO** `CodedWorkflow` base class — they are plain C# classes
+- **NO** `[Workflow]` or `[TestCase]` attribute
+- **NO** entry in `project.json` `entryPoints`
+- Can contain multiple classes per file if logically related (e.g. a models file)
+
+**Steps:**
+1. Read existing `project.json` to get the project name (for namespace)
+2. Create the `.cs` file:
+   - Use the project name as namespace
+   - Class name = file name (without .cs)
+   - Add only the `using` statements the class needs (typically just `System` namespaces)
+   - Do NOT inherit from `CodedWorkflow`
+3. No `project.json` changes needed
+
+**When to create Coded Source Files:**
+- **Data models / DTOs** — classes that represent structured data (e.g. `InvoiceData`, `CustomerRecord`)
+- **Helper/utility classes** — static methods for string manipulation, data transformation, validation
+- **Custom enums** — project-specific enumerations
+- **Constants** — centralized configuration values or magic strings
+- **Extension methods** — reusable extensions for built-in types
+- **Business logic** — complex logic that should be testable/reusable independently from the workflow orchestration
+
+**Example — Data model source file (`InvoiceData.cs`):**
+```csharp
+using System;
+
+namespace MyProject
+{
+    public class InvoiceData
+    {
+        public string InvoiceNumber { get; set; }
+        public string CustomerName { get; set; }
+        public decimal Amount { get; set; }
+        public DateTime DueDate { get; set; }
+        public bool IsOverdue => DueDate < DateTime.Now;
+    }
+}
+```
+
+**Example — Utility source file (`StringHelpers.cs`):**
+```csharp
+using System;
+using System.Text.RegularExpressions;
+
+namespace MyProject
+{
+    public static class StringHelpers
+    {
+        public static string ExtractInvoiceNumber(string text)
+        {
+            var match = Regex.Match(text, @"INV-\d{6}");
+            return match.Success ? match.Value : string.Empty;
+        }
+
+        public static string NormalizeName(string name)
+        {
+            return name?.Trim().ToUpperInvariant() ?? string.Empty;
+        }
+    }
+}
+```
+
+**Using source files from a workflow:**
+```csharp
+// In ProcessInvoices.cs (a workflow)
+[Workflow]
+public void Execute()
+{
+    var invoice = new InvoiceData  // from InvoiceData.cs
+    {
+        InvoiceNumber = StringHelpers.ExtractInvoiceNumber(rawText),  // from StringHelpers.cs
+        CustomerName = StringHelpers.NormalizeName(customerField),
+        Amount = parsedAmount,
+        DueDate = dueDate
+    };
+    Log($"Processing invoice {invoice.InvoiceNumber}, overdue: {invoice.IsOverdue}");
+}
+```
+
+## Edit an Existing Workflow File
+
+**Steps:**
+1. Read the existing `.cs` file to understand current structure
+2. Apply requested changes while preserving:
+   - Namespace (must match project name)
+   - Class structure and base class (`CodedWorkflow`)
+   - Attribute (`[Workflow]` or `[TestCase]`)
+   - Method name (`Execute`)
+3. If parameters changed (added/removed/renamed/retyped) and this is a **Process** project:
+   - Update `project.json` `entryPoints` input/output definitions for this file (Tests and Library projects do not use `entryPoints`)
+4. **Validate the file** — Run the validation loop (Critical Rule #14) until the file compiles cleanly before proceeding
+
+## Remove a Workflow File
+
+**Steps:**
+1. Delete the `.cs` file
+2. Update `project.json`:
+   - **Process projects:** Remove from `entryPoints` array. If it was the `main` file, update `main` field to another entry point
+   - **Tests and Library projects:** No `entryPoints` to update
+   - If Tests project, remove from `fileInfoCollection`
+
+## API Discovery (Before Creating Workflows)
+
+**MANDATORY before generating any C# code**: Learn from existing project patterns first.
+
+This operation helps you understand the project's existing code style, API usage patterns, and conventions before creating new workflows. This ensures consistency across the project.
+
+**Steps:**
+
+1. **Search for existing C# files:**
+   ```
+   Glob pattern: "**/*.cs"
+   Path: <PROJECT_DIR>
+   ```
+
+2. **Count and filter results:**
+   - Count total .cs files returned
+   - Exclude files in `.local\.codedworkflows\` and `.codedworkflows\` from your count
+   - Note: Generated/temporary files in these folders can still be read for API information
+
+3. **Read example files:**
+   - **If 5+ files found**: Read at least 5 diverse examples
+   - **If fewer than 5**: Read all of them
+   - **If 0 files**: Proceed using generic CodedWorkflow patterns from templates
+
+4. **Read generated API files** (if they exist):
+   - `<PROJECT_DIR>\.local\.codedworkflows\ObjectRepository.cs` — UI element descriptors
+   - `<PROJECT_DIR>\.local\.codedworkflows\CodedWorkflow.cs` — available service definitions
+
+5. **Extract patterns:**
+   - Common `using` statements (e.g., `using UiPath.CodedWorkflows;`)
+   - Namespace patterns (e.g., `namespace ProjectName`)
+   - Class structure (inheritance from `CodedWorkflow`)
+   - Service usage patterns (e.g., `excel.UseExcelFile()`, `mail.Outlook()`)
+   - Argument patterns (input parameters, return tuples)
+   - Logging patterns (e.g., `Log("message")`)
+   - Error handling patterns (try-catch blocks)
+   - UI Automation patterns (Object Repository descriptor usage: `Descriptors.App.Screen.Element`)
+
+**Example patterns to look for:**
+
+```csharp
+// Common using statements
+using System;
+using System.Collections.Generic;
+using UiPath.CodedWorkflows;
+
+// Namespace pattern
+namespace MyProjectName
+{
+    // Class structure
+    public class MyWorkflow : CodedWorkflow
+    {
+        [Workflow]
+        public void Execute(string inputParam)
+        {
+            // Logging pattern
+            Log("Starting workflow...");
+
+            // Service usage pattern
+            using (var workbook = excel.UseExcelFile(inputParam))
+            {
+                // Implementation
+            }
+
+            // Error handling pattern
+            try
+            {
+                // Operations
+            }
+            catch (Exception ex)
+            {
+                Log($"Error: {ex.Message}");
+                throw;
+            }
+        }
+    }
+}
+```
+
+**Why API discovery matters:**
+- Ensures code consistency across the project
+- Prevents using incorrect method names or patterns
+- Identifies available services and their usage
+- Discovers project-specific conventions
+- Finds Object Repository selectors for UI automation
+- Reduces compilation errors from wrong API usage
+
+---
+
+## Configure UI Targets (Object Repository)
+
+**This operation applies when writing UI automation code** (any workflow that uses `uiAutomation.*` calls). UI automation uses **Object Repository descriptors** (`Descriptors.App.Screen.Element`) — if required elements are missing, configure them through the `uia-configure-target` skill flow.
+
+**When to use:**
+- The workflow needs a UI element that doesn't exist in `ObjectRepository.cs`
+- The user asks to automate something involving a screen or element not yet in the Object Repository
+
+**Workflow order:** Configure ALL missing targets FIRST, then write the workflow code using real descriptor paths.
+
+[ui-automation-guide.md](../ui-automation-guide.md) MUST be read IN FULL first, and [uia-configure-target-workflows.md](../uia-configure-target-workflows.md) MUST be read IN FULL first — they cover target configuration rules, selector recovery, indication fallback, and multi-step UI flows.
+
+**Key reminders:**
+- Add `using <ProjectNamespace>.ObjectRepository;` to any file referencing `Descriptors.*`
+- After target configuration, re-read `ObjectRepository.cs` — Studio regenerates it. Search for the reference IDs returned by `uia-configure-target` to find the exact `Descriptors.<App>.<Screen>.<Element>` paths.
+
+---
+
+## Add a Dependency
+
+Canonical CLI: `uip rpa packages install`. Do NOT hand-edit `project.json` `dependencies`. **There is no `uip rpa add-dependency` command** — agents that try it get `error: unknown command 'add-dependency'`. See [cli-reference.md § packages install](../cli-reference.md).
+
+**Steps:**
+1. Read `project.json` to check existing dependencies — skip packages already at the desired version.
+2. Run:
+   ```bash
+   uip rpa packages install --project-dir "<PROJECT_DIR>" --packages 'id=<PACKAGE_ID>,version=<VERSION>' --output json
+   ```
+   Omit `,version=<VERSION>` to resolve the latest compatible. Pin a version only when there is a known compatibility constraint (see pinned versions below). The CLI writes `project.json` and runs restore — re-read `project.json` afterward if subsequent steps need it.
+3. Only install packages the project actually needs.
+
+**Pinned versions for UiPath activity packages (current v25.x):**
+- `UiPath.System.Activities` → `25.12.2` — system activities (assets, queues, credentials)
+- `UiPath.Testing.Activities` → `25.10.2` — testing and assertions. Pin this exact patch — `25.10.0` and `25.10.1` synthesize a bootloader under `.local/install/` that references `UiPath.Robot.Activities.Api` and breaks the build with CS0234.
+- `UiPath.UIAutomation.Activities` → `25.10.21` — UI automation
+- `UiPath.Excel.Activities` → `3.3.1` — Excel automation
+- `UiPath.Word.Activities` → `2.3.1` — Word automation
+- `UiPath.Presentations.Activities` → `2.3.1` — PowerPoint automation
+- `UiPath.Mail.Activities` → `2.5.10` — Mail automation
+- `UiPath.MicrosoftOffice365.Activities` → `3.6.10` — Microsoft 365 (Graph API: mail, calendar, Excel cloud, OneDrive, SharePoint)
+- `UiPath.GSuite.Activities` → `3.6.10` — Google Workspace (Gmail, Calendar, Drive, Sheets, Docs)
+
+**Third-party NuGet packages:** same CLI — pass the public NuGet package ID as `id`. See [third-party-packages-guide.md](third-party-packages-guide.md).

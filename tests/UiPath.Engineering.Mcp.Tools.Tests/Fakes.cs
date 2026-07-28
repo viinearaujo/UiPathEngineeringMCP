@@ -11,14 +11,22 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider
 {
     public bool Allowed { get; set; } = true;
     public string? ProjectJson { get; set; } = "/projects/testProcess/project.json";
+    public string ProjectJsonContent { get; set; } = string.Empty;
+    public HashSet<string> ExistingFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> Writes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<string> CreatedDirectories { get; } = [];
 
     public bool IsPathAllowed(string requestedPath) => Allowed;
     public string? FindProjectJson(string projectPath) => ProjectJson;
     public IReadOnlyList<string> FindXamlFiles(string projectPath) => [];
-    public string ReadAllText(string filePath) => string.Empty;
+    public string ReadAllText(string filePath) => ProjectJsonContent;
     public DateTime GetLastWriteTimeUtc(string filePath) => DateTime.UnixEpoch;
     public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) =>
         new() { Name = Path.GetFileName(root) ?? root, Path = root, IsDirectory = true };
+
+    public void CreateDirectory(string path) => CreatedDirectories.Add(path);
+    public void WriteAllText(string filePath, string content) => Writes[filePath] = content;
+    public bool FileExists(string path) => ExistingFiles.Contains(path) || Writes.ContainsKey(path);
 }
 
 internal sealed class FakeProjectModelBuilder : IProjectModelBuilder
@@ -40,12 +48,22 @@ internal sealed class FakeProjectModelBuilder : IProjectModelBuilder
 internal sealed class FakeUiPathCliProvider : IUiPathCliProvider
 {
     public UiPathCliResult Result { get; set; } = new() { Success = true, Summary = "Validation completed." };
+    public UiPathCliResult RunResult { get; set; } = new() { Success = true, Summary = "Completed." };
+    public string? LastVerb { get; private set; }
+    public string? LastArguments { get; private set; }
 
     public Task<UiPathCliResult> ValidateAsync(
         string projectPath, bool restore, bool analyze, bool pack, CancellationToken cancellationToken = default)
         => Task.FromResult(Result);
-}
 
+    public Task<UiPathCliResult> RunAsync(
+        string verb, string arguments, string? workingDirectory = null, CancellationToken cancellationToken = default)
+    {
+        LastVerb = verb;
+        LastArguments = arguments;
+        return Task.FromResult(RunResult);
+    }
+}
 
 internal sealed class FakeGitProvider : IGitProvider
 {

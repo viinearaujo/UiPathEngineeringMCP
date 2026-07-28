@@ -186,6 +186,51 @@ public class FilesystemProviderTests
         Assert.Empty(tree.Children);
     }
 
+    [Fact]
+    public void WriteAllText_InsideAllowedRoot_WritesFile()
+    {
+        using var temp = new TempDir();
+        var sut = CreateSut(temp.Path);
+        var target = Path.Combine(temp.Path, "Main.xaml");
+
+        sut.WriteAllText(target, "<x/>");
+
+        Assert.Equal("<x/>", File.ReadAllText(target));
+        Assert.True(sut.FileExists(target));
+    }
+
+    [Fact]
+    public void WriteAllText_OutsideAllowedRoot_Throws()
+    {
+        using var temp = new TempDir();
+        var sut = CreateSut(temp.Path);
+        var outside = Path.Combine(Path.GetTempPath(), "outside-" + Guid.NewGuid().ToString("N"), "Main.xaml");
+
+        Assert.Throws<UnauthorizedAccessException>(() => sut.WriteAllText(outside, "<x/>"));
+    }
+
+    [Fact]
+    public void CreateDirectory_OutsideAllowedRoot_Throws()
+    {
+        using var temp = new TempDir();
+        var sut = CreateSut(temp.Path);
+        var outside = Path.Combine(Path.GetTempPath(), "outside-" + Guid.NewGuid().ToString("N"));
+
+        Assert.Throws<UnauthorizedAccessException>(() => sut.CreateDirectory(outside));
+    }
+
+    [Fact]
+    public void CreateDirectory_InsideAllowedRoot_CreatesDirectory()
+    {
+        using var temp = new TempDir();
+        var sut = CreateSut(temp.Path);
+        var target = Path.Combine(temp.Path, "Workflows", "Nested");
+
+        sut.CreateDirectory(target);
+
+        Assert.True(Directory.Exists(target));
+    }
+
     private sealed class TempDir : IDisposable
     {
         public string Path { get; } =

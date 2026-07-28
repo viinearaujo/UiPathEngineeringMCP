@@ -11,3 +11,4 @@ artifacts/
 # Dev tunnel / local secrets
 appsettings.Local.json
 *.env
+.uipath/.skills/

@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="..\buildMultiTargeting\UiPath.Engineering.Mcp.Server.props" />
-</Project>

@@ -184,4 +184,26 @@ public sealed class FilesystemProvider : IFilesystemProvider
     public string ReadAllText(string filePath) => File.ReadAllText(filePath);
 
     public DateTime GetLastWriteTimeUtc(string filePath) => File.GetLastWriteTimeUtc(filePath);
+
+    public void CreateDirectory(string path)
+    {
+        EnsureAllowed(path);
+        Directory.CreateDirectory(Path.GetFullPath(path));
+    }
+
+    public void WriteAllText(string filePath, string content)
+    {
+        EnsureAllowed(filePath);
+        File.WriteAllText(Path.GetFullPath(filePath), content);
+    }
+
+    public bool FileExists(string path) => File.Exists(Path.GetFullPath(path));
+
+    private void EnsureAllowed(string path)
+    {
+        if (!IsPathAllowed(path))
+        {
+            throw new UnauthorizedAccessException($"Path is outside the configured allowed roots: {path}");
+        }
+    }
 }
