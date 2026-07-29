@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Text.Json;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Authoring;
@@ -10,31 +9,17 @@ namespace UiPath.Engineering.Mcp.Tools;
 
 [McpServerToolType]
 public sealed class ValidateActivitySpecTool {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     [McpServerTool, Description("Validates a JSON activity spec against the UiPath activity catalog without reading or writing any files. Returns every violation as a structured error (errorCode, message, fixHint), or the list of catalog activities the spec uses. Use this as a dry-run before authoring or editing workflows. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only) }. An If spec has no Else branch — Children is the Then branch.")]
     public ToolResult ValidateActivitySpec(
         [Description("JSON activity spec to validate (no files are read or written).")] string specJson) {
 
         var sw = Stopwatch.StartNew();
 
-        ActivitySpec? spec;
-        try {
-            spec = JsonSerializer.Deserialize<ActivitySpec>(specJson, JsonOptions);
-        } catch (JsonException ex) {
-            return ToolResults.Failure(new ToolError(
-                ToolErrorCodes.SpecInvalidSpecJson,
-                $"The spec is not valid JSON: {ex.Message}",
-                "Pass a JSON object like { \"name\": \"Sequence\", \"children\": [...] }."), sw);
+        if (!SpecJson.TryDeserialize(specJson, out var spec, out var deserializeError)) {
+            return ToolResults.Failure(deserializeError!, sw);
         }
 
-        var errors = spec is null
-            ? [new ToolError(
-                ToolErrorCodes.SpecEmptySpec,
-                "The activity spec is empty: 'name' is missing or blank.",
-                "Provide a spec with a 'name' matching an activity from the catalog, e.g. { \"name\": \"Sequence\", \"children\": [...] }.",
-                "validate_activity_spec")]
-            : SpecValidator.Validate(spec);
+        var errors = SpecValidator.Validate(spec!);
 
         if (errors.Count > 0) {
             return ToolResults.Failure($"The activity spec has {errors.Count} violation(s).", errors, sw);
@@ -71,7 +56,7 @@ public sealed class ValidateActivitySpecTool {
             .Select(name => $"experimental: \"{name}\" is an experimental activity; its schema may change.")
             .ToList();
 
-    private static void CollectActivities(ActivitySpec spec, List<string> used) {
+    internal static void CollectActivities(ActivitySpec spec, List<string> used) {
         if (ActivityCatalog.TryGet(spec.Name, out var schema) && !used.Contains(schema.Name)) {
             used.Add(schema.Name);
         }
