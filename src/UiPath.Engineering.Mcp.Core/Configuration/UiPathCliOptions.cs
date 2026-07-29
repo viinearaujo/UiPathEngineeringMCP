@@ -15,7 +15,7 @@ public sealed class UiPathCliOptions {
     };
 
     // Master switch for mutating subcommands (pack, publish, deploy, delete...).
-    public bool EnableMutatingCommands { get; init; }
+    public bool EnableMutatingCommands { get; set; }
 
     // Character cap applied to each of stdout/stderr in run_uip_cli responses.
     public int MaxOutputChars { get; init; } = 32768;

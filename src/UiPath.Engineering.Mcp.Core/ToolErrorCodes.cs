@@ -18,4 +18,6 @@ public static class ToolErrorCodes {
     public const string SkillNotFound = "SKILL_NOT_FOUND";
     public const string SkillPathRejected = "SKILL_PATH_REJECTED";
     public const string SkillFileNotFound = "SKILL_FILE_NOT_FOUND";
+    public const string CliVerbNotAllowed = "CLI_VERB_NOT_ALLOWED";
+    public const string MutatingCommandDisabled = "MUTATING_COMMAND_DISABLED";
 }

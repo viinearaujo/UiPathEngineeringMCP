@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.AspNetCore;
 using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -6,6 +7,7 @@ using UiPath.Engineering.Mcp.Core.Planning;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
 using UiPath.Engineering.Mcp.Providers.Git;
 using UiPath.Engineering.Mcp.Providers.GitLab;
+using UiPath.Engineering.Mcp.Providers.Skills;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 using UiPath.Engineering.Mcp.Tools;
 
@@ -15,11 +17,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<McpServerOptions>(builder.Configuration.GetSection("McpServer"));
 builder.Services.Configure<ProjectRootOptions>(builder.Configuration.GetSection("Projects"));
 builder.Services.Configure<UiPathCliOptions>(builder.Configuration.GetSection("UiPathCli"));
+builder.Services.Configure<SkillsOptions>(builder.Configuration.GetSection("Skills"));
 builder.Services.Configure<GitLabOptions>(builder.Configuration.GetSection("GitLab"));
 
 // Register providers
 builder.Services.AddSingleton<IFilesystemProvider, FilesystemProvider>();
 builder.Services.AddSingleton<IUiPathCliProvider, UiPathCliProvider>();
+builder.Services.AddSingleton<ISkillsProvider, SkillsProvider>();
+builder.Services.AddSingleton(sp =>
+    new CliCommandPolicy(sp.GetRequiredService<IOptions<UiPathCliOptions>>().Value));
 builder.Services.AddSingleton<IGitProvider, GitProvider>();
 builder.Services.AddHttpClient<IGitLabProvider, GitLabProvider>();
 
