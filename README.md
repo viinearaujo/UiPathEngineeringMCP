@@ -4,7 +4,7 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Twenty tools are implemented:
+This is the **MVP / POC (v4)** milestone. Twenty-two tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
@@ -17,6 +17,8 @@ This is the **MVP / POC (v4)** milestone. Twenty tools are implemented:
 | `create_project` | Scaffolds a new UiPath project via `uip rpa init` (requires the UiPath CLI RPA tool installed on the host). Detects the documented partial-success case by checking the created files. |
 | `add_xaml_workflow` | Adds a blank `.xaml` workflow to an existing project, with the correct `x:Class` naming (relative path, separators → underscores). |
 | `write_workflow_file` | Creates or fully overwrites a `.xaml` or `.cs` file inside a project with caller-supplied content (extension allowlist + path-escape guard). |
+| `read_workflow_file` | Reads any text file inside a project with line numbers and pagination (`startLine`/`lineCount`, default 1000 lines); obvious secret values are redacted and `.env`/`*.pem`/`*.key` files are refused. |
+| `edit_workflow_file` | Replaces an exact string in a `.xaml`/`.cs` file; fails on zero or ambiguous matches unless `replaceAll: true`. Preferred over `write_workflow_file` for small changes. |
 | `edit_workflow_activity` | Activity-level XAML editing: insert an activity fragment into a container, replace, or remove an activity located by `DisplayName` (optional `activityType` disambiguation). Whitespace-preserving; fragments understand unprefixed WF activities plus the `ui:`/`x:` prefixes. |
 | `validate_activity_spec` | Dry-run validation of a JSON activity spec against the UiPath activity catalog — no files read or written. Returns every violation as a structured error (`errorCode`/`message`/`fixHint`), or the list of catalog activities the spec uses. |
 | `build_workflow` | Creates a real `.xaml` workflow file in a project from a JSON activity spec (run `validate_activity_spec` first). Never overwrites an existing file unless `overwrite: true`. |
@@ -150,7 +152,7 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`
+- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `read_workflow_file`, `edit_workflow_file`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`
 
 ---
 
@@ -232,7 +234,7 @@ The `tests/` folder contains three xUnit projects:
 |---------|--------|
 | `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder` (xaml + coded `.cs` files), `XamlWorkflowParser` (arguments/variables/try-catch/invokes/log messages, malformed xaml), `CodedSourceFileParser` (namespace/class/`[Workflow]`/public methods, malformed input), `DependencyGraphBuilder` (chains, cycles, orphans), XAML/C# file templates (x:Class naming, namespace sanitization), `ImplementationPlanStore` round-trip, `ProjectGapAnalyzer` rule coverage. |
 | `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing (root/child allowed, sibling-prefix & unrelated rejected), filesystem write guards (writes outside allowed roots throw), `.xaml`/`.cs` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree` (depth/ignore/missing dir), `CliExecutableResolver` (explicit path, exe/cmd/ps1 priority, extension fallback), `UiPathCliOutputParser` (analyzer/NuGet/fallback formats), `UiPathCliProvider` per-step results and CLI-not-found error, `GitStatusParser` (porcelain/ahead-behind/not-a-repo), `GitLabProvider` (search/create, token never surfaced). |
-| `UiPath.Engineering.Mcp.Tools.Tests` | All twenty tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing (insert first/last, replace, remove, ambiguous-target and invalid-fragment errors), spec-based authoring (spec validation error codes, `build_workflow` happy path + overwrite guard, `insert_activities` targeting, `manage_workflow_data` add/remove/rename), plan create/update/get (overwrite guard, unknown task, no-plan), gap-analysis shape, `verify_work` CLI success/failure/unavailable branches with task status transitions, and structured error propagation (no raw exceptions). |
+| `UiPath.Engineering.Mcp.Tools.Tests` | All twenty-two tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing (insert first/last, replace, remove, ambiguous-target and invalid-fragment errors), spec-based authoring (spec validation error codes, `build_workflow` happy path + overwrite guard, `insert_activities` targeting, `manage_workflow_data` add/remove/rename), `read_workflow_file` (line numbering, `startLine`/`lineCount` pagination, secret redaction, `.env`/`*.pem`/`*.key` refusal), `edit_workflow_file` (exact-match replace, zero/ambiguous-match errors, `replaceAll`), plan create/update/get (overwrite guard, unknown task, no-plan), gap-analysis shape, `verify_work` CLI success/failure/unavailable branches with task status transitions, and structured error propagation (no raw exceptions). |
 
 Tests use hand-written fakes (no Moq) so there are no extra runtime dependencies.
 
