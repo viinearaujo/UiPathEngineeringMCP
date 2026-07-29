@@ -14,4 +14,8 @@ public static class ToolErrorCodes {
     public const string DataDeclarationConflict = "DATA_DECLARATION_CONFLICT";
     public const string DataDeclarationNotFound = "DATA_DECLARATION_NOT_FOUND";
     public const string PathNotAllowed = "PATH_NOT_ALLOWED";
+    public const string SkillsRootMissing = "SKILLS_ROOT_MISSING";
+    public const string SkillNotFound = "SKILL_NOT_FOUND";
+    public const string SkillPathRejected = "SKILL_PATH_REJECTED";
+    public const string SkillFileNotFound = "SKILL_FILE_NOT_FOUND";
 }

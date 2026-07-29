@@ -3,6 +3,7 @@ using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.Git;
 using UiPath.Engineering.Mcp.Providers.GitLab;
+using UiPath.Engineering.Mcp.Providers.Skills;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -97,5 +98,28 @@ internal sealed class FakeGitLabProvider : IGitLabProvider {
                 Issue = new GitLabIssueSummary { Iid = CreatedIssues.Count, Title = title, WebUrl = $"https://gitlab.example.com/p/-/issues/{CreatedIssues.Count}" }
             };
         return Task.FromResult(result);
+    }
+}
+
+internal sealed class FakeSkillsProvider : ISkillsProvider {
+    public IReadOnlyList<SkillSummary> Skills { get; set; } = [];
+    public SkillReadResult ReadResult { get; set; } = new() {
+        Success = true, SkillName = "uipath-rpa", File = "SKILL.md", Content = "# playbook"
+    };
+    public bool ThrowRootMissing { get; set; }
+    public string? LastName { get; private set; }
+    public string? LastFile { get; private set; }
+
+    public Task<IReadOnlyList<SkillSummary>> ListAsync(CancellationToken cancellationToken = default) {
+        if (ThrowRootMissing) {
+            throw new DirectoryNotFoundException("Skills root '/missing' does not exist.");
+        }
+        return Task.FromResult(Skills);
+    }
+
+    public Task<SkillReadResult> ReadAsync(string name, string? file = null, CancellationToken cancellationToken = default) {
+        LastName = name;
+        LastFile = file;
+        return Task.FromResult(ReadResult);
     }
 }
