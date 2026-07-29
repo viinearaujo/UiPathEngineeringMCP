@@ -12,3 +12,4 @@ artifacts/
 appsettings.Local.json
 *.env
 .uipath/.skills/
+.worktrees/
