@@ -50,10 +50,8 @@ public sealed class ValidateActivitySpecTool {
         var activitiesUsed = new List<string>();
         CollectActivities(spec!, activitiesUsed);
 
-        var warnings = activitiesUsed
-            .Where(name => ActivityCatalog.TryGet(name, out var schema) && schema.Experimental)
-            .Select(name => $"experimental: \"{name}\" is an experimental activity; its schema may change.")
-            .ToList();
+        var warnings = ExperimentalWarnings(activitiesUsed, name =>
+            ActivityCatalog.TryGet(name, out var schema) && schema.Experimental);
 
         return ToolResults.Ok(
             $"The activity spec is valid; it uses {activitiesUsed.Count} distinct activity type(s).",
@@ -63,6 +61,15 @@ public sealed class ValidateActivitySpecTool {
                 warnings
             }, sw, warnings);
     }
+
+    // One "experimental: ..." warning per used activity the lookup reports as
+    // experimental. Internal + injectable so tests can exercise the path without
+    // an experimental entry in the shipped catalog.
+    internal static List<string> ExperimentalWarnings(IReadOnlyList<string> activitiesUsed, Func<string, bool> isExperimental) =>
+        activitiesUsed
+            .Where(isExperimental)
+            .Select(name => $"experimental: \"{name}\" is an experimental activity; its schema may change.")
+            .ToList();
 
     private static void CollectActivities(ActivitySpec spec, List<string> used) {
         if (ActivityCatalog.TryGet(spec.Name, out var schema) && !used.Contains(schema.Name)) {
