@@ -4,7 +4,7 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Sixteen tools are implemented:
+This is the **MVP / POC (v4)** milestone. Twenty tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
@@ -18,6 +18,10 @@ This is the **MVP / POC (v4)** milestone. Sixteen tools are implemented:
 | `add_xaml_workflow` | Adds a blank `.xaml` workflow to an existing project, with the correct `x:Class` naming (relative path, separators → underscores). |
 | `write_workflow_file` | Creates or fully overwrites a `.xaml` or `.cs` file inside a project with caller-supplied content (extension allowlist + path-escape guard). |
 | `edit_workflow_activity` | Activity-level XAML editing: insert an activity fragment into a container, replace, or remove an activity located by `DisplayName` (optional `activityType` disambiguation). Whitespace-preserving; fragments understand unprefixed WF activities plus the `ui:`/`x:` prefixes. |
+| `validate_activity_spec` | Dry-run validation of a JSON activity spec against the UiPath activity catalog — no files read or written. Returns every violation as a structured error (`errorCode`/`message`/`fixHint`), or the list of catalog activities the spec uses. |
+| `build_workflow` | Creates a real `.xaml` workflow file in a project from a JSON activity spec (run `validate_activity_spec` first). Never overwrites an existing file unless `overwrite: true`. |
+| `insert_activities` | Inserts activities described by a JSON activity spec into an existing `.xaml` workflow, as children of the activity located by `DisplayName` — the spec-based sibling of `edit_workflow_activity`. |
+| `manage_workflow_data` | Manages the data surface of an existing `.xaml` workflow: add, remove, or rename arguments (`x:Property`) and variables (`Sequence.Variables`). |
 | `add_coded_workflow` | Adds a Coded Workflow `.cs` (inherits `CodedWorkflow`, `[Workflow]` entry method, registered in `project.json` `entryPoints`) or a plain coded source file. |
 | `create_implementation_plan` | Creates an implementation plan for a project from a goal + ordered task list; writes `docs/implementation-plan.json` (source of truth) plus a Markdown mirror. Refuses to overwrite unless `overwrite: true`. |
 | `update_plan_task` | Updates a single plan task's status (`pending`/`in_progress`/`done`/`blocked`) and optional notes. |
@@ -146,11 +150,52 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `edit_workflow_activity`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`
+- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`
 
 ---
 
-## 5a. Autonomous loop (Copilot-driven)
+## 5a. Spec-based workflow authoring (default)
+
+The **default** way to author workflows is now spec-based: describe the workflow
+as a JSON activity spec and let the server render schema-correct XAML — no
+hand-written fragments. `validate_activity_spec` dry-runs a spec against the
+activity catalog and returns every violation in one round trip; `build_workflow`
+creates a new workflow from a spec; `insert_activities` adds spec-described
+activities into an existing workflow; `manage_workflow_data` adds/removes/renames
+arguments and variables. `edit_workflow_activity`'s fragment mode remains as an
+escape hatch for surgical edits the spec model does not cover.
+
+Spec shape: `{ name, properties, children, variables (root only), catches (TryCatch only) }`.
+
+Example spec:
+
+```json
+{
+  "name": "Sequence",
+  "variables": [{ "name": "rowCount", "type": "Int32", "default": "0" }],
+  "children": [
+    {
+      "name": "ForEach",
+      "properties": { "values": "[in_TransactionData]", "typeArgument": "DataRow" },
+      "children": [
+        {
+          "name": "TryCatch",
+          "children": [
+            { "name": "LogMessage", "properties": { "message": "\"Processing row\"", "level": "Info" } }
+          ],
+          "catches": [{ "exception": "System.Exception", "children": [ { "name": "Rethrow" } ] }]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Strings enclosed in square brackets ([expr]) are interpreted as expressions in the project's configured expression language. All other values are treated as literals.
+
+---
+
+## 5b. Autonomous loop (Copilot-driven)
 
 The plan/gap/verify tools let Copilot run a full autonomous development loop. The
 server stays passive — it answers one deterministic tool call at a time and never
@@ -175,7 +220,7 @@ request.
 
 ---
 
-## 5b. Run the tests
+## 5c. Run the tests
 
 ```powershell
 dotnet test
@@ -187,7 +232,7 @@ The `tests/` folder contains three xUnit projects:
 |---------|--------|
 | `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder` (xaml + coded `.cs` files), `XamlWorkflowParser` (arguments/variables/try-catch/invokes/log messages, malformed xaml), `CodedSourceFileParser` (namespace/class/`[Workflow]`/public methods, malformed input), `DependencyGraphBuilder` (chains, cycles, orphans), XAML/C# file templates (x:Class naming, namespace sanitization), `ImplementationPlanStore` round-trip, `ProjectGapAnalyzer` rule coverage. |
 | `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing (root/child allowed, sibling-prefix & unrelated rejected), filesystem write guards (writes outside allowed roots throw), `.xaml`/`.cs` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree` (depth/ignore/missing dir), `CliExecutableResolver` (explicit path, exe/cmd/ps1 priority, extension fallback), `UiPathCliOutputParser` (analyzer/NuGet/fallback formats), `UiPathCliProvider` per-step results and CLI-not-found error, `GitStatusParser` (porcelain/ahead-behind/not-a-repo), `GitLabProvider` (search/create, token never surfaced). |
-| `UiPath.Engineering.Mcp.Tools.Tests` | All sixteen tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing (insert first/last, replace, remove, ambiguous-target and invalid-fragment errors), plan create/update/get (overwrite guard, unknown task, no-plan), gap-analysis shape, `verify_work` CLI success/failure/unavailable branches with task status transitions, and structured error propagation (no raw exceptions). |
+| `UiPath.Engineering.Mcp.Tools.Tests` | All twenty tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing (insert first/last, replace, remove, ambiguous-target and invalid-fragment errors), spec-based authoring (spec validation error codes, `build_workflow` happy path + overwrite guard, `insert_activities` targeting, `manage_workflow_data` add/remove/rename), plan create/update/get (overwrite guard, unknown task, no-plan), gap-analysis shape, `verify_work` CLI success/failure/unavailable branches with task status transitions, and structured error propagation (no raw exceptions). |
 
 Tests use hand-written fakes (no Moq) so there are no extra runtime dependencies.
 
@@ -204,11 +249,19 @@ src/
 ## 7. Notes / known limitations (v4)
 
 - Authoring tools (`create_project`, `add_xaml_workflow`, `write_workflow_file`,
-  `add_coded_workflow`, `edit_workflow_activity`) **write to disk** — they are restricted to
+  `add_coded_workflow`, `edit_workflow_activity`, `build_workflow`, `insert_activities`,
+  `manage_workflow_data`) **write to disk** — they are restricted to
   `Projects:AllowedRoots`, reject path escapes outside the target project, and only accept
   `.xaml`/`.cs` content.
   `create_project` delegates scaffolding to `uip rpa init` (files are never hand-written);
   `uip rpa init`'s documented partial-success case is detected by checking the created files.
+- Spec-based authoring (`validate_activity_spec`, `build_workflow`, `insert_activities`,
+  `manage_workflow_data`) is the **default** way to author workflows: specs are validated
+  against the activity catalog before anything is written. `edit_workflow_activity`'s
+  fragment mode remains as an escape hatch for edits the spec model does not cover.
+  In the spec model an `If` activity's `children` are the **Then** branch only — there
+  is no Else branch yet. `manage_workflow_data` rename updates the declaration only;
+  expressions referencing the old name are not rewritten.
 - `edit_workflow_activity` matches the target activity by `DisplayName` (exact, case-sensitive);
   when several activities share a name the edit is rejected and `activityType` must be passed
   to disambiguate. Inserted fragments are re-indented to match the container; the rest of the
