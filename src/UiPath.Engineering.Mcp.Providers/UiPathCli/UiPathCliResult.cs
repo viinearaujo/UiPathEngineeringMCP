@@ -10,4 +10,6 @@ public sealed class UiPathCliResult {
     public List<string> Errors { get; init; } = [];
     public List<string> Warnings { get; init; } = [];
     public List<string> RawOutputLines { get; init; } = [];
+    public string StdOut { get; init; } = string.Empty;
+    public string StdErr { get; init; } = string.Empty;
 }

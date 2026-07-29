@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Configuration;
 
 namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
@@ -99,6 +100,16 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         _ => $"rpa pack \"{projectPath}\" --output json"
     };
 
+    // Redacts secrets and caps each stream so tool responses stay bounded.
+    internal static (string StdOut, string StdErr) CaptureOutput(string stdout, string stderr, int maxChars) {
+        var (redactedOut, _) = SecretRedactor.Redact(stdout);
+        var (redactedErr, _) = SecretRedactor.Redact(stderr);
+        return (Cap(redactedOut, maxChars), Cap(redactedErr, maxChars));
+    }
+
+    private static string Cap(string s, int maxChars) =>
+        s.Length <= maxChars ? s : s[..maxChars] + "\n...[truncated]";
+
     public async Task<UiPathCliResult> RunAsync(
         string verb,
         string arguments,
@@ -165,6 +176,8 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             rawLines.AddRange(ProcessRunner.SplitLines(run.StdErr));
         }
 
+        var (stdout, stderr) = CaptureOutput(run.StdOut, run.StdErr, _options.MaxOutputChars);
+
         return new UiPathCliResult {
             Success = run.ExitCode == 0,
             Command = command,
@@ -172,7 +185,9 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             Summary = run.ExitCode == 0 ? $"'{verb}' completed." : $"'{verb}' failed.",
             Errors = errors,
             Warnings = warnings,
-            RawOutputLines = rawLines
+            RawOutputLines = rawLines,
+            StdOut = stdout,
+            StdErr = stderr
         };
     }
 }

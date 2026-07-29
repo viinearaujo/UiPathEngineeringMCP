@@ -86,4 +86,16 @@ public class UiPathCliProviderTests {
     public void BuildVerbArguments_MapsStepsToRpaCommandLines(string verb, string expected) {
         Assert.Equal(expected, UiPathCliProvider.BuildVerbArguments(verb, @"C:\projects\testProcess"));
     }
+
+    [Fact]
+    public void CaptureOutput_RedactsSecrets_AndCapsLength() {
+        var (stdout, _) = UiPathCliProvider.CaptureOutput(
+            "token=abc123secret", "", maxChars: 50);
+
+        Assert.DoesNotContain("abc123secret", stdout);
+
+        var (capped, _) = UiPathCliProvider.CaptureOutput(new string('y', 500), "", maxChars: 100);
+        Assert.True(capped.Length < 500);
+        Assert.Contains("[truncated]", capped);
+    }
 }
