@@ -24,6 +24,17 @@ internal static class ToolResults {
 
     public static ToolResult Failure(string message, Stopwatch sw) => Failure(message, message, sw);
 
+    public static ToolResult Failure(ToolError error, Stopwatch sw) =>
+        Failure(error.Message, [error], sw);
+
+    public static ToolResult Failure(string summary, IReadOnlyList<ToolError> errors, Stopwatch sw) => new() {
+        Status = "error",
+        Summary = summary,
+        Errors = errors.Select(e => $"{e.ErrorCode}: {e.Message} Fix: {e.FixHint}").ToList(),
+        ErrorDetails = [.. errors],
+        DurationMs = sw.ElapsedMilliseconds
+    };
+
     public static ToolResult Failure(string summary, IReadOnlyList<string> errors, Stopwatch sw) => new() {
         Status = "error",
         Summary = summary,

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
@@ -16,6 +17,18 @@ public class ToolResultsTests
         Assert.Equal("done.", result.Summary);
         Assert.Empty(result.Errors);
         Assert.NotNull(result.Data);
+    }
+
+    [Fact]
+    public void Failure_StructuredError_SetsStatusAndDetails()
+    {
+        var sw = Stopwatch.StartNew();
+        var error = new ToolError("SPEC_UNKNOWN_ACTIVITY", "Unknown activity 'FoeEach'.", "Did you mean 'ForEach'? Check ActivityCatalog.All for valid names.");
+        var result = ToolResults.Failure(error, sw);
+        Assert.Equal("error", result.Status);
+        var detail = Assert.Single(result.ErrorDetails);
+        Assert.Equal("SPEC_UNKNOWN_ACTIVITY", detail.ErrorCode);
+        Assert.Contains(error.Message, result.Errors[0]); // plain list kept in sync for old clients
     }
 
     [Fact]
