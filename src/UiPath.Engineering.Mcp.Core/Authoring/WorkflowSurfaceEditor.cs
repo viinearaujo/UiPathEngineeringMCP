@@ -79,7 +79,7 @@ public static class WorkflowSurfaceEditor {
                         ToolErrorCodes.DataDeclarationConflict);
                 }
                 var variable = new XElement(Wf + "Variable",
-                    new XAttribute(X + "TypeArguments", TypeToken(type)),
+                    new XAttribute(X + "TypeArguments", TypeToken.Render(type)),
                     new XAttribute("Name", name));
                 if (defaultValue is not null) {
                     variable.Add(new XAttribute("Default", defaultValue));
@@ -137,7 +137,7 @@ public static class WorkflowSurfaceEditor {
                 }
                 var property = new XElement(X + "Property",
                     new XAttribute("Name", name),
-                    new XAttribute("Type", $"{wrapper}({TypeToken(type)})"));
+                    new XAttribute("Type", $"{wrapper}({TypeToken.Render(type)})"));
                 AddArgumentProperty(root, property);
                 break;
 
@@ -176,16 +176,6 @@ public static class WorkflowSurfaceEditor {
             "in/out" => "InOutArgument",
             _ => null
         };
-
-    // Type token: x: prefix for BCL primitives (String/Int32/Boolean/Double), bare
-    // fully-qualified names otherwise. Already-qualified tokens pass through verbatim.
-    private static string TypeToken(string type) {
-        var trimmed = type.Trim();
-        if (trimmed.Contains(':') || trimmed.Contains('.')) {
-            return trimmed;
-        }
-        return trimmed is "String" or "Int32" or "Boolean" or "Double" ? "x:" + trimmed : trimmed;
-    }
 
     private static void AddToVariablesBlock(XElement sequence, XElement? block, XElement variable) {
         if (block is null) {

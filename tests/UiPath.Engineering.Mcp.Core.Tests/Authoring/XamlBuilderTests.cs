@@ -56,6 +56,18 @@ public class XamlBuilderTests
     }
 
     [Fact]
+    public void RenderWorkflowFile_VariableBareNonPrimitiveType_PassesThroughWithoutXPrefix()
+    {
+        var spec = new ActivitySpec { Name = "Sequence",
+            Variables = [new VariableSpec { Name = "row", Type = "DataRow" },
+                         new VariableSpec { Name = "n", Type = "Int32" }] };
+        var result = XamlBuilder.RenderWorkflowFile(spec, "TestWorkflow");
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<Variable x:TypeArguments=\"DataRow\" Name=\"row\" />", result.Xaml);
+        Assert.Contains("<Variable x:TypeArguments=\"x:Int32\" Name=\"n\" />", result.Xaml);
+    }
+
+    [Fact]
     public void RenderWorkflowFile_InvalidSpec_ShortCircuitsWithValidatorErrors()
     {
         var spec = new ActivitySpec { Name = "Assign",

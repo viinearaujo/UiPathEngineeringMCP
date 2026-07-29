@@ -186,7 +186,7 @@ public static class XamlBuilder
         new(Wf + "Sequence.Variables", variables.Select(v =>
         {
             var element = new XElement(Wf + "Variable",
-                new XAttribute(X + "TypeArguments", VariableType(v.Type)),
+                new XAttribute(X + "TypeArguments", TypeToken.Render(v.Type)),
                 new XAttribute("Name", v.Name));
             if (v.Default is not null)
             {
@@ -194,11 +194,6 @@ public static class XamlBuilder
             }
             return element;
         }));
-
-    // Bare type names ("Int32") map into the x: namespace; anything already
-    // qualified ("x:Int32", "System.Data.DataTable") passes through verbatim.
-    private static string VariableType(string type) =>
-        type.Contains(':') || type.Contains('.') ? type : "x:" + type;
 
     private static void AddChildren(XElement element, List<ActivitySpec>? children)
     {
