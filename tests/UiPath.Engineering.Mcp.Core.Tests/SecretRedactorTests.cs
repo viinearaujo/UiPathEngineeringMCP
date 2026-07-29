@@ -43,4 +43,15 @@ public class SecretRedactorTests {
 
         Assert.Equal(2, count);
     }
+
+    [Fact]
+    public void Redact_BlankLineBeforeSecret_PreservesLineCount() {
+        var input = "Region=us-east-1\n\nDbPassword=secret1\nHost=h1";
+
+        var (text, count) = SecretRedactor.Redact(input);
+
+        Assert.Equal(1, count);
+        Assert.Equal(input.Split('\n').Length, text.Split('\n').Length);
+        Assert.Contains("DbPassword=***REDACTED***", text);
+    }
 }

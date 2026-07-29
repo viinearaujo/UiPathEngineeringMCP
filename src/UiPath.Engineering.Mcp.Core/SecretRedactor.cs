@@ -15,7 +15,7 @@ public static class SecretRedactor {
 
     // key=value / key: value on a single line (unquoted key, value not already redacted)
     private static readonly Regex KeyValuePattern = new(
-        $@"(?m)^\s*([^\s""'=:]*(?:{KeyPattern})[^\s""'=:]*\s*[=:]\s*)(?!\*)\S.*$",
+        $@"(?m)^[^\S\r\n]*([^\s""'=:]*(?:{KeyPattern})[^\s""'=:]*\s*[=:]\s*)(?!\*)\S.*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static (string Text, int RedactedCount) Redact(string content) {
