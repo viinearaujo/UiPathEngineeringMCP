@@ -53,6 +53,8 @@ public sealed class BuildWorkflowTool {
             return ToolResults.Failure($"The activity spec has {build.Errors.Count} violation(s).", build.Errors, sw);
         }
 
+        var directory = Path.GetDirectoryName(targetPath)!;
+        _filesystem.CreateDirectory(directory);
         _filesystem.WriteAllText(targetPath, build.Xaml!);
 
         var activitiesUsed = new List<string>();

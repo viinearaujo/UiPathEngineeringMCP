@@ -104,6 +104,17 @@ public class BuildWorkflowToolTests {
     }
 
     [Fact]
+    public void BuildWorkflow_NestedRelativePath_CreatesDirectoryBeforeWrite() {
+        var (tool, fs) = CreateTool();
+
+        var result = tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", DesignDocSpecJson);
+
+        Assert.Equal("success", result.Status);
+        Assert.Contains(Path.GetDirectoryName(Target)!, fs.CreatedDirectories);
+        Assert.True(fs.Writes.ContainsKey(Target));
+    }
+
+    [Fact]
     public void BuildWorkflow_NonXamlExtension_Error() {
         var (tool, fs) = CreateTool();
 
