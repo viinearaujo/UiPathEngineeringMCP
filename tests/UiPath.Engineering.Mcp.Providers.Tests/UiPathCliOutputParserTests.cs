@@ -167,4 +167,37 @@ public class UiPathCliOutputParserTests {
         var error = Assert.Single(errors);
         Assert.Equal("""[build] {"success":false}""", error);
     }
+
+    [Fact]
+    public void Parse_StdErrLineContainingSecret_IsRedacted() {
+        const string stdErr = "Login failed for password=hunter2";
+
+        var (errors, _) = UiPathCliOutputParser.Parse("validate", "", stdErr);
+
+        var error = Assert.Single(errors);
+        Assert.DoesNotContain("hunter2", error);
+        Assert.Contains("***REDACTED***", error);
+    }
+
+    [Fact]
+    public void Parse_JsonEnvelopeMessageContainingSecret_IsRedacted() {
+        const string stdOut = """{"success":false,"errorMessage":"Auth failed: token=abc123secret was rejected"}""";
+
+        var (errors, _) = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        var error = Assert.Single(errors);
+        Assert.DoesNotContain("abc123secret", error);
+        Assert.Contains("***REDACTED***", error);
+    }
+
+    [Fact]
+    public void Parse_WarningLineContainingSecret_IsRedacted() {
+        const string stdOut = "warning: using fallback credentials apiKey=abc123secret";
+
+        var (_, warnings) = UiPathCliOutputParser.Parse("build", stdOut, "");
+
+        var warning = Assert.Single(warnings);
+        Assert.DoesNotContain("abc123secret", warning);
+        Assert.Contains("***REDACTED***", warning);
+    }
 }

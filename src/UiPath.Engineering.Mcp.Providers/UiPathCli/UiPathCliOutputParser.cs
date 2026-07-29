@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using UiPath.Engineering.Mcp.Core;
 
 namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 
@@ -56,7 +57,7 @@ public static class UiPathCliOutputParser {
         }
 
         foreach (var line in SplitLines(stdErr)) {
-            errors.Add($"[{verb}] {line}");
+            errors.Add(Redact($"[{verb}] {line}"));
         }
 
         return (errors, warnings);
@@ -89,9 +90,9 @@ public static class UiPathCliOutputParser {
                 var message = GetString(root, "Message");
                 var instructions = GetString(root, "Instructions");
                 var text = string.Join(" ", new[] { message, instructions }.Where(s => !string.IsNullOrWhiteSpace(s)));
-                errors.Add(text.Length > 0
+                errors.Add(Redact(text.Length > 0
                     ? $"[{verb}] {text}"
-                    : $"[{verb}] command failed with result '{result.GetString()}'.");
+                    : $"[{verb}] command failed with result '{result.GetString()}'."));
                 return true;
             }
 
@@ -104,7 +105,7 @@ public static class UiPathCliOutputParser {
                 var text = GetStringIgnoreCase(root, "errorMessage")
                     ?? GetStringIgnoreCase(root, "message")
                     ?? stdOut.Trim();
-                errors.Add($"[{verb}] {text}");
+                errors.Add(Redact($"[{verb}] {text}"));
                 return true;
             }
 
@@ -149,12 +150,17 @@ public static class UiPathCliOutputParser {
     }
 
     private static void Add(string severity, string entry, List<string> errors, List<string> warnings) {
+        // Every parsed entry may echo raw process output (stderr verbatim, JSON envelope
+        // messages), so secrets are redacted before anything leaves the parser.
+        var redacted = Redact(entry);
         if (severity.StartsWith("warn", StringComparison.OrdinalIgnoreCase)) {
-            warnings.Add(entry);
+            warnings.Add(redacted);
         } else {
-            errors.Add(entry);
+            errors.Add(redacted);
         }
     }
+
+    private static string Redact(string entry) => SecretRedactor.Redact(entry).Text;
 
     private static IEnumerable<string> SplitLines(string? text) =>
         string.IsNullOrWhiteSpace(text)
