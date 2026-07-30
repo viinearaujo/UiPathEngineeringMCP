@@ -13,7 +13,15 @@ public sealed class SkillsProvider : ISkillsProvider {
         _options = options.Value;
     }
 
-    private string ResolvedRoot => Path.GetFullPath(_options.SkillsRoot);
+    private string ResolvedRoot {
+        get {
+            var resolved = SkillsRootResolver.Resolve(_options.SkillsRoot, Directory.GetCurrentDirectory());
+            if (!Path.IsPathRooted(_options.SkillsRoot) && !Directory.Exists(resolved)) {
+                resolved = SkillsRootResolver.Resolve(_options.SkillsRoot, AppContext.BaseDirectory);
+            }
+            return resolved;
+        }
+    }
 
     public Task<IReadOnlyList<SkillSummary>> ListAsync(CancellationToken cancellationToken = default) {
         var root = ResolvedRoot;
