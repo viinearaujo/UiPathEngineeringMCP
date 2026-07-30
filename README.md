@@ -65,8 +65,8 @@ be analyzed or validated (security guard). Example:
 ```json
 "Projects": {
   "AllowedRoots": [
-    "C:/Users/viniciusaraujo/Documents/latam_reconciliation",
-    "C:/Users/viniciusaraujo/Documents/uipath"
+    "C:/Users/arauj/OneDrive/Documentos/UiPath",
+    "C:/Users/arauj/Documents/uipath"
   ]
 }
 ```
