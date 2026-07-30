@@ -52,4 +52,55 @@ public class CliCommandPolicyTests {
 
         Assert.Equal(CliCommandClass.VerbNotAllowed, sut.Classify("orx", "assets list"));
     }
+
+    [Theory]
+    [InlineData("validate --output json & whoami")]
+    [InlineData("validate | more")]
+    [InlineData("validate > out.txt")]
+    [InlineData("validate < in.txt")]
+    [InlineData("validate --output %PATH%")]
+    [InlineData("validate ^")]
+    public void Classify_ShellMetacharacters_AreRejected(string arguments) {
+        var sut = CreateSut();
+
+        Assert.Equal(CliCommandClass.ArgumentsRejected, sut.Classify("rpa", arguments));
+    }
+
+    [Fact]
+    public void Classify_QuotedPathWithSpaces_IsNotRejected() {
+        var sut = CreateSut();
+
+        Assert.Equal(CliCommandClass.AllowedReadOnly,
+            sut.Classify("rpa", "validate --project-dir \"C:/my proj\" --output json"));
+    }
+
+    [Fact]
+    public void Classify_SolutionNestedReadOnlySubcommand_PrefixMatches() {
+        var sut = CreateSut();
+
+        Assert.Equal(CliCommandClass.AllowedReadOnly,
+            sut.Classify("solution", "project list --output json"));
+    }
+
+    [Fact]
+    public void Classify_SolutionNestedMutatingSubcommand_IsAllowedMutating() {
+        var sut = CreateSut();
+
+        Assert.Equal(CliCommandClass.AllowedMutating, sut.Classify("solution", "project remove x"));
+    }
+
+    [Fact]
+    public void Classify_PrefixMatchDoesNotMatchLongerToken_IsAllowedMutating() {
+        var sut = CreateSut();
+
+        // "validatex" must not prefix-match the "validate" entry.
+        Assert.Equal(CliCommandClass.AllowedMutating, sut.Classify("rpa", "validatex --output json"));
+    }
+
+    [Fact]
+    public void Classify_RpaAnalyze_NoLongerReadOnly_IsAllowedMutating() {
+        var sut = CreateSut();
+
+        Assert.Equal(CliCommandClass.AllowedMutating, sut.Classify("rpa", "analyze --project-dir x"));
+    }
 }

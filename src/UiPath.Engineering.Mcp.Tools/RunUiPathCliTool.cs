@@ -52,6 +52,13 @@ public sealed class RunUiPathCliTool {
                     $"Use one of: {string.Join(", ", _options.AllowedVerbs)}.")], sw);
         }
 
+        if (classification == CliCommandClass.ArgumentsRejected) {
+            return ToolResults.Failure("Arguments rejected.",
+                [new ToolError(ToolErrorCodes.CliArgumentsRejected,
+                    "The arguments contain shell metacharacters that could break out of the command shim.",
+                    "Remove shell metacharacters (& | < > % ^) from the arguments; only plain uip arguments are allowed.")], sw);
+        }
+
         if (classification == CliCommandClass.AllowedMutating && !_options.EnableMutatingCommands) {
             var subcommand = arguments.TrimStart().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
             return ToolResults.Failure("Mutating command blocked.",
@@ -65,7 +72,12 @@ public sealed class RunUiPathCliTool {
             return guardFailure;
         }
 
-        var result = await _cli.RunAsync(verb, arguments, workingDirectory, cancellationToken);
+        // The provider executes the arguments verbatim (spec.ArgumentPrefix +
+        // arguments + spec.ArgumentSuffix); `verb` is only a label there, so the
+        // verb must be prepended here to make the executed command `uip <verb> <args>`.
+        // CliCommandPolicy.Classify above intentionally received the ORIGINAL
+        // arguments (first token = subcommand), not this verb-prefixed string.
+        var result = await _cli.RunAsync(verb, verb + " " + arguments, workingDirectory, cancellationToken);
 
         return new ToolResult {
             Status = result.Success ? "success" : "error",

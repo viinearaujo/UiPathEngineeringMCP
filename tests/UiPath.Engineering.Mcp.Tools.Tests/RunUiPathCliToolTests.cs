@@ -27,7 +27,8 @@ public class RunUiPathCliToolTests {
 
         Assert.Equal("success", result.Status);
         Assert.Equal("rpa", cli.LastVerb);
-        Assert.Equal("validate --project-dir \"C:/proj\" --output json", cli.LastArguments);
+        // The tool prepends the verb so the executed command is `uip rpa validate ...`.
+        Assert.Equal("rpa validate --project-dir \"C:/proj\" --output json", cli.LastArguments);
     }
 
     [Fact]
@@ -65,6 +66,20 @@ public class RunUiPathCliToolTests {
 
         Assert.Equal("success", result.Status);
         Assert.Equal("solution", cli.LastVerb);
+        Assert.Equal("solution pack", cli.LastArguments);
+    }
+
+    [Fact]
+    public async Task ShellMetacharactersInArguments_ReturnsStructuredError_AndNeverRuns() {
+        var cli = new FakeUiPathCliProvider();
+        var sut = CreateSut(cli, new FakeFilesystemProvider());
+
+        var result = await sut.RunUiPathCli("rpa", "validate --output json & whoami");
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains(result.ErrorDetails, e => e.ErrorCode == "CLI_ARGUMENTS_REJECTED");
+        Assert.Null(cli.LastVerb);
+        Assert.Null(cli.LastArguments);
     }
 
     [Fact]

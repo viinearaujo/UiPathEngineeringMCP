@@ -10,8 +10,8 @@ public sealed class UiPathCliOptions {
     // Subcommands of an allowed verb that run without EnableMutatingCommands.
     // Anything not listed here is classified as mutating (fail closed).
     public Dictionary<string, string[]> ReadOnlySubcommands { get; init; } = new(StringComparer.OrdinalIgnoreCase) {
-        ["rpa"] = ["analyze", "validate", "build"],
-        ["solution"] = ["list", "status"]
+        ["rpa"] = ["validate", "build"],
+        ["solution"] = ["project list", "resources list", "deploy status"]
     };
 
     // Master switch for mutating subcommands (pack, publish, deploy, delete...).
