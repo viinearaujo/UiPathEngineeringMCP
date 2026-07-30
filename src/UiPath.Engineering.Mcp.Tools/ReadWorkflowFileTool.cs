@@ -19,7 +19,7 @@ public sealed class ReadWorkflowFileTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool, Description("Reads the text content of any file inside an existing UiPath project, with line numbers and pagination. Obvious secret values are redacted. Use startLine/lineCount to page through large files.")]
+    [McpServerTool, Description("Reads the contents of any text file inside a UiPath project (XAML, .cs, JSON, configs, docs), with line numbers and pagination. Use this whenever the user asks what a file contains, to show specific lines, or to inspect project configuration. Obvious secret values are redacted; .env, *.pem and *.key files are refused. Use startLine/lineCount to page through large files.")]
     public ToolResult ReadWorkflowFile(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the file relative to the project root, e.g. 'Main.cs' or 'Data/Config.json'.")] string relativePath,
