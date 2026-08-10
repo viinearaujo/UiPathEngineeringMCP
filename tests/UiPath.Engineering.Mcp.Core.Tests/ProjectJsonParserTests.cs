@@ -78,4 +78,21 @@ public class ProjectJsonParserTests {
         Assert.Empty(model.Packages);
         Assert.Empty(model.Workflows);
     }
+
+    [Fact]
+    public void Parse_TargetFramework_IsCaptured() {
+        var fs = new FakeFilesystemProvider { ProjectJsonPath = ProjectJsonPath };
+        fs.FileContents[ProjectJsonPath] = """
+            {
+              "name": "testProcess",
+              "targetFramework": "net6.0",
+              "dependencies": { "UiPath.System.Activities": "24.10.4" }
+            }
+            """;
+        var parser = new ProjectJsonParser(fs);
+
+        var model = parser.Parse(ProjectJsonPath, ProjectRoot);
+
+        Assert.Equal("net6.0", model.TargetFramework);
+    }
 }

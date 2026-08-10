@@ -45,6 +45,7 @@ public sealed class ProjectJsonParser {
             MainWorkflow = mainWorkflow,
             EntryPoints = entryPoints,
             Description = root.TryGetProperty("description", out var desc) ? desc.GetString() : null,
+            TargetFramework = root.TryGetProperty("targetFramework", out var tf) ? tf.GetString() : null,
             Dependencies = dependencies,
             Packages = packages
         };

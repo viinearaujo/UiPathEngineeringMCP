@@ -6,6 +6,7 @@ public sealed class UiPathProjectModel {
     public List<string> EntryPoints { get; init; } = [];
     public string? ProjectJsonPath { get; init; }
     public string? Description { get; set; }
+    public string? TargetFramework { get; init; }
     public string? ReadmeSummary { get; set; }
     public DirectoryTreeNode? FolderStructure { get; set; }
     public List<WorkflowModel> Workflows { get; init; } = [];
