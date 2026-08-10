@@ -58,7 +58,7 @@ public sealed class NuGetReferenceResolver {
         return IsLegacyTfm(tfm) ? ResolveLegacyFramework(tfm) : ResolveModernFramework(tfm);
     }
 
-    internal static string NormalizeTfm(string? targetFramework) {
+    public static string NormalizeTfm(string? targetFramework) {
         if (string.IsNullOrWhiteSpace(targetFramework)) {
             return "net8.0";
         }
@@ -68,7 +68,7 @@ public sealed class NuGetReferenceResolver {
         return dash > 0 ? tfm[..dash] : tfm;
     }
 
-    private static bool IsLegacyTfm(string tfm) => Regex.IsMatch(tfm, @"^net4\d\d$");
+    private static bool IsLegacyTfm(string tfm) => Regex.IsMatch(tfm, @"^net4\d{1,2}$");
 
     private static (List<string> Paths, bool Resolved) ResolveModernFramework(string tfm) {
         var packsRoot = Path.Combine(
@@ -210,6 +210,13 @@ public sealed class NuGetReferenceResolver {
         if (dotted.Success) {
             var parts = dotted.Value.Split('.');
             return int.Parse(parts[0]) * 10 + int.Parse(parts[1]);
+        }
+        // Legacy net4x/net4xx forms must share one scale: net45 -> 450, net48 -> 480,
+        // net461 -> 461, net472 -> 472, so e.g. net461 <= net48 but net48 > net472.
+        var legacy = Regex.Match(tfm, @"^net(4\d\d?)$");
+        if (legacy.Success) {
+            var value = int.Parse(legacy.Groups[1].Value);
+            return value < 100 ? value * 10 : value;
         }
         var plain = Regex.Match(tfm, @"\d+");
         return plain.Success ? int.Parse(plain.Value) : 0;

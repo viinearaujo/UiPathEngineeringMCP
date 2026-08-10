@@ -77,7 +77,19 @@ public class NuGetReferenceResolverTests : IDisposable {
     [InlineData("net5.0", "net6.0", 50)] // older net folder compatible
     [InlineData("net461", "net472", 461)] // legacy: lower version compatible
     [InlineData("netstandard2.0", "net472", -1)] // legacy target: no netstandard
+    [InlineData("net461", "net48", 461)] // net48 target accepts older 4.x folders
+    [InlineData("net472", "net48", 472)] // net48 target accepts net472 too
+    [InlineData("net48", "net472", -1)] // net472 target rejects newer net48 folder
     public void ScoreTfmFolder_CompatibilityMatrix(string folder, string target, int expected) {
         Assert.Equal(expected, NuGetReferenceResolver.ScoreTfmFolder(folder, target));
+    }
+
+    [Theory]
+    [InlineData("net6.0-windows", "net6.0")] // platform suffix stripped
+    [InlineData("NET6.0", "net6.0")] // lowercased
+    [InlineData(" net7.0 ", "net7.0")] // trimmed
+    [InlineData(null, "net8.0")] // default when unspecified
+    public void NormalizeTfm_NormalizesInput(string? input, string expected) {
+        Assert.Equal(expected, NuGetReferenceResolver.NormalizeTfm(input));
     }
 }
