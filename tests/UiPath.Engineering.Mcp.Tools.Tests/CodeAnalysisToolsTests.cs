@@ -85,4 +85,63 @@ public class CodeAnalysisToolsTests {
         Assert.Equal("Flow.cs", analysis.LastFile);
         Assert.Equal(6, analysis.LastLine);
     }
+
+    // --- find_code_references ---
+
+    [Fact]
+    public async Task FindCodeReferences_PathNotAllowed_ReturnsError() {
+        var tool = new FindCodeReferencesTool(new FakeFilesystemProvider { Allowed = false }, new FakeCSharpAnalysisService());
+
+        var result = await tool.FindCodeReferences("/not/allowed", "Log");
+
+        Assert.Equal("error", result.Status);
+        Assert.Equal("Path not allowed.", result.Summary);
+    }
+
+    [Fact]
+    public async Task FindCodeReferences_HappyPath_ReturnsReferences() {
+        var analysis = new FakeCSharpAnalysisService {
+            ReferencesResult = new FindReferencesResult {
+                References = [new ReferenceMatch { FilePath = "Flow.cs", Line = 7, ContainingMember = "Execute", Snippet = "Log(\"start\");" }]
+            }
+        };
+        var tool = new FindCodeReferencesTool(ProjectFilesystem(), analysis);
+
+        var result = await tool.FindCodeReferences("/projects/testProcess", "Log");
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal("Log", analysis.LastSymbol);
+        var data = Assert.IsType<FindReferencesResult>(result.Data);
+        Assert.Single(data.References);
+    }
+
+    // --- get_compile_errors ---
+
+    [Fact]
+    public async Task GetCompileErrors_PathNotAllowed_ReturnsError() {
+        var tool = new GetCompileErrorsTool(new FakeFilesystemProvider { Allowed = false }, new FakeCSharpAnalysisService());
+
+        var result = await tool.GetCompileErrors("/not/allowed");
+
+        Assert.Equal("error", result.Status);
+        Assert.Equal("Path not allowed.", result.Summary);
+    }
+
+    [Fact]
+    public async Task GetCompileErrors_HappyPath_ReturnsDiagnosticsAndForwardsSeverity() {
+        var analysis = new FakeCSharpAnalysisService {
+            DiagnosticsResult = new CompileDiagnosticsResult {
+                Diagnostics = [new DiagnosticItem { FilePath = "Flow.cs", Line = 3, Column = 16, Code = "CS0103", Severity = "error", Message = "The name 'missingName' does not exist in the current context" }]
+            }
+        };
+        var tool = new GetCompileErrorsTool(ProjectFilesystem(), analysis);
+
+        var result = await tool.GetCompileErrors("/projects/testProcess", severity: "warning");
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal("warning", analysis.LastSeverity);
+        var data = Assert.IsType<CompileDiagnosticsResult>(result.Data);
+        var diagnostic = Assert.Single(data.Diagnostics);
+        Assert.Equal("CS0103", diagnostic.Code);
+    }
 }
