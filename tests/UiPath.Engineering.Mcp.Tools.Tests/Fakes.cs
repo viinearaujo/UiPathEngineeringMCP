@@ -1,4 +1,5 @@
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.Git;
@@ -121,5 +122,43 @@ internal sealed class FakeSkillsProvider : ISkillsProvider {
         LastName = name;
         LastFile = file;
         return Task.FromResult(ReadResult);
+    }
+}
+
+internal sealed class FakeCSharpAnalysisService : ICSharpAnalysisService {
+    public FindSymbolResult SymbolResult { get; set; } = new();
+    public FindReferencesResult ReferencesResult { get; set; } = new();
+    public CodeContextResult ContextResult { get; set; } = new() { Found = true };
+    public CompileDiagnosticsResult DiagnosticsResult { get; set; } = new();
+    public Exception? ToThrow { get; set; }
+    public string? LastProjectPath { get; private set; }
+    public string? LastSymbol { get; private set; }
+    public string? LastKind { get; private set; }
+    public string? LastFile { get; private set; }
+    public int? LastLine { get; private set; }
+    public string? LastSeverity { get; private set; }
+
+    public Task<FindSymbolResult> FindSymbolAsync(string projectPath, string symbol, string? kind = null, CancellationToken cancellationToken = default) {
+        if (ToThrow is not null) throw ToThrow;
+        LastProjectPath = projectPath; LastSymbol = symbol; LastKind = kind;
+        return Task.FromResult(SymbolResult);
+    }
+
+    public Task<FindReferencesResult> FindReferencesAsync(string projectPath, string symbol, CancellationToken cancellationToken = default) {
+        if (ToThrow is not null) throw ToThrow;
+        LastProjectPath = projectPath; LastSymbol = symbol;
+        return Task.FromResult(ReferencesResult);
+    }
+
+    public Task<CodeContextResult> GetCodeContextAsync(string projectPath, string? symbol = null, string? file = null, int? line = null, CancellationToken cancellationToken = default) {
+        if (ToThrow is not null) throw ToThrow;
+        LastProjectPath = projectPath; LastSymbol = symbol; LastFile = file; LastLine = line;
+        return Task.FromResult(ContextResult);
+    }
+
+    public Task<CompileDiagnosticsResult> GetDiagnosticsAsync(string projectPath, string? severity = null, CancellationToken cancellationToken = default) {
+        if (ToThrow is not null) throw ToThrow;
+        LastProjectPath = projectPath; LastSeverity = severity;
+        return Task.FromResult(DiagnosticsResult);
     }
 }
