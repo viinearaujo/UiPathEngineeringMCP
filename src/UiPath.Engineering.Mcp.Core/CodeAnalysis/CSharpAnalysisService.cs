@@ -145,8 +145,53 @@ public sealed class CSharpAnalysisService : ICSharpAnalysisService {
         return result;
     }
 
-    public Task<CompileDiagnosticsResult> GetDiagnosticsAsync(string projectPath, string? severity = null, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException(); // Task 8
+    private static readonly HashSet<string> MissingReferenceCodes = new(StringComparer.Ordinal) {
+        "CS0234", // type or namespace does not exist in namespace
+        "CS0246", // type or namespace could not be found
+        "CS0012"  // type is defined in an assembly that is not referenced
+    };
+
+    public async Task<CompileDiagnosticsResult> GetDiagnosticsAsync(string projectPath, string? severity = null, CancellationToken cancellationToken = default) {
+        var context = await _contextBuilder.BuildAsync(projectPath, cancellationToken);
+        var result = new CompileDiagnosticsResult();
+        ApplyContext(result, context);
+
+        if (context.Mode == CSharpAnalysisMode.SyntaxOnly) {
+            result.Note = "References could not be resolved; compiler diagnostics are unavailable in syntaxOnly mode.";
+            return result;
+        }
+
+        var minSeverity = severity?.ToLowerInvariant() switch {
+            "all" => DiagnosticSeverity.Hidden,
+            "warning" => DiagnosticSeverity.Warning,
+            _ => DiagnosticSeverity.Error
+        };
+
+        foreach (var diagnostic in context.Compilation.GetDiagnostics(cancellationToken)) {
+            if (diagnostic.Severity < minSeverity || !diagnostic.Location.IsInSource) {
+                continue;
+            }
+            if (context.Mode == CSharpAnalysisMode.Partial && MissingReferenceCodes.Contains(diagnostic.Id)) {
+                result.SuppressedMissingReferenceDiagnostics++;
+                continue;
+            }
+
+            var span = diagnostic.Location.GetLineSpan();
+            result.Diagnostics.Add(new DiagnosticItem {
+                FilePath = span.Path ?? string.Empty,
+                Line = span.StartLinePosition.Line + 1,
+                Column = span.StartLinePosition.Character + 1,
+                Code = diagnostic.Id,
+                Severity = diagnostic.Severity.ToString().ToLowerInvariant(),
+                Message = diagnostic.GetMessage()
+            });
+        }
+
+        if (result.SuppressedMissingReferenceDiagnostics > 0) {
+            result.Note = $"Suppressed {result.SuppressedMissingReferenceDiagnostics} diagnostics caused by unresolved references ({string.Join(", ", context.UnresolvedReferences)}). Resolve the packages and re-run for full diagnostics.";
+        }
+        return result;
+    }
 
     // --- shared helpers (also used by Tasks 6-8) -------------------------------
 
