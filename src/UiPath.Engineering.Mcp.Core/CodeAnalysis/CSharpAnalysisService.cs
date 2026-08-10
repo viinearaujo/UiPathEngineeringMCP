@@ -85,8 +85,65 @@ public sealed class CSharpAnalysisService : ICSharpAnalysisService {
         return result;
     }
 
-    public Task<CodeContextResult> GetCodeContextAsync(string projectPath, string? symbol = null, string? file = null, int? line = null, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException(); // Task 7
+    public async Task<CodeContextResult> GetCodeContextAsync(string projectPath, string? symbol = null, string? file = null, int? line = null, CancellationToken cancellationToken = default) {
+        var context = await _contextBuilder.BuildAsync(projectPath, cancellationToken);
+        var result = new CodeContextResult();
+        ApplyContext(result, context);
+
+        var located = await LocateMemberAsync(context, symbol, file, line, cancellationToken);
+        if (located is null) {
+            result.Found = false;
+            result.Note = symbol is null && file is null
+                ? "Provide either 'symbol' or 'file' + 'line'."
+                : "No matching member found for the given symbol or location.";
+            return result;
+        }
+
+        var (member, model) = located;
+        var declared = model.GetDeclaredSymbol(member, cancellationToken);
+        var span = member.GetLocation().GetLineSpan();
+
+        result.Found = true;
+        result.Name = member switch {
+            MethodDeclarationSyntax method => method.Identifier.Text,
+            ConstructorDeclarationSyntax constructor => constructor.Identifier.Text,
+            BaseTypeDeclarationSyntax type => type.Identifier.Text,
+            PropertyDeclarationSyntax property => property.Identifier.Text,
+            _ => member.GetType().Name
+        };
+        result.Kind = declared is not null
+            ? ToSymbolMatch(declared).Kind
+            : member.Kind().ToString().Replace("Declaration", string.Empty).ToLowerInvariant();
+        result.FilePath = span.Path;
+        result.Line = span.StartLinePosition.Line + 1;
+        result.ContainingType = declared?.ContainingType?.ToDisplayString();
+        result.Signature = declared?.ToDisplayString();
+
+        result.CalledMethods = member.DescendantNodes().OfType<InvocationExpressionSyntax>()
+            .Select(invocation => model.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol)
+            .Where(method => method is not null)
+            .Select(method => $"{method!.ContainingType?.Name}.{method.Name}")
+            .Distinct()
+            .Take(MaxListItems)
+            .ToList();
+
+        result.ReferencedTypes = member.DescendantNodes().OfType<TypeSyntax>()
+            .Select(typeNode => model.GetTypeInfo(typeNode, cancellationToken).Type)
+            .Where(type => type is { SpecialType: SpecialType.None } and not IErrorTypeSymbol)
+            .Select(type => type!.Name)
+            .Where(name => !string.IsNullOrEmpty(name))
+            .Distinct()
+            .Take(MaxListItems)
+            .ToList();
+
+        var source = member.ToString();
+        var sourceLines = source.Split('\n');
+        result.Truncated = sourceLines.Length > MaxSourceLines;
+        result.Source = result.Truncated
+            ? string.Join('\n', sourceLines.Take(MaxSourceLines))
+            : source;
+        return result;
+    }
 
     public Task<CompileDiagnosticsResult> GetDiagnosticsAsync(string projectPath, string? severity = null, CancellationToken cancellationToken = default) =>
         throw new NotImplementedException(); // Task 8
@@ -130,6 +187,50 @@ public sealed class CSharpAnalysisService : ICSharpAnalysisService {
             ContainingType = symbol.ContainingType?.ToDisplayString(),
             Signature = symbol.ToDisplayString()
         };
+    }
+
+    private sealed record LocatedMember(MemberDeclarationSyntax Member, SemanticModel Model);
+
+    private static async Task<LocatedMember?> LocateMemberAsync(
+        CSharpAnalysisContext context, string? symbol, string? file, int? line, CancellationToken cancellationToken) {
+        if (!string.IsNullOrWhiteSpace(symbol)) {
+            var target = context.Compilation
+                .GetSymbolsWithName(symbol, SymbolFilter.All, cancellationToken)
+                .Where(s => string.Equals(s.Name, symbol, StringComparison.Ordinal))
+                .Where(s => s.Locations.Any(l => l.IsInSource))
+                .OrderByDescending(s => s.Kind == SymbolKind.Method) // prefer methods over types
+                .FirstOrDefault();
+            var reference = target?.DeclaringSyntaxReferences.FirstOrDefault();
+            if (reference is null) {
+                return null;
+            }
+            var node = reference.GetSyntax(cancellationToken);
+            var member = node.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
+            return member is null
+                ? null
+                : new LocatedMember(member, context.Compilation.GetSemanticModel(member.SyntaxTree));
+        }
+
+        if (!string.IsNullOrWhiteSpace(file) && line is > 0) {
+            var tree = context.Compilation.SyntaxTrees.FirstOrDefault(t =>
+                string.Equals(t.FilePath, file, StringComparison.OrdinalIgnoreCase));
+            if (tree is null) {
+                return null;
+            }
+            var text = await tree.GetTextAsync(cancellationToken);
+            if (line.Value > text.Lines.Count) {
+                return null;
+            }
+            var position = text.Lines[line.Value - 1].Start;
+            var root = await tree.GetRootAsync(cancellationToken);
+            var token = root.FindToken(position);
+            var member = token.Parent?.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
+            return member is null
+                ? null
+                : new LocatedMember(member, context.Compilation.GetSemanticModel(tree));
+        }
+
+        return null;
     }
 
     private static bool SymbolMatchesTarget(ISymbol? candidate, ISymbol target) {
