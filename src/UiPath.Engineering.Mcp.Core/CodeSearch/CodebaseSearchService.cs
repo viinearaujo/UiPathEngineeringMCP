@@ -114,6 +114,95 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
         return result;
     }
 
+    public async Task<ActivitySearchResult> SearchActivitiesAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
+        var model = await _projectModelBuilder.BuildAsync(projectPath, cancellationToken);
+        var result = new ActivitySearchResult();
+        var parseErrors = model.Workflows.Count(w => w.HasParseError);
+        var matches = new List<(ActivityMatch Match, bool Exact)>();
+
+        foreach (var workflow in model.Workflows.Where(w => !w.HasParseError)) {
+            result.WorkflowsSearched++;
+            foreach (var activity in workflow.Activities) {
+                cancellationToken.ThrowIfCancellationRequested();
+                var nameHit = activity.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase);
+                var typeHit = activity.Type.Contains(query, StringComparison.OrdinalIgnoreCase);
+                if (!nameHit && !typeHit) {
+                    continue;
+                }
+                var exact = string.Equals(activity.DisplayName, query, StringComparison.Ordinal)
+                    || string.Equals(activity.Type, query, StringComparison.Ordinal);
+                matches.Add((new ActivityMatch {
+                    WorkflowFile = workflow.FileName,
+                    WorkflowPath = workflow.FilePath,
+                    DisplayName = activity.DisplayName,
+                    ActivityType = activity.Type,
+                    Depth = activity.Depth
+                }, exact));
+            }
+        }
+
+        // OrderBy is stable: within the same workflow, activities keep document order.
+        foreach (var (match, _) in matches
+            .OrderBy(m => m.Exact ? 0 : 1)
+            .ThenBy(m => m.Match.WorkflowPath, StringComparer.OrdinalIgnoreCase)
+            .Take(CSharpAnalysisService.MaxResults)) {
+            result.Matches.Add(match);
+        }
+
+        var notes = new List<string>();
+        if (parseErrors > 0) {
+            notes.Add($"{parseErrors} workflow(s) failed to parse and were skipped.");
+        }
+        if (result.Matches.Count > 0) {
+            notes.Add("Activity hits locate the workflow file; line-level activity addressing lands with SP3.");
+        }
+        if (matches.Count > CSharpAnalysisService.MaxResults) {
+            result.Truncated = true;
+            notes.Add($"Results truncated at {CSharpAnalysisService.MaxResults} matches; narrow the query.");
+        }
+        result.Note = notes.Count > 0 ? string.Join(' ', notes) : null;
+        return result;
+    }
+
+    public async Task<WorkflowSearchResult> SearchWorkflowsAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
+        var model = await _projectModelBuilder.BuildAsync(projectPath, cancellationToken);
+        var result = new WorkflowSearchResult();
+
+        var matches = model.Workflows
+            .Select(w => {
+                var nameHit = w.FileName.Contains(query, StringComparison.OrdinalIgnoreCase);
+                var descriptionHit = w.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false;
+                return (Workflow: w, NameHit: nameHit, DescriptionHit: descriptionHit);
+            })
+            .Where(x => x.NameHit || x.DescriptionHit)
+            .Select(x => (Match: new WorkflowMatch {
+                FileName = x.Workflow.FileName,
+                FilePath = x.Workflow.FilePath,
+                IsMain = x.Workflow.IsMain,
+                Description = x.Workflow.Description,
+                MatchedOn = x.NameHit && x.DescriptionHit ? "both" : x.NameHit ? "name" : "description"
+            }, Exact: string.Equals(Path.GetFileNameWithoutExtension(x.Workflow.FileName), query, StringComparison.Ordinal)))
+            .OrderBy(x => x.Exact ? 0 : 1)
+            .ThenBy(x => x.Match.FilePath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var (match, _) in matches.Take(CSharpAnalysisService.MaxResults)) {
+            result.Matches.Add(match);
+        }
+
+        var notes = new List<string>();
+        var parseErrors = model.Workflows.Count(w => w.HasParseError);
+        if (parseErrors > 0) {
+            notes.Add($"{parseErrors} workflow(s) failed to parse.");
+        }
+        if (matches.Count > CSharpAnalysisService.MaxResults) {
+            result.Truncated = true;
+            notes.Add($"Results truncated at {CSharpAnalysisService.MaxResults} matches; narrow the query.");
+        }
+        result.Note = notes.Count > 0 ? string.Join(' ', notes) : null;
+        return result;
+    }
+
     // Yields source-declared named types (recursing into their members), methods,
     // properties, and fields. Metadata symbols and implicit members are excluded,
     // as are accessor methods (get_*/set_*), which surface via their property/event.
