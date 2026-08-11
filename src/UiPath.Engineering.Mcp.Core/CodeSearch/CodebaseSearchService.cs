@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.Parsing;
@@ -72,6 +73,72 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
             result.Note = $"Results truncated at {CSharpAnalysisService.MaxResults} matches; narrow the query.";
         }
         return Task.FromResult(result);
+    }
+
+    public async Task<SymbolSearchResult> SearchSymbolsAsync(string projectPath, string query, string? kind = null, CancellationToken cancellationToken = default) {
+        var context = await _contextBuilder.BuildAsync(projectPath, cancellationToken);
+        var result = new SymbolSearchResult {
+            AnalysisMode = context.Mode switch {
+                CSharpAnalysisMode.Full => "full",
+                CSharpAnalysisMode.Partial => "partial",
+                _ => "syntaxOnly"
+            },
+            UnresolvedReferences = [.. context.UnresolvedReferences],
+            Warnings = [.. context.Warnings],
+            HasCSharpFiles = context.HasCSharpFiles
+        };
+        if (!context.HasCSharpFiles) {
+            result.Note = "The project contains no C# files.";
+            return result;
+        }
+
+        // GetSymbolsWithName only does exact-name lookup, so substring search
+        // enumerates source symbols from the global namespace instead.
+        var matches = EnumerateSourceSymbols(context.Compilation.GlobalNamespace)
+            .Where(s => s.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Where(s => CSharpAnalysisService.KindMatches(s, kind))
+            .Select(s => (Match: CSharpAnalysisService.ToSymbolMatch(s), Exact: string.Equals(s.Name, query, StringComparison.Ordinal)))
+            .OrderBy(m => m.Exact ? 0 : 1)
+            .ThenBy(m => m.Match.FilePath, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(m => m.Match.Line)
+            .ThenBy(m => m.Match.Name, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var (match, _) in matches.Take(CSharpAnalysisService.MaxResults)) {
+            result.Matches.Add(match);
+        }
+        if (matches.Count > CSharpAnalysisService.MaxResults) {
+            result.Truncated = true;
+            result.Note = $"Results truncated at {CSharpAnalysisService.MaxResults} matches; narrow the query.";
+        }
+        return result;
+    }
+
+    // Yields source-declared named types (recursing into their members), methods,
+    // properties, and fields. Metadata symbols and implicit members are excluded,
+    // as are accessor methods (get_*/set_*), which surface via their property/event.
+    private static IEnumerable<ISymbol> EnumerateSourceSymbols(INamespaceOrTypeSymbol container) {
+        foreach (var member in container.GetMembers()) {
+            if (member is INamespaceSymbol ns) {
+                foreach (var nested in EnumerateSourceSymbols(ns)) {
+                    yield return nested;
+                }
+                continue;
+            }
+
+            if (member.IsImplicitlyDeclared || !member.Locations.Any(l => l.IsInSource) ||
+                member is IMethodSymbol { AssociatedSymbol: not null }) {
+                continue;
+            }
+            if (member is INamedTypeSymbol or IMethodSymbol or IPropertySymbol or IFieldSymbol) {
+                yield return member;
+            }
+            if (member is INamedTypeSymbol type) {
+                foreach (var nested in EnumerateSourceSymbols(type)) {
+                    yield return nested;
+                }
+            }
+        }
     }
 
     private static string TrimSnippet(string line) {
