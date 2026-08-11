@@ -21,4 +21,5 @@ public static class ToolErrorCodes {
     public const string CliVerbNotAllowed = "CLI_VERB_NOT_ALLOWED";
     public const string CliArgumentsRejected = "CLI_ARGUMENTS_REJECTED";
     public const string MutatingCommandDisabled = "MUTATING_COMMAND_DISABLED";
+    public const string InvalidArgument = "INVALID_ARGUMENT";
 }

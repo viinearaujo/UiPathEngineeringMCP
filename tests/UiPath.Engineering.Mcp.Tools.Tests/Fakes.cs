@@ -1,5 +1,6 @@
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
+using UiPath.Engineering.Mcp.Core.CodeSearch;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.Git;
@@ -160,5 +161,40 @@ internal sealed class FakeCSharpAnalysisService : ICSharpAnalysisService {
         if (ToThrow is not null) throw ToThrow;
         LastProjectPath = projectPath; LastSeverity = severity;
         return Task.FromResult(DiagnosticsResult);
+    }
+}
+
+internal sealed class FakeCodebaseSearchService : ICodebaseSearchService {
+    public TextSearchResult TextResult { get; set; } = new();
+    public SymbolSearchResult SymbolResult { get; set; } = new();
+    public ActivitySearchResult ActivityResult { get; set; } = new();
+    public WorkflowSearchResult WorkflowResult { get; set; } = new();
+    public Exception? ToThrow { get; set; }
+    public string? LastProjectPath { get; private set; }
+    public string? LastQuery { get; private set; }
+    public string? LastKind { get; private set; }
+
+    public Task<TextSearchResult> SearchTextAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
+        if (ToThrow is not null) throw ToThrow;
+        LastProjectPath = projectPath; LastQuery = query;
+        return Task.FromResult(TextResult);
+    }
+
+    public Task<SymbolSearchResult> SearchSymbolsAsync(string projectPath, string query, string? kind = null, CancellationToken cancellationToken = default) {
+        if (ToThrow is not null) throw ToThrow;
+        LastProjectPath = projectPath; LastQuery = query; LastKind = kind;
+        return Task.FromResult(SymbolResult);
+    }
+
+    public Task<ActivitySearchResult> SearchActivitiesAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
+        if (ToThrow is not null) throw ToThrow;
+        LastProjectPath = projectPath; LastQuery = query;
+        return Task.FromResult(ActivityResult);
+    }
+
+    public Task<WorkflowSearchResult> SearchWorkflowsAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
+        if (ToThrow is not null) throw ToThrow;
+        LastProjectPath = projectPath; LastQuery = query;
+        return Task.FromResult(WorkflowResult);
     }
 }
