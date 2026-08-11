@@ -3,6 +3,7 @@ using ModelContextProtocol.AspNetCore;
 using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
+using UiPath.Engineering.Mcp.Core.CodeSearch;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Core.Planning;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
@@ -49,6 +50,7 @@ builder.Services.AddSingleton<ICSharpContextBuilder>(sp =>
         sp.GetRequiredService<CSharpContextBuilder>(),
         sp.GetRequiredService<IFilesystemProvider>()));
 builder.Services.AddSingleton<ICSharpAnalysisService, CSharpAnalysisService>();
+builder.Services.AddSingleton<ICodebaseSearchService, CodebaseSearchService>();
 
 // Add health checks and MCP server.
 // IMPORTANT: the tool classes live in the UiPath.Engineering.Mcp.Tools assembly,
