@@ -102,7 +102,7 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
 
         // GetSymbolsWithName only does exact-name lookup, so substring search
         // enumerates source symbols from the global namespace instead.
-        var matches = EnumerateSourceSymbols(context.Compilation.GlobalNamespace)
+        var matches = EnumerateSourceSymbols(context.Compilation.GlobalNamespace, cancellationToken)
             .Where(s => s.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
             .Where(s => CSharpAnalysisService.KindMatches(s, kind))
             .Select(s => (Match: CSharpAnalysisService.ToSymbolMatch(s), Exact: string.Equals(s.Name, query, StringComparison.Ordinal)))
@@ -215,10 +215,11 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
     // Yields source-declared named types (recursing into their members), methods,
     // properties, and fields. Metadata symbols and implicit members are excluded,
     // as are accessor methods (get_*/set_*), which surface via their property/event.
-    private static IEnumerable<ISymbol> EnumerateSourceSymbols(INamespaceOrTypeSymbol container) {
+    private static IEnumerable<ISymbol> EnumerateSourceSymbols(INamespaceOrTypeSymbol container, CancellationToken cancellationToken) {
         foreach (var member in container.GetMembers()) {
+            cancellationToken.ThrowIfCancellationRequested();
             if (member is INamespaceSymbol ns) {
-                foreach (var nested in EnumerateSourceSymbols(ns)) {
+                foreach (var nested in EnumerateSourceSymbols(ns, cancellationToken)) {
                     yield return nested;
                 }
                 continue;
@@ -232,7 +233,7 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
                 yield return member;
             }
             if (member is INamedTypeSymbol type) {
-                foreach (var nested in EnumerateSourceSymbols(type)) {
+                foreach (var nested in EnumerateSourceSymbols(type, cancellationToken)) {
                     yield return nested;
                 }
             }

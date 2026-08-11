@@ -105,6 +105,16 @@ public class SearchSymbolsTests : CSharpAnalysisServiceTestBase {
     }
 
     [Fact]
+    public async Task SearchSymbols_CancelledToken_ThrowsDuringEnumeration() {
+        var sut = CreateSearchService(BuildContext(Source));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => sut.SearchSymbolsAsync(Root, "execute", cancellationToken: cts.Token));
+    }
+
+    [Fact]
     public async Task SearchSymbols_MoreThan200Matches_Truncated() {
         var members = string.Join("\n", Enumerable.Range(0, 210).Select(i => $"    public void Log{i}() {{ }}"));
         var source = $"public class Bulk {{\n{members}\n}}";
