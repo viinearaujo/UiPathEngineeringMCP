@@ -181,7 +181,8 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
                 IsMain = x.Workflow.IsMain,
                 Description = x.Workflow.Description,
                 MatchedOn = x.NameHit && x.DescriptionHit ? "both" : x.NameHit ? "name" : "description"
-            }, Exact: string.Equals(Path.GetFileNameWithoutExtension(x.Workflow.FileName), query, StringComparison.Ordinal)))
+            }, Exact: string.Equals(x.Workflow.FileName, query, StringComparison.Ordinal)
+                || string.Equals(Path.GetFileNameWithoutExtension(x.Workflow.FileName), query, StringComparison.Ordinal)))
             .OrderBy(x => x.Exact ? 0 : 1)
             .ThenBy(x => x.Match.FilePath, StringComparer.OrdinalIgnoreCase)
             .ToList();

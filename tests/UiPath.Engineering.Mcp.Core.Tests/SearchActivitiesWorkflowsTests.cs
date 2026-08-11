@@ -153,4 +153,20 @@ public class SearchActivitiesWorkflowsTests {
         Assert.Equal(2, result.Matches.Count);
         Assert.Equal("Log.xaml", result.Matches[0].FileName); // exact ordinal-name equality
     }
+
+    [Fact]
+    public async Task SearchWorkflows_ExactFullFileNameMatch_OrdersFirst() {
+        var model = new UiPathProjectModel {
+            ProjectName = "testProcess",
+            Workflows = [
+                new WorkflowModel { FileName = "ALogin.xaml", FilePath = "/projects/testProcess/ALogin.xaml" },
+                new WorkflowModel { FileName = "Log.xaml", FilePath = "/projects/testProcess/Log.xaml" }
+            ]
+        };
+        var sut = CreateService(model);
+
+        var result = await sut.SearchWorkflowsAsync(Root, "Log.xaml");
+
+        Assert.Equal("Log.xaml", result.Matches[0].FileName); // exact tier fires for the full-filename form too
+    }
 }
