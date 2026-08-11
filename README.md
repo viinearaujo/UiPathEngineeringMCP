@@ -4,7 +4,7 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Thirty tools are implemented:
+This is the **MVP / POC (v4)** milestone. Thirty-one tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
