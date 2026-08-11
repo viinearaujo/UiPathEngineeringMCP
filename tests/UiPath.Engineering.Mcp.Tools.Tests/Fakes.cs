@@ -17,6 +17,7 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
     public HashSet<string> ExistingFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> CSharpFiles { get; } = [];
     public Dictionary<string, string> FileContents { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, long> FileSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> Writes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> CreatedDirectories { get; } = [];
 
@@ -26,6 +27,13 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
     public IReadOnlyList<string> FindCSharpFiles(string projectPath) => CSharpFiles;
     public string ReadAllText(string filePath) =>
         FileContents.TryGetValue(filePath, out var content) ? content : ProjectJsonContent;
+
+    public long GetFileSize(string filePath) {
+        if (FileSizes.TryGetValue(filePath, out var size)) {
+            return size;
+        }
+        return FileContents.TryGetValue(filePath, out var content) ? content.Length : ProjectJsonContent.Length;
+    }
     public DateTime GetLastWriteTimeUtc(string filePath) => DateTime.UnixEpoch;
     public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) =>
         new() { Name = Path.GetFileName(root) ?? root, Path = root, IsDirectory = true };

@@ -8,6 +8,7 @@ public interface IFilesystemProvider {
     IReadOnlyList<string> FindXamlFiles(string projectPath);
     IReadOnlyList<string> FindCSharpFiles(string projectPath);
     string ReadAllText(string filePath);
+    long GetFileSize(string filePath);
     DateTime GetLastWriteTimeUtc(string filePath);
     DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3);
 

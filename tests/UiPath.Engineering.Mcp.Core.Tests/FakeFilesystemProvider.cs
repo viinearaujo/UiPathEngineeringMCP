@@ -12,6 +12,7 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
     public List<string> XamlFiles { get; } = [];
     public List<string> CSharpFiles { get; } = [];
     public Dictionary<string, string> FileContents { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, long> FileSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, DateTime> WriteTimesUtc { get; } = new(StringComparer.OrdinalIgnoreCase);
     public DirectoryTreeNode? DirectoryTree { get; set; }
 
@@ -30,6 +31,15 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
         FileContents.TryGetValue(filePath, out var content)
             ? content
             : throw new FileNotFoundException(filePath);
+
+    public long GetFileSize(string filePath) {
+        if (FileSizes.TryGetValue(filePath, out var size)) {
+            return size;
+        }
+        return FileContents.TryGetValue(filePath, out var content)
+            ? content.Length
+            : throw new FileNotFoundException(filePath);
+    }
 
     public DateTime GetLastWriteTimeUtc(string filePath) =>
         WriteTimesUtc.TryGetValue(filePath, out var timestamp)

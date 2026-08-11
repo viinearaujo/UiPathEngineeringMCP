@@ -244,6 +244,16 @@ public class FilesystemProviderTests {
         Assert.True(Directory.Exists(target));
     }
 
+    [Fact]
+    public void GetFileSize_ReturnsByteLength() {
+        using var temp = new TempDir();
+        var target = Path.Combine(temp.Path, "Main.xaml");
+        File.WriteAllText(target, "<x/>");
+        var sut = CreateSut(temp.Path);
+
+        Assert.Equal(new FileInfo(target).Length, sut.GetFileSize(target));
+    }
+
     private sealed class TempDir : IDisposable {
         public string Path { get; } =
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mcp-tests-" + Guid.NewGuid().ToString("N"));

@@ -160,6 +160,8 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
     public string ReadAllText(string filePath) => File.ReadAllText(filePath);
 
+    public long GetFileSize(string filePath) => new FileInfo(Path.GetFullPath(filePath)).Length;
+
     public DateTime GetLastWriteTimeUtc(string filePath) => File.GetLastWriteTimeUtc(filePath);
 
     public void CreateDirectory(string path) {
