@@ -42,13 +42,15 @@ builder.Services.AddSingleton<IProjectModelBuilder>(sp =>
 builder.Services.AddSingleton<ImplementationPlanStore>();
 
 // C# semantic analysis (Roslyn). The context builder is wrapped in the
-// fingerprint cache so compilations are only rebuilt when project files change.
+// fingerprint cache so compilations are only rebuilt when project files or the
+// NuGet package folders backing its dependencies change.
 builder.Services.AddSingleton<NuGetReferenceResolver>();
 builder.Services.AddSingleton<CSharpContextBuilder>();
 builder.Services.AddSingleton<ICSharpContextBuilder>(sp =>
     new CSharpAnalysisCache(
         sp.GetRequiredService<CSharpContextBuilder>(),
-        sp.GetRequiredService<IFilesystemProvider>()));
+        sp.GetRequiredService<IFilesystemProvider>(),
+        sp.GetRequiredService<NuGetReferenceResolver>()));
 builder.Services.AddSingleton<ICSharpAnalysisService, CSharpAnalysisService>();
 builder.Services.AddSingleton<ICodebaseSearchService, CodebaseSearchService>();
 

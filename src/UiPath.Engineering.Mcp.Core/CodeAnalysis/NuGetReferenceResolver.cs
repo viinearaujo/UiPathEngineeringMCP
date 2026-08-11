@@ -8,7 +8,7 @@ namespace UiPath.Engineering.Mcp.Core.CodeAnalysis;
 /// folder, plus framework reference assemblies from the machine's .NET targeting packs
 /// (falling back to the server's own runtime assemblies for modern targets).
 /// </summary>
-public sealed class NuGetReferenceResolver {
+public class NuGetReferenceResolver {
     private readonly string? _packagesFolderOverride;
 
     // packagesFolderOverride exists for tests; production uses the default probing.
@@ -16,7 +16,7 @@ public sealed class NuGetReferenceResolver {
         _packagesFolderOverride = packagesFolderOverride;
     }
 
-    public string? GetPackagesFolder() {
+    public virtual string? GetPackagesFolder() {
         var folder = _packagesFolderOverride
             ?? Environment.GetEnvironmentVariable("NUGET_PACKAGES")
             ?? Path.Combine(
