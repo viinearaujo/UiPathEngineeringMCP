@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using ModelContextProtocol.AspNetCore;
 using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Core.Planning;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
@@ -38,6 +39,16 @@ builder.Services.AddSingleton<IProjectModelBuilder>(sp =>
 
 // Implementation-plan persistence (docs/implementation-plan.json inside each project).
 builder.Services.AddSingleton<ImplementationPlanStore>();
+
+// C# semantic analysis (Roslyn). The context builder is wrapped in the
+// fingerprint cache so compilations are only rebuilt when project files change.
+builder.Services.AddSingleton<NuGetReferenceResolver>();
+builder.Services.AddSingleton<CSharpContextBuilder>();
+builder.Services.AddSingleton<ICSharpContextBuilder>(sp =>
+    new CSharpAnalysisCache(
+        sp.GetRequiredService<CSharpContextBuilder>(),
+        sp.GetRequiredService<IFilesystemProvider>()));
+builder.Services.AddSingleton<ICSharpAnalysisService, CSharpAnalysisService>();
 
 // Add health checks and MCP server.
 // IMPORTANT: the tool classes live in the UiPath.Engineering.Mcp.Tools assembly,

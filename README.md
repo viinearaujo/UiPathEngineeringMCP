@@ -4,7 +4,7 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Twenty-two tools are implemented:
+This is the **MVP / POC (v4)** milestone. Twenty-seven tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
@@ -30,6 +30,11 @@ This is the **MVP / POC (v4)** milestone. Twenty-two tools are implemented:
 | `get_implementation_plan` | Returns the project's implementation plan with derived per-status task counts. |
 | `analyze_project_gaps` | Deterministic hygiene gap analysis over the project model (entry point, orphan workflows, exception handling, logging, descriptions, tests, unresolved invokes) plus plan cross-checks; each gap names the MCP tool that fixes it. |
 | `verify_work` | Rebuilds the model, runs CLI validation (`uip rpa validate` + `build`), checks expected/planned files exist, and marks the given plan tasks `done` or `blocked` accordingly (statuses untouched when the CLI cannot run). |
+| `find_code_symbol` | Finds C# symbols (methods, classes, properties, fields, interfaces) by exact name using Roslyn semantic analysis; returns kind, file, line, containing type, signature. |
+| `find_code_references` | Finds all usage sites of a C# symbol across the project's `.cs` files (semantic matching with an identifier-matching fallback for external symbols). |
+| `get_code_context` | Returns the semantic context of one C# member (located by symbol name or file+line): signature, containing type, called methods, referenced types, and the member's source. |
+| `get_compile_errors` | Structured Roslyn compiler diagnostics (file/line/column/code/severity/message) without running a build; responses include `analysisMode` (`full`/`partial`/`syntaxOnly`). |
+| `compile_project` | Authoritative UiPath CLI build (`uip rpa build`) returning structured compiler errors/warnings. |
 
 ---
 
@@ -152,7 +157,7 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `read_workflow_file`, `edit_workflow_file`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`
+- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `read_workflow_file`, `edit_workflow_file`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`, `find_code_symbol`, `find_code_references`, `get_code_context`, `get_compile_errors`, `compile_project`
 
 ---
 
@@ -283,4 +288,10 @@ src/
   structured error instead of crashing.
 - The `/sse` path serves the **Streamable HTTP** transport (not legacy SSE); the name is
   kept only to match the Copilot registration docs.
+- The C# analysis tools (`find_code_symbol`, `find_code_references`, `get_code_context`,
+  `get_compile_errors`) build a cached in-memory Roslyn compilation per project. When
+  NuGet package assemblies cannot be resolved the response reports
+  `analysisMode: "partial"` (some references missing — results may be incomplete) or
+  `"syntaxOnly"` (NuGet folder unreachable — declaration/name matching only), so the
+  client always knows how much to trust the result.
 - The PowerShell provider is a planned phase, not yet implemented.
