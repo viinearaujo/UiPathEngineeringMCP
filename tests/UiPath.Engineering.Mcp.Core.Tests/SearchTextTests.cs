@@ -110,6 +110,23 @@ public class SearchTextTests {
     }
 
     [Fact]
+    public async Task SearchText_OversizedFileBySize_SkippedBeforeReading() {
+        var fs = new FakeFilesystemProvider();
+        fs.XamlFiles.Add(MainXaml);
+        fs.FileSizes[MainXaml] = 2_000_001L; // size says oversized...
+        fs.FileContents[MainXaml] = "queue"; // ...even though the content is tiny
+        var sut = CreateService(fs);
+
+        var result = await sut.SearchTextAsync(Root, "queue");
+
+        Assert.Equal([MainXaml], result.SkippedFiles);
+        Assert.Single(result.Warnings);
+        Assert.Contains("bytes", result.Warnings[0]);
+        Assert.Equal(0, result.FilesSearched);
+        Assert.Empty(result.Matches);
+    }
+
+    [Fact]
     public async Task SearchText_MoreThan200Matches_Truncated() {
         var fs = new FakeFilesystemProvider();
         fs.XamlFiles.Add(MainXaml);

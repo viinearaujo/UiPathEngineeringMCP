@@ -12,7 +12,8 @@ namespace UiPath.Engineering.Mcp.Core.CodeSearch;
 /// the injected caches; every method takes the project path.
 /// </summary>
 public sealed class CodebaseSearchService : ICodebaseSearchService {
-    // ~2 MB of text: files larger than this are skipped rather than scanned.
+    // ~2 MB of text: files larger than this are skipped rather than scanned. The pre-read
+    // check compares bytes (GetFileSize) so oversized files are never loaded into memory.
     internal const int MaxFileCharacters = 2_000_000;
     private const int MaxSnippetLength = 300;
 
@@ -38,12 +39,19 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
             cancellationToken.ThrowIfCancellationRequested();
             string content;
             try {
+                var fileSize = _filesystem.GetFileSize(file);
+                if (fileSize > MaxFileCharacters) {
+                    result.SkippedFiles.Add(file);
+                    result.Warnings.Add($"Skipped oversized file '{file}' ({fileSize} bytes).");
+                    continue;
+                }
                 content = _filesystem.ReadAllText(file);
-            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 result.SkippedFiles.Add(file);
                 result.Warnings.Add($"Skipped unreadable file '{file}': {ex.Message}");
                 continue;
             }
+            // Safety net: GetFileSize reports bytes; keep the char-accurate check post-read.
             if (content.Length > MaxFileCharacters) {
                 result.SkippedFiles.Add(file);
                 result.Warnings.Add($"Skipped oversized file '{file}' ({content.Length} characters).");
