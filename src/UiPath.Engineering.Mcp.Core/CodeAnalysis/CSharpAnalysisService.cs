@@ -168,6 +168,10 @@ public sealed class CSharpAnalysisService : ICSharpAnalysisService {
         };
 
         foreach (var diagnostic in context.Compilation.GetDiagnostics(cancellationToken)) {
+            if (result.Diagnostics.Count >= MaxResults) {
+                result.Truncated = true;
+                break;
+            }
             if (diagnostic.Severity < minSeverity || !diagnostic.Location.IsInSource) {
                 continue;
             }
@@ -189,6 +193,10 @@ public sealed class CSharpAnalysisService : ICSharpAnalysisService {
 
         if (result.SuppressedMissingReferenceDiagnostics > 0) {
             result.Note = $"Suppressed {result.SuppressedMissingReferenceDiagnostics} diagnostics caused by unresolved references ({string.Join(", ", context.UnresolvedReferences)}). Resolve the packages and re-run for full diagnostics.";
+        }
+        if (result.Truncated) {
+            var truncationNote = $"Results truncated at {MaxResults} diagnostics; narrow with the 'severity' parameter or fix the first errors and re-run.";
+            result.Note = result.Note is null ? truncationNote : result.Note + " " + truncationNote;
         }
         return result;
     }

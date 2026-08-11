@@ -63,6 +63,19 @@ public class ValidateProjectToolTests {
         Assert.Contains("[build] heads up", result.Warnings);
     }
 
+    [Fact]
+    public async Task ValidateProject_WhenCliThrows_ReturnsStructuredErrorInsteadOfThrowing() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var cli = new FakeUiPathCliProvider { ValidateException = new InvalidOperationException("boom") };
+        var tool = new ValidateProjectTool(cli, fs);
+
+        var result = await tool.ValidateProject("/projects/testProcess");
+
+        Assert.Equal("error", result.Status);
+        Assert.Equal("Project validation failed.", result.Summary);
+        Assert.Contains("boom", result.Errors[0]);
+    }
+
     private static JsonElement SerializeData(object? data) =>
         JsonSerializer.SerializeToElement(data);
 

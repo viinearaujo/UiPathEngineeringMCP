@@ -31,24 +31,28 @@ public sealed class ValidateProjectTool {
             return guardFailure;
         }
 
-        var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, cancellationToken);
+        try {
+            var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, cancellationToken);
 
-        return new ToolResult {
-            Status = cliResult.Success ? "success" : "error",
-            Summary = cliResult.Summary,
-            Data = new {
-                success = cliResult.Success,
-                validate = StepData(cliResult.Validate),
-                build = StepData(cliResult.Build),
-                pack = StepData(cliResult.Pack),
-                errors = cliResult.Errors,
-                warnings = cliResult.Warnings,
-                recommendations = BuildRecommendations(cliResult)
-            },
-            Errors = cliResult.Errors,
-            Warnings = cliResult.Warnings,
-            DurationMs = sw.ElapsedMilliseconds
-        };
+            return new ToolResult {
+                Status = cliResult.Success ? "success" : "error",
+                Summary = cliResult.Summary,
+                Data = new {
+                    success = cliResult.Success,
+                    validate = StepData(cliResult.Validate),
+                    build = StepData(cliResult.Build),
+                    pack = StepData(cliResult.Pack),
+                    errors = cliResult.Errors,
+                    warnings = cliResult.Warnings,
+                    recommendations = BuildRecommendations(cliResult)
+                },
+                Errors = cliResult.Errors,
+                Warnings = cliResult.Warnings,
+                DurationMs = sw.ElapsedMilliseconds
+            };
+        } catch (Exception ex) {
+            return ToolResults.FromException(ex, "Project validation failed.", sw);
+        }
     }
 
     private static object StepData(CliStepResult step) => new {

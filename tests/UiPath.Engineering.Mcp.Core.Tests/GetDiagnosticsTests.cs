@@ -64,6 +64,27 @@ public class GetDiagnosticsTests : CSharpAnalysisServiceTestBase {
     }
 
     [Fact]
+    public async Task GetDiagnostics_MoreThanMaxResults_CapsListAndMarksTruncated() {
+        // Must match CSharpAnalysisService.MaxResults (internal to Core).
+        const int maxResults = 200;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("public class Many {");
+        sb.AppendLine("    public void Execute() {");
+        for (var i = 0; i < maxResults + 50; i++) {
+            sb.AppendLine($"        undefined{i}();");
+        }
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        var service = CreateService(BuildContext(sb.ToString()));
+
+        var result = await service.GetDiagnosticsAsync(Root);
+
+        Assert.Equal(maxResults, result.Diagnostics.Count);
+        Assert.True(result.Truncated);
+        Assert.Contains("truncated", result.Note, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task GetDiagnostics_SyntaxOnlyMode_ReturnsEmptyWithNote() {
         var context = BuildContext(BrokenSource, mode: CSharpAnalysisMode.SyntaxOnly);
         var service = CreateService(context);

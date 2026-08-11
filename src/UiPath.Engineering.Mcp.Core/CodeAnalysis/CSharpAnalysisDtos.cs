@@ -62,4 +62,7 @@ public sealed class DiagnosticItem {
 public sealed class CompileDiagnosticsResult : CSharpAnalysisResult {
     public List<DiagnosticItem> Diagnostics { get; init; } = [];
     public int SuppressedMissingReferenceDiagnostics { get; set; }
+
+    // True when more diagnostics existed than were returned (list capped at MaxResults).
+    public bool Truncated { get; set; }
 }

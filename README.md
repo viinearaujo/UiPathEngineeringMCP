@@ -4,7 +4,7 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Twenty-seven tools are implemented:
+This is the **MVP / POC (v4)** milestone. Thirty tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
@@ -35,6 +35,9 @@ This is the **MVP / POC (v4)** milestone. Twenty-seven tools are implemented:
 | `get_code_context` | Returns the semantic context of one C# member (located by symbol name or file+line): signature, containing type, called methods, referenced types, and the member's source. |
 | `get_compile_errors` | Structured Roslyn compiler diagnostics (file/line/column/code/severity/message) without running a build; responses include `analysisMode` (`full`/`partial`/`syntaxOnly`). |
 | `compile_project` | Authoritative UiPath CLI build (`uip rpa build`) returning structured compiler errors/warnings. |
+| `run_ui_path_cli` | Runs an allowlisted UiPath CLI (`uip`) command (default verbs: `rpa`, `solution`); mutating subcommands are blocked unless enabled in config, shell metacharacters are rejected, and stdout/stderr are redacted and capped. |
+| `list_skills` | Lists the UiPath skills catalog (name + description) — the playbooks for UiPath tasks. |
+| `read_skill` | Reads the full content of a UiPath skill (its SKILL.md playbook, or an auxiliary file via the `file` parameter). |
 
 ---
 
@@ -239,7 +242,7 @@ The `tests/` folder contains three xUnit projects:
 |---------|--------|
 | `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder` (xaml + coded `.cs` files), `XamlWorkflowParser` (arguments/variables/try-catch/invokes/log messages, malformed xaml), `CodedSourceFileParser` (namespace/class/`[Workflow]`/public methods, malformed input), `DependencyGraphBuilder` (chains, cycles, orphans), XAML/C# file templates (x:Class naming, namespace sanitization), `ImplementationPlanStore` round-trip, `ProjectGapAnalyzer` rule coverage. |
 | `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing (root/child allowed, sibling-prefix & unrelated rejected), filesystem write guards (writes outside allowed roots throw), `.xaml`/`.cs` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree` (depth/ignore/missing dir), `CliExecutableResolver` (explicit path, exe/cmd/ps1 priority, extension fallback), `UiPathCliOutputParser` (analyzer/NuGet/fallback formats), `UiPathCliProvider` per-step results and CLI-not-found error, `GitStatusParser` (porcelain/ahead-behind/not-a-repo), `GitLabProvider` (search/create, token never surfaced). |
-| `UiPath.Engineering.Mcp.Tools.Tests` | All twenty-two tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing (insert first/last, replace, remove, ambiguous-target and invalid-fragment errors), spec-based authoring (spec validation error codes, `build_workflow` happy path + overwrite guard, `insert_activities` targeting, `manage_workflow_data` add/remove/rename), `read_workflow_file` (line numbering, `startLine`/`lineCount` pagination, secret redaction, `.env`/`*.pem`/`*.key` refusal), `edit_workflow_file` (exact-match replace, zero/ambiguous-match errors, `replaceAll`), plan create/update/get (overwrite guard, unknown task, no-plan), gap-analysis shape, `verify_work` CLI success/failure/unavailable branches with task status transitions, and structured error propagation (no raw exceptions). |
+| `UiPath.Engineering.Mcp.Tools.Tests` | All thirty tools: path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing (insert first/last, replace, remove, ambiguous-target and invalid-fragment errors), spec-based authoring (spec validation error codes, `build_workflow` happy path + overwrite guard, `insert_activities` targeting, `manage_workflow_data` add/remove/rename), `read_workflow_file` (line numbering, `startLine`/`lineCount` pagination, secret redaction, `.env`/`*.pem`/`*.key` refusal), `edit_workflow_file` (exact-match replace, zero/ambiguous-match errors, `replaceAll`), plan create/update/get (overwrite guard, unknown task, no-plan), gap-analysis shape, `verify_work` CLI success/failure/unavailable branches with task status transitions, C# analysis tools (`find_code_symbol`, `find_code_references`, `get_code_context`, `get_compile_errors`, `compile_project`) over a fake analysis service, and structured error propagation (no raw exceptions). |
 
 Tests use hand-written fakes (no Moq) so there are no extra runtime dependencies.
 

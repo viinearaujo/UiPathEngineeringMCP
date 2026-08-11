@@ -33,6 +33,18 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         var overallSuccess = true;
         var lastExitCode = 0;
 
+        // projectPath is interpolated into a cmd.exe /c command line; reject shell
+        // metacharacters before any step runs (same rule CliCommandPolicy enforces
+        // for run_ui_path_cli arguments).
+        if (CliCommandPolicy.ContainsRejectedChars(projectPath)) {
+            return new UiPathCliResult {
+                Success = false,
+                ExitCode = -1,
+                Summary = "Project path rejected.",
+                Errors = ["The project path contains shell metacharacters (& | < > % ^) and cannot be passed to the UiPath CLI safely."]
+            };
+        }
+
         var steps = new List<(string Verb, bool Enabled)>
         {
             ("validate", validate),
@@ -115,6 +127,19 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         string arguments,
         string? workingDirectory = null,
         CancellationToken cancellationToken = default) {
+        // arguments are interpolated verbatim into a cmd.exe /c command line; reject
+        // shell metacharacters here too, so a future caller that bypasses
+        // CliCommandPolicy (run_ui_path_cli already classifies) cannot inject.
+        if (CliCommandPolicy.ContainsRejectedChars(arguments)) {
+            return new UiPathCliResult {
+                Success = false,
+                Command = $"{_options.ExecutablePath} {arguments}",
+                ExitCode = -1,
+                Summary = "Arguments rejected.",
+                Errors = ["The arguments contain shell metacharacters (& | < > % ^) that could break out of the command shim."]
+            };
+        }
+
         var spec = _launchSpec.Value;
         if (spec is null) {
             var baseName = Path.GetFileNameWithoutExtension(_options.ExecutablePath);

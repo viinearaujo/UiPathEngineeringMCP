@@ -80,6 +80,35 @@ public class UiPathCliProviderTests {
     }
 
     [Theory]
+    [InlineData("/some/project&calc")]
+    [InlineData("/some/project|whoami")]
+    [InlineData("/some/project%PATH%")]
+    [InlineData("/some/project^calc")]
+    public async Task ValidateAsync_ProjectPathWithShellMetachars_RejectedWithoutExecuting(string projectPath) {
+        var sut = CreateSut("uip.exe");
+
+        var result = await sut.ValidateAsync(projectPath, validate: true, build: true, pack: true);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Errors, e => e.Contains("metacharacters", StringComparison.OrdinalIgnoreCase));
+        Assert.False(result.Validate.Executed);
+        Assert.False(result.Build.Executed);
+        Assert.False(result.Pack.Executed);
+        Assert.Equal(string.Empty, result.Command);
+    }
+
+    [Fact]
+    public async Task RunAsync_ArgumentsWithShellMetachars_RejectedWithoutExecuting() {
+        var sut = CreateSut("uip.exe");
+
+        var result = await sut.RunAsync("rpa", "rpa validate --project-dir \"/some/project\" & calc");
+
+        Assert.False(result.Success);
+        Assert.Equal(-1, result.ExitCode);
+        Assert.Contains(result.Errors, e => e.Contains("metacharacters", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
     [InlineData("validate", "rpa validate --project-dir \"C:\\projects\\testProcess\" --output json")]
     [InlineData("build", "rpa build \"C:\\projects\\testProcess\" --output json")]
     [InlineData("pack", "rpa pack \"C:\\projects\\testProcess\" --output json")]

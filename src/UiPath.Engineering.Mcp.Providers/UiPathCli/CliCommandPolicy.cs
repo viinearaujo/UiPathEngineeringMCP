@@ -24,7 +24,7 @@ public sealed class CliCommandPolicy {
             return CliCommandClass.VerbNotAllowed;
         }
 
-        if (arguments.IndexOfAny(RejectedArgumentChars) >= 0) {
+        if (ContainsRejectedChars(arguments)) {
             return CliCommandClass.ArgumentsRejected;
         }
 
@@ -37,6 +37,13 @@ public sealed class CliCommandPolicy {
 
         return CliCommandClass.AllowedMutating;
     }
+
+    // True when the string contains a shell metacharacter that could break out of
+    // the quoted cmd.exe /c command line. Exposed so the provider can reject
+    // interpolated paths even when the caller bypassed Classify (e.g. ValidateAsync
+    // builds its own arguments from a projectPath).
+    public static bool ContainsRejectedChars(string arguments) =>
+        arguments.IndexOfAny(RejectedArgumentChars) >= 0;
 
     // A read-only entry matches when the arguments start with it followed by a
     // space or end-of-string (case-insensitive), e.g. "project list" matches
