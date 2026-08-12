@@ -5,13 +5,17 @@ namespace UiPath.Engineering.Mcp.Core.Parsing;
 public sealed class DependencyGraphEdge {
     public string Source { get; init; } = string.Empty;
     public string Target { get; init; } = string.Empty;
+    public string DisplayName { get; init; } = string.Empty;
     public bool IsResolved { get; init; }
+    public List<ArgumentMappingModel> ArgumentMappings { get; init; } = [];
 }
 
 public sealed class DependencyGraphResult {
     public List<DependencyGraphEdge> Edges { get; init; } = [];
     public List<List<string>> Cycles { get; init; } = [];
     public List<string> Orphans { get; init; } = [];
+    public IReadOnlyDictionary<string, List<DependencyGraphEdge>> CallersIndex { get; init; }
+        = new Dictionary<string, List<DependencyGraphEdge>>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -37,7 +41,9 @@ public static class DependencyGraphBuilder {
                 result.Edges.Add(new DependencyGraphEdge {
                     Source = workflow.FileName,
                     Target = invoke.TargetWorkflow,
-                    IsResolved = resolved
+                    DisplayName = invoke.DisplayName,
+                    IsResolved = resolved,
+                    ArgumentMappings = [.. invoke.ArgumentMappings]
                 });
 
                 if (resolved) {
@@ -50,9 +56,21 @@ public static class DependencyGraphBuilder {
             }
         }
 
-        result.Cycles.AddRange(DetectCycles(byFileName.Keys, adjacency));
-        result.Orphans.AddRange(FindOrphans(byFileName.Keys, adjacency, mainWorkflow));
-        return result;
+        var callers = new Dictionary<string, List<DependencyGraphEdge>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var edge in result.Edges) {
+            if (!callers.TryGetValue(edge.Target, out var incoming)) {
+                incoming = [];
+                callers[edge.Target] = incoming;
+            }
+            incoming.Add(edge);
+        }
+
+        return new DependencyGraphResult {
+            Edges = result.Edges,
+            CallersIndex = callers,
+            Cycles = DetectCycles(byFileName.Keys, adjacency),
+            Orphans = FindOrphans(byFileName.Keys, adjacency, mainWorkflow)
+        };
     }
 
     private static List<List<string>> DetectCycles(IEnumerable<string> nodes, Dictionary<string, List<string>> adjacency) {
