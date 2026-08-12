@@ -171,4 +171,32 @@ public class XamlWorkflowParserTests {
         Assert.Equal(16, logStart.Line);
         Assert.All(model.Activities, a => Assert.True(a.Line > 0));
     }
+
+    [Fact]
+    public void Parse_ExtractsInvokeWorkflowArgumentMappings() {
+        const string xaml = """
+        <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                  xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+          <Sequence DisplayName="Main">
+            <ui:InvokeWorkflowFile DisplayName="Invoke child" WorkflowFileName="Child.xaml">
+              <ui:InvokeWorkflowFile.Arguments>
+                <InArgument x:Key="in_CustomerId">[customerId]</InArgument>
+                <OutArgument x:Key="out_Result">[result]</OutArgument>
+              </ui:InvokeWorkflowFile.Arguments>
+            </ui:InvokeWorkflowFile>
+          </Sequence>
+        </Activity>
+        """;
+
+        var model = Parse(xaml);
+
+        var invoke = Assert.Single(model.InvokeWorkflows);
+        Assert.Equal("Child.xaml", invoke.TargetWorkflow);
+        Assert.Equal(2, invoke.ArgumentMappings.Count);
+        Assert.Contains(invoke.ArgumentMappings,
+            m => m.Direction == "In" && m.TargetArgument == "in_CustomerId" && m.Expression == "[customerId]");
+        Assert.Contains(invoke.ArgumentMappings,
+            m => m.Direction == "Out" && m.TargetArgument == "out_Result" && m.Expression == "[result]");
+    }
 }

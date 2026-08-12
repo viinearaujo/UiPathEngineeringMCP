@@ -104,13 +104,7 @@ public sealed class XamlWorkflowParser {
             if (local == "TryCatch") {
                 ExtractTryCatch(element, model);
             } else if (local == "InvokeWorkflowFile") {
-                model.InvokeWorkflows.Add(new InvokeWorkflowModel {
-                    SourceWorkflow = model.FileName,
-                    TargetWorkflow = element.Attribute("WorkflowFileName")?.Value
-                        ?? element.Attribute("FileName")?.Value
-                        ?? string.Empty,
-                    DisplayName = element.Attribute("DisplayName")?.Value ?? string.Empty
-                });
+                model.InvokeWorkflows.Add(ExtractInvokeWorkflow(element, model.FileName));
             } else if (local == "LogMessage") {
                 model.LogMessages.Add(new LogMessageModel {
                     DisplayName = element.Attribute("DisplayName")?.Value ?? string.Empty,
@@ -137,6 +131,51 @@ public sealed class XamlWorkflowParser {
                 parent.Children.Add(activity);
             }
         }
+    }
+
+    private static InvokeWorkflowModel ExtractInvokeWorkflow(XElement element, string sourceFileName) {
+        var invoke = new InvokeWorkflowModel {
+            SourceWorkflow = sourceFileName,
+            TargetWorkflow = element.Attribute("WorkflowFileName")?.Value
+                ?? element.Attribute("FileName")?.Value
+                ?? string.Empty,
+            DisplayName = element.Attribute("DisplayName")?.Value ?? string.Empty
+        };
+
+        var container = element.Elements()
+            .FirstOrDefault(e => e.Name.LocalName == "InvokeWorkflowFile.Arguments");
+        if (container is null) {
+            return invoke;
+        }
+
+        foreach (var argument in container.Elements()) {
+            var direction = argument.Name.LocalName switch {
+                "InArgument" => "In",
+                "OutArgument" => "Out",
+                "InOutArgument" => "In/Out",
+                _ => null
+            };
+            var key = argument.Attributes().FirstOrDefault(a => a.Name.LocalName == "Key")?.Value;
+            if (direction is null || key is null) {
+                continue;
+            }
+
+            invoke.ArgumentMappings.Add(new ArgumentMappingModel {
+                Direction = direction,
+                TargetArgument = key,
+                Expression = ExtractExpressionText(argument)
+            });
+        }
+        return invoke;
+    }
+
+    // Simple bindings are literal text ([expr]); VisualBasicReference-style bindings
+    // carry the expression on an ExpressionText attribute instead.
+    private static string ExtractExpressionText(XElement argument) {
+        var expressionText = argument.Descendants()
+            .Select(d => d.Attribute("ExpressionText")?.Value)
+            .FirstOrDefault(t => t is not null);
+        return expressionText ?? argument.Value.Trim();
     }
 
     private static void ExtractTryCatch(XElement tryCatch, WorkflowModel model) {
