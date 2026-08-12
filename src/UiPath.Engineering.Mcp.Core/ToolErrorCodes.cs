@@ -22,4 +22,7 @@ public static class ToolErrorCodes {
     public const string CliArgumentsRejected = "CLI_ARGUMENTS_REJECTED";
     public const string MutatingCommandDisabled = "MUTATING_COMMAND_DISABLED";
     public const string InvalidArgument = "INVALID_ARGUMENT";
+    public const string ActivityNotFound = "ACTIVITY_NOT_FOUND";
+    public const string ActivityIdStale = "ACTIVITY_ID_STALE";
+    public const string AmbiguousActivity = "AMBIGUOUS_ACTIVITY";
 }

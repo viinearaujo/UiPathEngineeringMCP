@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -149,6 +150,96 @@ public class XamlActivityEditorTests {
 
         Assert.False(result.Success);
         Assert.Contains("parse failure", result.Error);
+    }
+
+    [Fact]
+    public void EditById_Replace_TargetsExactlyTheResolvedActivity() {
+        const string workflow = """
+            <Activity x:Class="Main"
+              xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:ui="http://schemas.uipath.com/workflow/activities">
+              <Sequence DisplayName="Main">
+                <ui:LogMessage DisplayName="Dup" Message="first" />
+                <ui:LogMessage DisplayName="Dup" Message="second" />
+              </Sequence>
+            </Activity>
+            """;
+
+        var result = XamlActivityEditor.EditById(workflow, XamlActivityEditor.Replace,
+            "sequence.1/logmessage.2", fragment: "<ui:Comment DisplayName=\"Note\" />");
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("sequence.1/logmessage.2", result.ResolvedId);
+        Assert.Contains("Message=\"first\"", result.UpdatedContent);
+        Assert.DoesNotContain("Message=\"second\"", result.UpdatedContent);
+        Assert.Contains("<ui:Comment DisplayName=\"Note\"", result.UpdatedContent);
+    }
+
+    [Fact]
+    public void EditById_UnknownId_ReturnsActivityNotFound() {
+        var result = XamlActivityEditor.EditById(Workflow, XamlActivityEditor.Remove, "sequence.9/nope.1");
+
+        Assert.False(result.Success);
+        Assert.Equal(ToolErrorCodes.ActivityNotFound, result.ErrorCode);
+        Assert.Contains("sequence.9/nope.1", result.Error);
+    }
+
+    [Fact]
+    public void EditById_TypeMismatch_ReturnsActivityIdStale() {
+        // sequence.1 is a Sequence; claiming it is a LogMessage means the snapshot moved.
+        var result = XamlActivityEditor.EditById(Workflow, XamlActivityEditor.Remove,
+            "sequence.1", activityType: "LogMessage");
+
+        Assert.False(result.Success);
+        Assert.Equal(ToolErrorCodes.ActivityIdStale, result.ErrorCode);
+        Assert.Contains("find_activity", result.Error);
+    }
+
+    [Fact]
+    public void EditById_DisplayNameMismatch_ReturnsActivityIdStale() {
+        var result = XamlActivityEditor.EditById(Workflow, XamlActivityEditor.Remove,
+            "sequence.1", expectedDisplayName: "Renamed since snapshot");
+
+        Assert.False(result.Success);
+        Assert.Equal(ToolErrorCodes.ActivityIdStale, result.ErrorCode);
+    }
+
+    [Fact]
+    public void Edit_NoDisplayNameMatch_CarriesActivityNotFoundCode() {
+        var result = XamlActivityEditor.Edit(Workflow, XamlActivityEditor.Remove, "Missing");
+
+        Assert.False(result.Success);
+        Assert.Equal(ToolErrorCodes.ActivityNotFound, result.ErrorCode);
+    }
+
+    [Fact]
+    public void Edit_AmbiguousDisplayName_CarriesAmbiguousActivityCode() {
+        const string workflow = """
+            <Activity x:Class="Main"
+              xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:ui="http://schemas.uipath.com/workflow/activities">
+              <Sequence DisplayName="Main">
+                <ui:LogMessage DisplayName="Dup" Message="a" />
+                <ui:LogMessage DisplayName="Dup" Message="b" />
+              </Sequence>
+            </Activity>
+            """;
+
+        var result = XamlActivityEditor.Edit(workflow, XamlActivityEditor.Remove, "Dup");
+
+        Assert.False(result.Success);
+        Assert.Equal(ToolErrorCodes.AmbiguousActivity, result.ErrorCode);
+        Assert.Contains("activityId", result.Error);
+    }
+
+    [Fact]
+    public void Edit_ByDisplayName_ReportsResolvedIdOnSuccess() {
+        var result = XamlActivityEditor.Edit(Workflow, XamlActivityEditor.Remove, "Start");
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("sequence.1/logmessage.1", result.ResolvedId);
     }
 }
 

@@ -41,28 +41,91 @@ public static class XamlActivityEditor {
 
         XDocument doc;
         try {
-            doc = XDocument.Parse(xamlContent, LoadOptions.PreserveWhitespace);
+            doc = XDocument.Parse(xamlContent, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
         } catch (Exception ex) when (ex is XmlException or InvalidOperationException) {
             return XamlEditResult.Failure($"XAML parse failure: {ex.Message}");
         }
 
-        var matches = FindMatches(doc, displayName, activityType);
+        var matches = XamlActivityLocator.Locate(doc)
+            .Where(a => string.Equals(a.Element.Attribute("DisplayName")?.Value, displayName, StringComparison.Ordinal)
+                && (activityType is null || string.Equals(a.Element.Name.LocalName, activityType, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
         if (matches.Count == 0) {
             return XamlEditResult.Failure(
                 $"No activity found with DisplayName '{displayName}'" +
-                (activityType is null ? "." : $" of type '{activityType}'."));
+                (activityType is null ? "." : $" of type '{activityType}'."),
+                ToolErrorCodes.ActivityNotFound);
         }
         if (matches.Count > 1) {
             return XamlEditResult.Failure(
                 $"Found {matches.Count} activities with DisplayName '{displayName}'. " +
-                "Pass activityType to disambiguate, or make display names unique.");
+                "Pass activityId to target exactly one (run find_activity to list IDs), " +
+                "or narrow with activityType.",
+                ToolErrorCodes.AmbiguousActivity);
         }
 
-        var target = matches[0];
+        return ApplyEdit(doc, matches[0], operation, fragment, position);
+    }
 
+    /// <summary>
+    /// Edit the activity addressed by a structural ID previously issued by find_activity.
+    /// When <paramref name="activityType"/> or <paramref name="expectedDisplayName"/> are
+    /// supplied they are verified against the resolved element; a mismatch means the file
+    /// changed since the ID was issued and the edit is refused with ACTIVITY_ID_STALE.
+    /// </summary>
+    public static XamlEditResult EditById(
+        string xamlContent,
+        string operation,
+        string activityId,
+        string? activityType = null,
+        string? expectedDisplayName = null,
+        string? fragment = null,
+        string position = Last) {
+        if (string.IsNullOrWhiteSpace(activityId)) {
+            return XamlEditResult.Failure("activityId is required to locate the target activity.",
+                ToolErrorCodes.InvalidArgument);
+        }
+
+        XDocument doc;
+        try {
+            doc = XDocument.Parse(xamlContent, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
+        } catch (Exception ex) when (ex is XmlException or InvalidOperationException) {
+            return XamlEditResult.Failure($"XAML parse failure: {ex.Message}");
+        }
+
+        var located = XamlActivityLocator.Locate(doc)
+            .FirstOrDefault(a => string.Equals(a.Id, activityId, StringComparison.Ordinal));
+        if (located is null) {
+            return XamlEditResult.Failure($"No activity found with ID '{activityId}'.",
+                ToolErrorCodes.ActivityNotFound);
+        }
+
+        // Verify the snapshot still matches reality: an ID issued before a structural
+        // edit may now resolve to a different activity than the caller intended.
+        var local = located.Element.Name.LocalName;
+        if (activityType is not null && !string.Equals(local, activityType, StringComparison.OrdinalIgnoreCase)) {
+            return XamlEditResult.Failure(
+                $"Activity ID '{activityId}' now resolves to a '{local}', not '{activityType}'. " +
+                "The file changed since the ID was issued; re-run find_activity for fresh IDs.",
+                ToolErrorCodes.ActivityIdStale);
+        }
+        var actualDisplayName = located.Element.Attribute("DisplayName")?.Value;
+        if (expectedDisplayName is not null
+            && !string.Equals(actualDisplayName, expectedDisplayName, StringComparison.Ordinal)) {
+            return XamlEditResult.Failure(
+                $"Activity ID '{activityId}' now resolves to DisplayName '{actualDisplayName}', not '{expectedDisplayName}'. " +
+                "The file changed since the ID was issued; re-run find_activity for fresh IDs.",
+                ToolErrorCodes.ActivityIdStale);
+        }
+
+        return ApplyEdit(doc, located, operation, fragment, position);
+    }
+
+    private static XamlEditResult ApplyEdit(
+        XDocument doc, LocatedActivity target, string operation, string? fragment, string position) {
         switch (operation) {
             case Remove:
-                RemoveElement(target);
+                RemoveElement(target.Element);
                 break;
 
             case Insert:
@@ -72,9 +135,9 @@ public static class XamlActivityEditor {
                     return XamlEditResult.Failure(fragmentError!);
                 }
                 if (operation == Insert) {
-                    InsertInto(target, nodes, position == First);
+                    InsertInto(target.Element, nodes, position == First);
                 } else {
-                    target.ReplaceWith(nodes);
+                    target.Element.ReplaceWith(nodes);
                 }
                 break;
 
@@ -82,16 +145,7 @@ public static class XamlActivityEditor {
                 return XamlEditResult.Failure($"Unknown operation '{operation}'. Use insert, replace, or remove.");
         }
 
-        return XamlEditResult.Ok(Serialize(doc), matches.Count);
-    }
-
-    private static List<XElement> FindMatches(XDocument doc, string displayName, string? activityType) {
-        return doc.Descendants()
-            .Where(e => !e.Name.LocalName.Contains('.')
-                && !XamlWorkflowParser.NonActivityElements.Contains(e.Name.LocalName)
-                && string.Equals(e.Attribute("DisplayName")?.Value, displayName, StringComparison.Ordinal)
-                && (activityType is null || string.Equals(e.Name.LocalName, activityType, StringComparison.OrdinalIgnoreCase)))
-            .ToList();
+        return XamlEditResult.Ok(Serialize(doc), 1, target.Id);
     }
 
     private static List<XElement>? ParseFragment(string? fragment, out string? error) {
@@ -219,7 +273,11 @@ public static class XamlActivityEditor {
     }
 }
 
-public sealed record XamlEditResult(bool Success, string? UpdatedContent, string? Error, int MatchCount) {
-    public static XamlEditResult Ok(string content, int matchCount) => new(true, content, null, matchCount);
-    public static XamlEditResult Failure(string error) => new(false, null, error, 0);
+public sealed record XamlEditResult(
+    bool Success, string? UpdatedContent, string? Error, int MatchCount,
+    string? ErrorCode = null, string? ResolvedId = null) {
+    public static XamlEditResult Ok(string content, int matchCount, string? resolvedId = null) =>
+        new(true, content, null, matchCount, null, resolvedId);
+    public static XamlEditResult Failure(string error, string? errorCode = null) =>
+        new(false, null, error, 0, errorCode);
 }
