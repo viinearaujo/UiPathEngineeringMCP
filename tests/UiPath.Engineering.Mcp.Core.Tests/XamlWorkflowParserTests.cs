@@ -111,4 +111,64 @@ public class XamlWorkflowParserTests {
         Assert.Contains("XAML parse failure", model.ParseError);
         Assert.Equal("Main.xaml", model.FileName);
     }
+
+    [Fact]
+    public void Parse_AssignsIdsParentLinksAndOrder() {
+        var model = Parse();
+
+        var sequence = model.Activities.Single(a => a.Type == "Sequence");
+        Assert.Equal("sequence.1", sequence.Id);
+        Assert.Null(sequence.ParentId);
+
+        var logStart = model.Activities.Single(a => a.DisplayName == "Log start");
+        Assert.Equal("sequence.1/logmessage.1", logStart.Id);
+        Assert.Equal("sequence.1", logStart.ParentId);
+
+        var tryCatch = model.Activities.Single(a => a.Type == "TryCatch");
+        Assert.Equal("sequence.1/trycatch.2", tryCatch.Id);
+
+        var invoke = model.Activities.Single(a => a.Type == "InvokeWorkflowFile");
+        Assert.Equal("sequence.1/trycatch.2/invokeworkflowfile.1", invoke.Id);
+        Assert.Equal("sequence.1/trycatch.2", invoke.ParentId);
+
+        // Log error sits under TryCatch.Catch > Catch > ActivityAction, all transparent.
+        var logError = model.Activities.Single(a => a.DisplayName == "Log error");
+        Assert.Equal("sequence.1/trycatch.2/logmessage.1", logError.Id);
+
+        Assert.Equal(Enumerable.Range(0, model.Activities.Count).ToArray(),
+            model.Activities.Select(a => a.Order).ToArray());
+    }
+
+    [Fact]
+    public void Parse_WiresChildrenButKeepsFlatPreOrderList() {
+        var model = Parse();
+
+        var sequence = model.Activities.Single(a => a.Id == "sequence.1");
+        Assert.Equal(["sequence.1/logmessage.1", "sequence.1/trycatch.2"],
+            sequence.Children.Select(c => c.Id).ToArray());
+        var tryCatch = model.Activities.Single(a => a.Id == "sequence.1/trycatch.2");
+        Assert.Equal(["sequence.1/trycatch.2/invokeworkflowfile.1", "sequence.1/trycatch.2/logmessage.1"],
+            tryCatch.Children.Select(c => c.Id).ToArray());
+    }
+
+    [Fact]
+    public void Parse_ChildrenAreNotSerialized() {
+        var model = Parse();
+
+        var json = System.Text.Json.JsonSerializer.Serialize(model.Activities);
+
+        Assert.DoesNotContain("\"Children\"", json);
+        Assert.Contains("\"Id\"", json);
+        Assert.Contains("\"Line\"", json);
+    }
+
+    [Fact]
+    public void Parse_ReportsOneBasedLineNumbers() {
+        var model = Parse();
+
+        // SampleXaml: "<ui:LogMessage DisplayName=\"Log start\" ... />" is content line 16 of the raw literal.
+        var logStart = model.Activities.Single(a => a.DisplayName == "Log start");
+        Assert.Equal(16, logStart.Line);
+        Assert.All(model.Activities, a => Assert.True(a.Line > 0));
+    }
 }

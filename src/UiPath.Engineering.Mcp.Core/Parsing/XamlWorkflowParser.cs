@@ -24,7 +24,7 @@ public sealed class XamlWorkflowParser {
     public WorkflowModel Parse(string fileName, string filePath, string xamlContent) {
         XDocument doc;
         try {
-            doc = XDocument.Parse(xamlContent);
+            doc = XDocument.Parse(xamlContent, LoadOptions.SetLineInfo);
         } catch (Exception ex) when (ex is System.Xml.XmlException or InvalidOperationException) {
             return new WorkflowModel {
                 FileName = fileName,
@@ -47,7 +47,7 @@ public sealed class XamlWorkflowParser {
 
         ExtractArguments(doc, model);
         ExtractVariables(doc, model);
-        Walk(doc.Root, 0, model);
+        PopulateActivities(doc, model);
         return model;
     }
 
@@ -95,42 +95,47 @@ public sealed class XamlWorkflowParser {
         }
     }
 
-    private void Walk(XElement element, int depth, WorkflowModel model) {
-        foreach (var child in element.Elements()) {
-            var local = child.Name.LocalName;
-            if (local.Contains('.') || NonActivityElements.Contains(local)) {
-                // Attached-property containers (Sequence.Variables, TryCatch.Catch, ViewState, ...)
-                // and XAML primitives: transparent, recurse at the same depth.
-                Walk(child, depth, model);
-                continue;
-            }
+    private void PopulateActivities(XDocument doc, WorkflowModel model) {
+        var byId = new Dictionary<string, ActivityModel>(StringComparer.Ordinal);
+        foreach (var located in XamlActivityLocator.Locate(doc)) {
+            var element = located.Element;
+            var local = element.Name.LocalName;
 
             if (local == "TryCatch") {
-                ExtractTryCatch(child, model);
+                ExtractTryCatch(element, model);
             } else if (local == "InvokeWorkflowFile") {
                 model.InvokeWorkflows.Add(new InvokeWorkflowModel {
                     SourceWorkflow = model.FileName,
-                    TargetWorkflow = child.Attribute("WorkflowFileName")?.Value
-                        ?? child.Attribute("FileName")?.Value
+                    TargetWorkflow = element.Attribute("WorkflowFileName")?.Value
+                        ?? element.Attribute("FileName")?.Value
                         ?? string.Empty,
-                    DisplayName = child.Attribute("DisplayName")?.Value ?? string.Empty
+                    DisplayName = element.Attribute("DisplayName")?.Value ?? string.Empty
                 });
             } else if (local == "LogMessage") {
                 model.LogMessages.Add(new LogMessageModel {
-                    DisplayName = child.Attribute("DisplayName")?.Value ?? string.Empty,
-                    Level = child.Attribute("Level")?.Value ?? string.Empty,
-                    Message = child.Attribute("Message")?.Value
-                        ?? child.Attribute("MessageText")?.Value
+                    DisplayName = element.Attribute("DisplayName")?.Value ?? string.Empty,
+                    Level = element.Attribute("Level")?.Value ?? string.Empty,
+                    Message = element.Attribute("Message")?.Value
+                        ?? element.Attribute("MessageText")?.Value
                         ?? string.Empty
                 });
             }
 
-            model.Activities.Add(new ActivityModel {
-                DisplayName = child.Attribute("DisplayName")?.Value ?? local,
+            var activity = new ActivityModel {
+                Id = located.Id,
+                ParentId = located.ParentId,
+                DisplayName = element.Attribute("DisplayName")?.Value ?? local,
                 Type = local,
-                Depth = depth
-            });
-            Walk(child, depth + 1, model);
+                Depth = located.Depth,
+                Order = located.Order,
+                Line = located.Line
+            };
+            model.Activities.Add(activity);
+            byId[located.Id] = activity;
+            // Pre-order traversal guarantees the parent was already added.
+            if (located.ParentId is not null && byId.TryGetValue(located.ParentId, out var parent)) {
+                parent.Children.Add(activity);
+            }
         }
     }
 
