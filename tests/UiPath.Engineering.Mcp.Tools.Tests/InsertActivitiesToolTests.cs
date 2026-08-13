@@ -32,7 +32,7 @@ public class InsertActivitiesToolTests {
     public void InsertActivities_HappyPath_WritesOriginalContentPlusNewActivity() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", "Main", AssignSpec);
+        var result = tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec, displayName: "Main");
 
         Assert.Equal("success", result.Status);
         var written = fs.Writes[target];
@@ -45,8 +45,8 @@ public class InsertActivitiesToolTests {
     public void InsertActivities_WhenSpecInvalid_ReturnsErrorAndDoesNotWrite() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", "Main",
-            """{ "name": "NoSuchActivity", "properties": { "DisplayName": "X" } }""");
+        var result = tool.InsertActivities(ProjectPath, "Main.xaml",
+            """{ "name": "NoSuchActivity", "properties": { "DisplayName": "X" } }""", displayName: "Main");
 
         Assert.Equal("error", result.Status);
         Assert.False(fs.Writes.ContainsKey(target));
@@ -56,7 +56,7 @@ public class InsertActivitiesToolTests {
     public void InsertActivities_WhenSpecJsonMalformed_ReturnsErrorAndDoesNotWrite() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", "Main", "{ not json");
+        var result = tool.InsertActivities(ProjectPath, "Main.xaml", "{ not json", displayName: "Main");
 
         Assert.Equal("error", result.Status);
         Assert.False(fs.Writes.ContainsKey(target));
@@ -66,7 +66,7 @@ public class InsertActivitiesToolTests {
     public void InsertActivities_WhenTargetNotFound_SurfacesEditorError() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", "Missing", AssignSpec);
+        var result = tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec, displayName: "Missing");
 
         Assert.Equal("error", result.Status);
         Assert.Contains("No activity found", result.Summary);
@@ -77,7 +77,7 @@ public class InsertActivitiesToolTests {
     public void InsertActivities_SequenceRootWithoutVariables_InsertsChildrenNotWrapper() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", "Main",
+        var result = tool.InsertActivities(ProjectPath, "Main.xaml",
             """
             {
               "name": "Sequence",
@@ -86,7 +86,7 @@ public class InsertActivitiesToolTests {
                 { "name": "Assign", "properties": { "DisplayName": "B", "To": "[y]", "Value": "[2]" } }
               ]
             }
-            """);
+            """, displayName: "Main");
 
         Assert.Equal("success", result.Status);
         var written = fs.Writes[target];
@@ -100,7 +100,7 @@ public class InsertActivitiesToolTests {
     public void InsertActivities_RejectsNonXamlFile() {
         var (_, tool, _) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.cs", "Main", AssignSpec);
+        var result = tool.InsertActivities(ProjectPath, "Main.cs", AssignSpec, displayName: "Main");
 
         Assert.Equal("error", result.Status);
         Assert.Contains(".xaml", result.Summary);
