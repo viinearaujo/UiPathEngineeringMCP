@@ -32,11 +32,13 @@ public sealed class SymbolSearchResult : CodebaseSearchResult {
 }
 
 public sealed class ActivityMatch {
+    public string Id { get; init; } = string.Empty;
     public string WorkflowFile { get; init; } = string.Empty;
     public string WorkflowPath { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public string ActivityType { get; init; } = string.Empty;
     public int Depth { get; init; }
+    public int Line { get; init; }
 }
 
 public sealed class ActivitySearchResult : CodebaseSearchResult {

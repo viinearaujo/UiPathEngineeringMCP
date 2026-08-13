@@ -140,11 +140,13 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
                 var exact = string.Equals(activity.DisplayName, query, StringComparison.Ordinal)
                     || string.Equals(activity.Type, query, StringComparison.Ordinal);
                 matches.Add((new ActivityMatch {
+                    Id = activity.Id,
                     WorkflowFile = workflow.FileName,
                     WorkflowPath = workflow.FilePath,
                     DisplayName = activity.DisplayName,
                     ActivityType = activity.Type,
-                    Depth = activity.Depth
+                    Depth = activity.Depth,
+                    Line = activity.Line
                 }, exact));
             }
         }
@@ -160,9 +162,6 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
         var notes = new List<string>();
         if (parseErrors > 0) {
             notes.Add($"{parseErrors} workflow(s) failed to parse and were skipped.");
-        }
-        if (result.Matches.Count > 0) {
-            notes.Add("Activity hits locate the workflow file; line-level activity addressing lands with SP3.");
         }
         if (matches.Count > CSharpAnalysisService.MaxResults) {
             result.Truncated = true;

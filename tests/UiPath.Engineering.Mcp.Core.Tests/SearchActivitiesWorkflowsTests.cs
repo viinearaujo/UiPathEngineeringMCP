@@ -30,9 +30,9 @@ public class SearchActivitiesWorkflowsTests {
                 IsMain = true,
                 Description = "Entry point for invoice processing",
                 Activities = [
-                    new ActivityModel { DisplayName = "Log start", Type = "LogMessage", Depth = 1 },
-                    new ActivityModel { DisplayName = "Log", Type = "LogMessage", Depth = 1 },
-                    new ActivityModel { DisplayName = "Write line", Type = "WriteLine", Depth = 2 }
+                    new ActivityModel { Id = "sequence.1/logmessage.1", DisplayName = "Log start", Type = "LogMessage", Depth = 1, Line = 12 },
+                    new ActivityModel { Id = "sequence.1/logmessage.2", DisplayName = "Log", Type = "LogMessage", Depth = 1, Line = 13 },
+                    new ActivityModel { Id = "sequence.1/writeline.3", DisplayName = "Write line", Type = "WriteLine", Depth = 2, Line = 14 }
                 ]
             },
             new WorkflowModel {
@@ -64,7 +64,9 @@ public class SearchActivitiesWorkflowsTests {
         Assert.Contains(result.Matches, m => m.WorkflowFile == "InvoiceFlow.xaml" && m.DisplayName == "Log invoice");
         Assert.Equal(2, result.WorkflowsSearched); // Broken.xaml skipped
         Assert.Contains("1 workflow(s) failed to parse", result.Note);
-        Assert.Contains("line-level activity addressing", result.Note); // SP3 limitation note
+        var logStart = result.Matches.Single(m => m.DisplayName == "Log start");
+        Assert.Equal("sequence.1/logmessage.1", logStart.Id);
+        Assert.Equal(12, logStart.Line);
     }
 
     [Fact]
