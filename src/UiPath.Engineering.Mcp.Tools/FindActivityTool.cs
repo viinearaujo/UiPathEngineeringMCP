@@ -23,7 +23,7 @@ public sealed class FindActivityTool {
         [Description("Optional workflow file name (with or without .xaml) to limit the search to one workflow.")] string? workflowFile = null,
         [Description("Optional DisplayName substring, case-insensitive.")] string? query = null,
         [Description("Optional exact activity type, e.g. 'LogMessage'.")] string? activityType = null,
-        [Description("Optional exact activity ID, e.g. 'sequence.1/if.1'. When supplied, other filters are ignored.")] string? activityId = null,
+        [Description("Optional exact activity ID, e.g. 'sequence.1/if.1'. When supplied, query/activityType are ignored, but workflowFile still narrows the lookup — pass it together with activityId, since IDs are per-workflow paths that collide across workflows (e.g. 'sequence.1' matches the root sequence of every workflow).")] string? activityId = null,
         CancellationToken cancellationToken = default) {
         var sw = Stopwatch.StartNew();
 

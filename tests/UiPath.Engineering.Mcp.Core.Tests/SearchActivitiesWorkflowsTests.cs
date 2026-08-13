@@ -64,6 +64,7 @@ public class SearchActivitiesWorkflowsTests {
         Assert.Contains(result.Matches, m => m.WorkflowFile == "InvoiceFlow.xaml" && m.DisplayName == "Log invoice");
         Assert.Equal(2, result.WorkflowsSearched); // Broken.xaml skipped
         Assert.Contains("1 workflow(s) failed to parse", result.Note);
+        Assert.Contains("per-parse-snapshot", result.Note);
         var logStart = result.Matches.Single(m => m.DisplayName == "Log start");
         Assert.Equal("sequence.1/logmessage.1", logStart.Id);
         Assert.Equal(12, logStart.Line);

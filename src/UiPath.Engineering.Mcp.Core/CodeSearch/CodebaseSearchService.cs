@@ -163,6 +163,9 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
         if (parseErrors > 0) {
             notes.Add($"{parseErrors} workflow(s) failed to parse and were skipped.");
         }
+        if (result.Matches.Count > 0) {
+            notes.Add("Activity IDs are per-parse-snapshot values; refresh them with find_activity before editing.");
+        }
         if (matches.Count > CSharpAnalysisService.MaxResults) {
             result.Truncated = true;
             notes.Add($"Results truncated at {CSharpAnalysisService.MaxResults} matches; narrow the query.");

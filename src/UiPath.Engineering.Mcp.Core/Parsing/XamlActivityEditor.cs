@@ -6,9 +6,11 @@ namespace UiPath.Engineering.Mcp.Core.Parsing;
 /// <summary>
 /// Activity-level edits on a UiPath .xaml workflow: insert an activity fragment into a
 /// container, replace an activity, or remove one. Targets are matched by DisplayName
-/// (optionally narrowed by activity type). Whitespace is preserved so untouched regions
-/// of the file stay byte-identical; edits never throw, failures come back as
-/// <see cref="XamlEditResult.Error"/>.
+/// (optionally narrowed by activity type) via <see cref="Edit"/>, or addressed directly
+/// by structural ID (e.g. "sequence.1/if.1") via <see cref="EditById"/>; both resolve
+/// targets through the shared <see cref="XamlActivityLocator"/>. Whitespace is preserved
+/// so untouched regions of the file stay byte-identical; edits never throw, failures
+/// come back as <see cref="XamlEditResult.Error"/>.
 /// </summary>
 public static class XamlActivityEditor {
     public const string Insert = "insert";
