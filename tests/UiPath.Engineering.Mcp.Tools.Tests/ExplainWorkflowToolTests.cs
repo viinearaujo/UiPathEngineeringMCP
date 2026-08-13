@@ -1,3 +1,4 @@
+using System.Text.Json;
 using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -182,5 +183,56 @@ public class ExplainWorkflowToolTests {
         Assert.Equal("error", result.Status);
         Assert.Equal("Workflow explanation failed.", result.Summary);
         Assert.Contains("boom", result.Errors);
+    }
+
+    [Fact]
+    public async Task ExplainWorkflow_WithActivityTree_NestsChildren() {
+        // Build the model through the real parser so IDs/Children are wired.
+        const string xaml = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <Sequence DisplayName="Main">
+                <If DisplayName="Check">
+                  <If.Then>
+                    <ui:LogMessage DisplayName="Log yes" Message="y" />
+                  </If.Then>
+                </If>
+              </Sequence>
+            </Activity>
+            """;
+        var workflow = new Core.Parsing.XamlWorkflowParser().Parse("Main.xaml", "/proj/Main.xaml", xaml);
+        var builder = new FakeProjectModelBuilder {
+            Model = new UiPathProjectModel {
+                ProjectName = "testProcess",
+                MainWorkflow = "Main.xaml",
+                Workflows = [workflow]
+            }
+        };
+        var tool = new ExplainWorkflowTool(new FakeFilesystemProvider(), builder);
+
+        var result = await tool.ExplainWorkflow("/projects/testProcess", "Main.xaml", includeActivityTree: true);
+
+        Assert.Equal("success", result.Status);
+        var tree = JsonSerializer.SerializeToElement(result.Data).GetProperty("activityTree");
+        var root = tree[0];
+        Assert.Equal("sequence.1", root.GetProperty("id").GetString());
+        var ifNode = root.GetProperty("children")[0];
+        Assert.Equal("sequence.1/if.1", ifNode.GetProperty("id").GetString());
+        var logNode = ifNode.GetProperty("children")[0];
+        Assert.Equal("sequence.1/if.1/logmessage.1", logNode.GetProperty("id").GetString());
+        Assert.True(logNode.GetProperty("line").GetInt32() > 0);
+    }
+
+    [Fact]
+    public async Task ExplainWorkflow_WithoutFlag_ActivityTreeIsNull() {
+        var tool = new ExplainWorkflowTool(new FakeFilesystemProvider { Allowed = true },
+            new FakeProjectModelBuilder { Model = BuildModel() });
+
+        var result = await tool.ExplainWorkflow("/projects/testProcess", "Main.xaml");
+
+        Assert.Equal("success", result.Status);
+        var data = JsonSerializer.SerializeToElement(result.Data);
+        Assert.Equal(JsonValueKind.Null, data.GetProperty("activityTree").ValueKind);
     }
 }

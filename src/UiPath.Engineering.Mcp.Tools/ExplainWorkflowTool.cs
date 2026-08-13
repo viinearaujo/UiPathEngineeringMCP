@@ -21,6 +21,7 @@ public sealed class ExplainWorkflowTool {
     public async Task<ToolResult> ExplainWorkflow(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Workflow file to explain (file name, with or without .xaml/.cs, or a path).")] string workflowFile,
+        [Description("When true, includes activityTree: the workflow's activities nested as a hierarchy with IDs and line numbers.")] bool includeActivityTree = false,
         CancellationToken cancellationToken = default) {
         var sw = Stopwatch.StartNew();
 
@@ -41,7 +42,7 @@ public sealed class ExplainWorkflowTool {
                 string.Equals(w.FileName, requestedName, StringComparison.OrdinalIgnoreCase));
 
             if (workflow is not null) {
-                return ExplainXamlWorkflow(workflow, sw);
+                return ExplainXamlWorkflow(workflow, includeActivityTree, sw);
             }
 
             var requestedCs = requestedName.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
@@ -72,7 +73,7 @@ public sealed class ExplainWorkflowTool {
         }
     }
 
-    private static ToolResult ExplainXamlWorkflow(WorkflowModel workflow, Stopwatch sw) {
+    private static ToolResult ExplainXamlWorkflow(WorkflowModel workflow, bool includeActivityTree, Stopwatch sw) {
         var data = new {
             workflow.FileName,
             workflow.FilePath,
@@ -84,7 +85,10 @@ public sealed class ExplainWorkflowTool {
             InvokeWorkflows = workflow.InvokeWorkflows.Select(i => new { i.DisplayName, i.TargetWorkflow }).ToList(),
             LogMessages = workflow.LogMessages.Select(l => new { l.DisplayName, l.Level, l.Message }).ToList(),
             workflow.HasParseError,
-            workflow.ParseError
+            workflow.ParseError,
+            activityTree = includeActivityTree
+                ? workflow.Activities.Where(a => a.ParentId is null).Select(ToTreeNode).ToList()
+                : null
         };
 
         var warnings = workflow.HasParseError
@@ -97,6 +101,14 @@ public sealed class ExplainWorkflowTool {
             $"{workflow.ExceptionHandlers.Count} exception handlers, invokes {workflow.InvokeWorkflows.Count} workflows.",
             data, sw, warnings);
     }
+
+    private static object ToTreeNode(ActivityModel activity) => new {
+        id = activity.Id,
+        displayName = activity.DisplayName,
+        type = activity.Type,
+        line = activity.Line,
+        children = activity.Children.Select(ToTreeNode).ToList()
+    };
 
     private static ToolResult ExplainCodedWorkflow(CodedWorkflowModel coded, Stopwatch sw) {
         var data = new {
