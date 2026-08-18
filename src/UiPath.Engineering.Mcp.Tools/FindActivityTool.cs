@@ -34,18 +34,32 @@ public sealed class FindActivityTool {
         try {
             var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
 
-            IEnumerable<WorkflowModel> workflows = model.Workflows.Where(w => !w.HasParseError);
+            IEnumerable<WorkflowModel> workflows;
+            List<string>? warnings = null;
             if (workflowFile is not null) {
                 var requestedName = Path.GetFileName(workflowFile);
                 if (!requestedName.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)) {
                     requestedName += ".xaml";
                 }
-                workflows = workflows.Where(w =>
+                var requested = model.Workflows.FirstOrDefault(w =>
                     string.Equals(w.FileName, requestedName, StringComparison.OrdinalIgnoreCase));
+                workflows = requested is null ? [] : [requested];
+                if (requested is { HasParseError: true }) {
+                    warnings = [$"Workflow could not be fully parsed: {requested.ParseError}"];
+                }
+            } else {
+                var skipped = model.Workflows.Where(w => w.HasParseError).ToList();
+                workflows = model.Workflows.Where(w => !w.HasParseError);
+                if (skipped.Count > 0) {
+                    warnings = [
+                        $"{skipped.Count} workflow(s) failed to parse and were skipped: " +
+                        $"{string.Join(", ", skipped.Select(w => w.FileName))}."
+                    ];
+                }
             }
 
             var matches = new List<object>();
-            foreach (var workflow in workflows) {
+            foreach (var workflow in workflows.Where(w => !w.HasParseError)) {
                 var byId = workflow.Activities.ToDictionary(a => a.Id, StringComparer.Ordinal);
                 foreach (var activity in workflow.Activities) {
                     if (activityId is not null) {
@@ -81,7 +95,7 @@ public sealed class FindActivityTool {
                 : "Activity IDs are per-parse-snapshot; re-run find_activity after structural edits.";
             return ToolResults.Ok(
                 matches.Count == 1 ? "1 activity matched." : $"{matches.Count} activities matched.",
-                new { matches, note }, sw);
+                new { matches, note }, sw, warnings);
         } catch (Exception ex) {
             return ToolResults.FromException(ex, "Activity search failed.", sw);
         }

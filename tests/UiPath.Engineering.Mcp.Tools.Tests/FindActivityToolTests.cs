@@ -82,4 +82,48 @@ public class FindActivityToolTests {
         Assert.Equal(0, data.GetProperty("matches").GetArrayLength());
         Assert.False(string.IsNullOrEmpty(data.GetProperty("note").GetString()));
     }
+
+    [Fact]
+    public async Task ProjectWide_WhenWorkflowHasParseError_WarnsAndSkipsIt() {
+        var model = SampleModel();
+        model.Workflows.Add(new WorkflowModel {
+            FileName = "Broken.xaml",
+            HasParseError = true,
+            ParseError = "Invalid XML at line 5.",
+            Activities = [new ActivityModel {
+                Id = "sequence.1", DisplayName = "Hidden", Type = "Sequence", Depth = 0, Line = 1
+            }]
+        });
+
+        var result = await Tool(model).FindActivity(ProjectPath, activityType: "Sequence");
+
+        Assert.Equal("success", result.Status);
+        Assert.Single(result.Warnings);
+        Assert.Contains("1 workflow(s) failed to parse and were skipped", result.Warnings[0]);
+        Assert.Contains("Broken.xaml", result.Warnings[0]);
+        var matches = JsonSerializer.SerializeToElement(result.Data).GetProperty("matches");
+        Assert.Equal(2, matches.GetArrayLength());
+        Assert.DoesNotContain(matches.EnumerateArray(), m => m.GetProperty("workflowFile").GetString() == "Broken.xaml");
+    }
+
+    [Fact]
+    public async Task WorkflowFile_WhenTargetHasParseError_SurfacesWarningAndNoMatches() {
+        var model = SampleModel();
+        model.Workflows.Add(new WorkflowModel {
+            FileName = "Broken.xaml",
+            HasParseError = true,
+            ParseError = "Invalid XML at line 5.",
+            Activities = [new ActivityModel {
+                Id = "sequence.1", DisplayName = "Hidden", Type = "Sequence", Depth = 0, Line = 1
+            }]
+        });
+
+        var result = await Tool(model).FindActivity(ProjectPath, workflowFile: "Broken.xaml");
+
+        Assert.Equal("success", result.Status);
+        Assert.Single(result.Warnings);
+        Assert.Contains("Invalid XML at line 5.", result.Warnings[0]);
+        var matches = JsonSerializer.SerializeToElement(result.Data).GetProperty("matches");
+        Assert.Equal(0, matches.GetArrayLength());
+    }
 }

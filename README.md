@@ -4,7 +4,7 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Thirty-one tools are implemented:
+This is the **MVP / POC (v4)** milestone. Thirty-three tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
@@ -19,10 +19,12 @@ This is the **MVP / POC (v4)** milestone. Thirty-one tools are implemented:
 | `write_workflow_file` | Creates or fully overwrites a `.xaml` or `.cs` file inside a project with caller-supplied content (extension allowlist + path-escape guard). |
 | `read_workflow_file` | Reads any text file inside a project with line numbers and pagination (`startLine`/`lineCount`, default 1000 lines); obvious secret values are redacted and `.env`/`*.pem`/`*.key` files are refused. |
 | `edit_workflow_file` | Replaces an exact string in a `.xaml`/`.cs` file; fails on zero or ambiguous matches unless `replaceAll: true`. Preferred over `write_workflow_file` for small changes. |
-| `edit_workflow_activity` | Activity-level XAML editing: insert an activity fragment into a container, replace, or remove an activity located by `DisplayName` (optional `activityType` disambiguation). Whitespace-preserving; fragments understand unprefixed WF activities plus the `ui:`/`x:` prefixes. |
+| `find_activity` | Finds activities in `.xaml` workflows and returns stable per-snapshot activity IDs, line numbers, and ancestor chains. Filter by `workflowFile`, DisplayName substring (`query`), exact `activityType`, or exact `activityId`. Pass the returned `id` to `edit_workflow_activity` / `insert_activities`. Unparsable workflows are skipped and reported as warnings. |
+| `get_workflow_dependencies` | Shows the `InvokeWorkflowFile` graph: project-wide edges, cycles, orphans, and unresolved targets; or, with `workflowFile`, that workflow's callers/callees with argument mappings. |
+| `edit_workflow_activity` | Activity-level XAML editing: insert an activity fragment into a container, replace, or remove an activity located by `activityId` (from `find_activity`) or `DisplayName` (optional `activityType` disambiguation). Whitespace-preserving; fragments understand unprefixed WF activities plus the `ui:`/`x:` prefixes. |
 | `validate_activity_spec` | Dry-run validation of a JSON activity spec against the UiPath activity catalog — no files read or written. Returns every violation as a structured error (`errorCode`/`message`/`fixHint`), or the list of catalog activities the spec uses. |
 | `build_workflow` | Creates a real `.xaml` workflow file in a project from a JSON activity spec (run `validate_activity_spec` first). Never overwrites an existing file unless `overwrite: true`. |
-| `insert_activities` | Inserts activities described by a JSON activity spec into an existing `.xaml` workflow, as children of the activity located by `DisplayName` — the spec-based sibling of `edit_workflow_activity`. |
+| `insert_activities` | Inserts activities described by a JSON activity spec into an existing `.xaml` workflow, as children of the activity located by `activityId` (from `find_activity`) or `DisplayName` — the spec-based sibling of `edit_workflow_activity`. |
 | `manage_workflow_data` | Manages the data surface of an existing `.xaml` workflow: add, remove, or rename arguments (`x:Property`) and variables (`Sequence.Variables`). |
 | `add_coded_workflow` | Adds a Coded Workflow `.cs` (inherits `CodedWorkflow`, `[Workflow]` entry method, registered in `project.json` `entryPoints`) or a plain coded source file. |
 | `create_implementation_plan` | Creates an implementation plan for a project from a goal + ordered task list; writes `docs/implementation-plan.json` (source of truth) plus a Markdown mirror. Refuses to overwrite unless `overwrite: true`. |
@@ -161,7 +163,7 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `read_workflow_file`, `edit_workflow_file`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`, `find_code_symbol`, `find_code_references`, `get_code_context`, `get_compile_errors`, `compile_project`, `search_codebase`, `run_ui_path_cli`, `list_skills`, `read_skill`
+- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `read_workflow_file`, `edit_workflow_file`, `find_activity`, `get_workflow_dependencies`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`, `find_code_symbol`, `find_code_references`, `get_code_context`, `get_compile_errors`, `compile_project`, `search_codebase`, `run_ui_path_cli`, `list_skills`, `read_skill`
 
 ---
 
