@@ -283,8 +283,7 @@ src/
   generated GUID; plain source files are deliberately not registered.
 - Publish/deploy to Orchestrator (`uip solution publish/deploy`) is a separate future phase.
 
-- `analyze_project` caches a full project model (fingerprint: file count + newest write
-  time, xaml + cs + project.json) but the default MCP response is a **summary** (counts,
+- `analyze_project` caches a full project model (fingerprint: SHA-256 of sorted path + last-write ticks for project.json, *.xaml, and *.cs (renames invalidate the cache even when timestamps are preserved)) but the default MCP response is a **summary** (counts,
   workflow index, packages, risks, folder tree) without activity trees. Pass `detail='full'`
   to page complete workflow models (`page`/`pageSize`), or `workflowFile` to load one
   workflow fully. Cycles and orphan workflows are flagged as risks.

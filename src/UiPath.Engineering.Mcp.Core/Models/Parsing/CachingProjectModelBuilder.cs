@@ -7,11 +7,11 @@ namespace UiPath.Engineering.Mcp.Core.Parsing;
 /// <summary>
 /// Decorates an <see cref="IProjectModelBuilder"/> with a cross-request cache keyed by the
 /// normalized project path. Each call recomputes a cheap fingerprint of the project files
-/// (count of project.json + *.xaml + *.cs files plus their newest write time) and only
+/// (SHA-256 of sorted path+write-time pairs for project.json + *.xaml + *.cs) and only
 /// delegates to the inner builder when the fingerprint changed.
 /// </summary>
 public sealed class CachingProjectModelBuilder : IProjectModelBuilder {
-    private sealed record CacheEntry(UiPathProjectModel Model, long FileCount, long MaxWriteTicks);
+    private sealed record CacheEntry(UiPathProjectModel Model, string Fingerprint);
 
     private readonly IProjectModelBuilder _inner;
     private readonly IFilesystemProvider _filesystem;
@@ -29,14 +29,13 @@ public sealed class CachingProjectModelBuilder : IProjectModelBuilder {
 
         await gate.WaitAsync(cancellationToken);
         try {
-            if (TryComputeFingerprint(projectPath, out var fileCount, out var maxWriteTicks)) {
-                if (_cache.TryGetValue(key, out var entry) &&
-                    entry.FileCount == fileCount && entry.MaxWriteTicks == maxWriteTicks) {
+            if (TryComputeFingerprint(projectPath, out var fingerprint)) {
+                if (_cache.TryGetValue(key, out var entry) && entry.Fingerprint == fingerprint) {
                     return entry.Model;
                 }
 
                 var built = await _inner.BuildAsync(projectPath, cancellationToken);
-                _cache[key] = new CacheEntry(built, fileCount, maxWriteTicks);
+                _cache[key] = new CacheEntry(built, fingerprint);
                 return built;
             }
 
@@ -52,9 +51,8 @@ public sealed class CachingProjectModelBuilder : IProjectModelBuilder {
         }
     }
 
-    private bool TryComputeFingerprint(string projectPath, out long fileCount, out long maxWriteTicks) {
-        fileCount = 0;
-        maxWriteTicks = 0;
+    private bool TryComputeFingerprint(string projectPath, out string fingerprint) {
+        fingerprint = string.Empty;
         try {
             var files = _filesystem.FindXamlFiles(projectPath)
                 .Concat(_filesystem.FindCSharpFiles(projectPath))
@@ -64,14 +62,14 @@ public sealed class CachingProjectModelBuilder : IProjectModelBuilder {
                 files.Add(projectJson);
             }
 
-            foreach (var file in files) {
+            var sb = new System.Text.StringBuilder();
+            foreach (var file in files.OrderBy(f => f, StringComparer.OrdinalIgnoreCase)) {
                 var ticks = _filesystem.GetLastWriteTimeUtc(file).Ticks;
-                if (ticks > maxWriteTicks) {
-                    maxWriteTicks = ticks;
-                }
+                sb.Append(file).Append('\0').Append(ticks).Append('\n');
             }
 
-            fileCount = files.Count;
+            fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
             return true;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException) {
             return false;

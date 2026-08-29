@@ -141,4 +141,23 @@ public class CachingProjectModelBuilderTests {
         Assert.Equal(2, inner.CallCount);
         Assert.Equal("build-2", model.ProjectName);
     }
+
+    [Fact]
+    public async Task BuildAsync_RenamedXamlSameCountAndTimestamp_TriggersRebuild() {
+        var fs = CreateFilesystem();
+        var inner = new CountingProjectModelBuilder();
+        var sut = new CachingProjectModelBuilder(inner, fs);
+
+        await sut.BuildAsync(Root);
+
+        fs.XamlFiles.Remove(MainXaml);
+        const string renamed = "/projects/testProcess/MainRenamed.xaml";
+        fs.XamlFiles.Add(renamed);
+        fs.WriteTimesUtc[renamed] = fs.WriteTimesUtc[MainXaml];
+        fs.WriteTimesUtc.Remove(MainXaml);
+
+        await sut.BuildAsync(Root);
+
+        Assert.Equal(2, inner.CallCount);
+    }
 }
