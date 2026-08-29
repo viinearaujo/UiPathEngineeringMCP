@@ -55,6 +55,7 @@ public static class McpServiceCollectionExtensions {
     public static IMcpServerBuilder AddUiPathMcpServer(this IServiceCollection services) {
         return services.AddMcpServer()
             .WithToolsFromAssembly(typeof(AnalyzeProjectTool).Assembly)
+            .WithResourcesFromAssembly(typeof(AnalyzeProjectTool).Assembly)
             .WithRequestFilters(filters => {
                 filters.AddCallToolFilter(next => async (context, cancellationToken) => {
                     var result = await next(context, cancellationToken);
