@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -47,11 +49,33 @@ public sealed class WriteWorkflowFileTool {
         _filesystem.CreateDirectory(directory);
         _filesystem.WriteAllText(targetPath, content);
 
+        var utf8 = Encoding.UTF8.GetBytes(content);
+        var sha256 = Convert.ToHexString(SHA256.HashData(utf8));
+        string? className = null;
+        if (extension.Equals(".xaml", StringComparison.OrdinalIgnoreCase)) {
+            const string marker = "x:Class=\"";
+            var start = content.IndexOf(marker, StringComparison.Ordinal);
+            if (start >= 0) {
+                start += marker.Length;
+                var end = content.IndexOf('"', start);
+                if (end > start) {
+                    className = content[start..end];
+                }
+            }
+        } else if (extension.Equals(".cs", StringComparison.OrdinalIgnoreCase)) {
+            var match = System.Text.RegularExpressions.Regex.Match(content, @"\bclass\s+(\w+)");
+            if (match.Success) {
+                className = match.Groups[1].Value;
+            }
+        }
+
         return ToolResults.Ok(
             existed ? $"Updated '{relativePath}'." : $"Created '{relativePath}'.",
             new {
                 filePath = targetPath,
                 bytesWritten = content.Length,
+                sha256,
+                className,
                 overwritten = existed
             }, sw);
     }

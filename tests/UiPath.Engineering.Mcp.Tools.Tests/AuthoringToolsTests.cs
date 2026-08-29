@@ -117,6 +117,39 @@ public class WriteWorkflowFileToolTests {
         Assert.Equal("success", result.Status);
         Assert.True(data.GetProperty("overwritten").GetBoolean());
     }
+
+    [Fact]
+    public void WriteWorkflowFile_Success_IncludesSha256AndXamlClass() {
+        var fs = new FakeFilesystemProvider();
+        var tool = new WriteWorkflowFileTool(fs);
+        var content = """
+            <Activity x:Class="Main" xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <Sequence />
+            </Activity>
+            """;
+
+        var result = tool.WriteWorkflowFile(ProjectPath, "Main.xaml", content);
+        var data = JsonSerializer.SerializeToElement(result.Data);
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal(content.Length, data.GetProperty("bytesWritten").GetInt32());
+        var expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
+        Assert.Equal(expected, data.GetProperty("sha256").GetString());
+        Assert.Equal("Main", data.GetProperty("className").GetString());
+    }
+
+    [Fact]
+    public void WriteWorkflowFile_Cs_IncludesClassName() {
+        var fs = new FakeFilesystemProvider();
+        var tool = new WriteWorkflowFileTool(fs);
+        var content = "namespace N;\npublic class InvoiceFlow : CodedWorkflow { }";
+
+        var result = tool.WriteWorkflowFile(ProjectPath, "InvoiceFlow.cs", content);
+        var data = JsonSerializer.SerializeToElement(result.Data);
+
+        Assert.Equal("InvoiceFlow", data.GetProperty("className").GetString());
+    }
 }
 
 public class CreateCodedWorkflowToolTests {
