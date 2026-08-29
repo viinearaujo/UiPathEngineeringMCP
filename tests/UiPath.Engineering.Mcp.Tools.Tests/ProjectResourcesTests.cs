@@ -74,4 +74,20 @@ public class ProjectResourcesTests : IDisposable {
         var text = Create().GetWorkflow(_projectPath, ".env");
         Assert.Contains("cannot be read", text, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Workflow_RefusesUppercasePemExtension() {
+        var text = Create().GetWorkflow(_projectPath, "certs/server.PEM");
+        Assert.Contains("cannot be read", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Model_WhenBuilderThrows_ReturnsErrorString() {
+        _models.ToThrow = new InvalidOperationException("builder exploded");
+
+        var text = await Create().GetProjectModel(_projectPath);
+
+        Assert.Contains("failed", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("builder exploded", text);
+    }
 }
