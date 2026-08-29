@@ -126,4 +126,25 @@ public class FindActivityToolTests {
         var matches = JsonSerializer.SerializeToElement(result.Data).GetProperty("matches");
         Assert.Equal(0, matches.GetArrayLength());
     }
+
+    [Fact]
+    public async Task DuplicateActivityIds_DoNotThrow() {
+        var model = new UiPathProjectModel {
+            Workflows = [
+                new WorkflowModel {
+                    FileName = "Main.xaml",
+                    Activities = [
+                        new ActivityModel { Id = "sequence.1/logmessage.1", DisplayName = "A", Type = "LogMessage" },
+                        new ActivityModel { Id = "sequence.1/logmessage.1", DisplayName = "B", Type = "LogMessage" }
+                    ]
+                }
+            ]
+        };
+
+        var result = await Tool(model).FindActivity(ProjectPath, query: "A");
+
+        Assert.Equal("success", result.Status);
+        var matches = JsonSerializer.SerializeToElement(result.Data).GetProperty("matches");
+        Assert.True(matches.GetArrayLength() >= 1);
+    }
 }

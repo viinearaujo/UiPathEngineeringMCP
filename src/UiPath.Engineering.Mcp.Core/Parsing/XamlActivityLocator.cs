@@ -9,8 +9,9 @@ namespace UiPath.Engineering.Mcp.Core.Parsing;
 /// local name plus a 1-based ordinal counted in document order among the activity
 /// siblings of one child-list traversal; attached-property containers (dot-suffixed
 /// local names) and XAML primitives are transparent — recursed without consuming a
-/// segment or depth, starting a fresh ordinal counter for their own child list.
-/// IDs are deterministic per parse snapshot; structural edits may shift ordinals.
+/// segment or depth, sharing the parent ordinal counter so Then/Else and Try/Catch
+/// cannot mint the same id. IDs are deterministic per parse snapshot; structural
+/// edits may shift ordinals.
 /// </summary>
 public sealed record LocatedActivity(
     XElement Element,
@@ -36,10 +37,15 @@ public static class XamlActivityLocator {
 
     private static void WalkChildren(XElement parent, string? parentId, int depth, List<LocatedActivity> results) {
         var ordinal = 0;
+        Walk(parent, parentId, depth, results, ref ordinal);
+    }
+
+    private static void Walk(
+        XElement parent, string? parentId, int depth, List<LocatedActivity> results, ref int ordinal) {
         foreach (var child in parent.Elements()) {
             var local = child.Name.LocalName;
             if (local.Contains('.') || XamlWorkflowParser.NonActivityElements.Contains(local)) {
-                WalkChildren(child, parentId, depth, results);
+                Walk(child, parentId, depth, results, ref ordinal);
                 continue;
             }
 
@@ -48,7 +54,8 @@ public static class XamlActivityLocator {
             var id = parentId is null ? segment : $"{parentId}/{segment}";
             var line = child is IXmlLineInfo info && info.HasLineInfo() ? info.LineNumber : 0;
             results.Add(new LocatedActivity(child, id, parentId, results.Count, line, depth));
-            WalkChildren(child, id, depth + 1, results);
+            var childOrdinal = 0;
+            Walk(child, id, depth + 1, results, ref childOrdinal);
         }
     }
 }

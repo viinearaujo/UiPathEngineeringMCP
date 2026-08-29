@@ -52,6 +52,32 @@ public class XamlActivityLocatorTests {
     }
 
     [Fact]
+    public void Locate_IfThenAndElse_DoNotShareIds() {
+        const string xaml = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <Sequence>
+                <If DisplayName="If connected">
+                  <If.Then>
+                    <ui:LogMessage DisplayName="Log then" Message="t" />
+                  </If.Then>
+                  <If.Else>
+                    <ui:LogMessage DisplayName="Log else" Message="e" />
+                  </If.Else>
+                </If>
+              </Sequence>
+            </Activity>
+            """;
+
+        var activities = Locate(xaml);
+        var ids = activities.Select(a => a.Id).ToList();
+        Assert.Equal(ids.Count, ids.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal("sequence.1/if.1/logmessage.1", activities.Single(a => a.Element.Attribute("DisplayName")?.Value == "Log then").Id);
+        Assert.Equal("sequence.1/if.1/logmessage.2", activities.Single(a => a.Element.Attribute("DisplayName")?.Value == "Log else").Id);
+    }
+
+    [Fact]
     public void Locate_TreatsAttachedPropertyContainersAsTransparent() {
         var activities = Locate(MixedXaml);
 

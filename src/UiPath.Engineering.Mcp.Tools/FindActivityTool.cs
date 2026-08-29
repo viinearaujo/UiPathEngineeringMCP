@@ -60,7 +60,10 @@ public sealed class FindActivityTool {
 
             var matches = new List<object>();
             foreach (var workflow in workflows.Where(w => !w.HasParseError)) {
-                var byId = workflow.Activities.ToDictionary(a => a.Id, StringComparer.Ordinal);
+                var byId = new Dictionary<string, ActivityModel>(StringComparer.Ordinal);
+                foreach (var a in workflow.Activities) {
+                    byId.TryAdd(a.Id, a);
+                }
                 foreach (var activity in workflow.Activities) {
                     if (activityId is not null) {
                         if (!string.Equals(activity.Id, activityId, StringComparison.Ordinal)) {
