@@ -11,15 +11,11 @@ The server is passive. The client drives the loop. UiPath facts come from tools;
 
 ## stdio (local agents)
 
-After Task 7 ships:
-
 ```text
 dotnet run --project src/UiPath.Engineering.Mcp.Server -- --stdio
 ```
 
 Logs go to stderr. stdin/stdout are the MCP stream. Spawn this process from the agent host; do not also bind port 5000 in that process.
-
-Until Task 7 ships, local agents must use Streamable HTTP at `/sse`.
 
 ## Plan path (P0)
 

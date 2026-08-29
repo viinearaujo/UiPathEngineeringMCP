@@ -104,6 +104,11 @@ dotnet build
 dotnet run --project src/UiPath.Engineering.Mcp.Server
 ```
 
+```powershell
+# Local agents (stdio; logs on stderr)
+dotnet run --project src/UiPath.Engineering.Mcp.Server -- --stdio
+```
+
 The server listens on `http://localhost:5000`.
 
 Verify the endpoints:
@@ -124,7 +129,7 @@ npx @modelcontextprotocol/inspector
 # generate_documentation, search_repository and create_work_items listed.
 ```
 
-Local agent stdio: see [docs/agent-connection.md](docs/agent-connection.md) (available after the stdio host ships).
+Local agent stdio: see [docs/agent-connection.md](docs/agent-connection.md).
 
 ---
 

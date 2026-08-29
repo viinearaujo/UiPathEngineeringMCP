@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UiPath.Engineering.Mcp.Prov
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UiPath.Engineering.Mcp.Tools.Tests", "tests\UiPath.Engineering.Mcp.Tools.Tests\UiPath.Engineering.Mcp.Tools.Tests.csproj", "{5033FA85-DCA3-44DE-B809-D8943FD45CD7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UiPath.Engineering.Mcp.Server.Tests", "tests\UiPath.Engineering.Mcp.Server.Tests\UiPath.Engineering.Mcp.Server.Tests.csproj", "{93000765-D966-41B2-B2F0-B303CB60FA02}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -58,6 +60,10 @@ Global
 		{5033FA85-DCA3-44DE-B809-D8943FD45CD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5033FA85-DCA3-44DE-B809-D8943FD45CD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5033FA85-DCA3-44DE-B809-D8943FD45CD7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{93000765-D966-41B2-B2F0-B303CB60FA02}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{93000765-D966-41B2-B2F0-B303CB60FA02}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{93000765-D966-41B2-B2F0-B303CB60FA02}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{93000765-D966-41B2-B2F0-B303CB60FA02}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{B09C3BFD-EA69-4885-B9A8-3E0FE8851BD0} = {32470430-3CE9-4C55-BDF9-0DCBE619429B}
@@ -67,5 +73,6 @@ Global
 		{E2C082FD-24F0-4150-9458-786309FA2792} = {90304BB6-C133-4568-9BE0-76EF0C040824}
 		{150AB515-12E4-4045-87C8-7A4197087642} = {90304BB6-C133-4568-9BE0-76EF0C040824}
 		{5033FA85-DCA3-44DE-B809-D8943FD45CD7} = {90304BB6-C133-4568-9BE0-76EF0C040824}
+		{93000765-D966-41B2-B2F0-B303CB60FA02} = {90304BB6-C133-4568-9BE0-76EF0C040824}
 	EndGlobalSection
 EndGlobal
