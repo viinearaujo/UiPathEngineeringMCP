@@ -17,7 +17,7 @@ public sealed class GetCodeContextTool {
         _analysis = analysis;
     }
 
-    [McpServerTool, Description("Returns the semantic context of one C# member (a method, class, or property) in a UiPath project: signature, containing type, called methods, referenced types, and the member's source. Locate the member by 'symbol' name or by 'file' + 'line'. Prefer this over reading whole .cs files.")]
+    [McpServerTool(UseStructuredContent = true), Description("Returns the semantic context of one C# member (a method, class, or property) in a UiPath project: signature, containing type, called methods, referenced types, and the member's source. Locate the member by 'symbol' name or by 'file' + 'line'. Prefer this over reading whole .cs files.")]
     public async Task<ToolResult> GetCodeContext(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Symbol name to inspect, e.g. 'ProcessTransaction'.")] string? symbol = null,

@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Tools.Tests" />
+    <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Server" />
   </ItemGroup>
 
   <PropertyGroup>

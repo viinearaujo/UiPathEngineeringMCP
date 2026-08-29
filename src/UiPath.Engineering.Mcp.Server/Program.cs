@@ -62,7 +62,21 @@ builder.Services.AddSingleton<ICodebaseSearchService, CodebaseSearchService>();
 builder.Services.AddHealthChecks();
 builder.Services.AddMcpServer()
     .WithHttpTransport()
-    .WithToolsFromAssembly(typeof(AnalyzeProjectTool).Assembly);
+    .WithToolsFromAssembly(typeof(AnalyzeProjectTool).Assembly)
+    .WithRequestFilters(filters => {
+        filters.AddCallToolFilter(next => async (context, cancellationToken) => {
+            var result = await next(context, cancellationToken);
+            if (result.IsError is true) {
+                return result;
+            }
+
+            if (McpToolErrorMapper.StructuredContentIndicatesError(result.StructuredContent)) {
+                result.IsError = true;
+            }
+
+            return result;
+        });
+    });
 
 var app = builder.Build();
 

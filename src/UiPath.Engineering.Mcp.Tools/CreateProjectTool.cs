@@ -17,7 +17,7 @@ public sealed class CreateProjectTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool, Description("Scaffolds a new UiPath project using 'uip rpa init'. Requires the UiPath CLI RPA tool installed on the host (uip tools install).")]
+    [McpServerTool(UseStructuredContent = true), Description("Scaffolds a new UiPath project using 'uip rpa init'. Requires the UiPath CLI RPA tool installed on the host (uip tools install).")]
     public async Task<ToolResult> CreateProject(
         [Description("Name of the new UiPath project (also becomes the project folder name).")] string name,
         [Description("Absolute path to the parent directory where the project folder is created. Must be inside the allowed roots.")] string parentDirectory,

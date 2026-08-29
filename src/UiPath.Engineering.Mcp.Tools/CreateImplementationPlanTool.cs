@@ -31,7 +31,7 @@ public sealed class CreateImplementationPlanTool {
         _planStore = planStore;
     }
 
-    [McpServerTool, Description("Creates an implementation plan for a UiPath project from a goal and an ordered task list. Writes docs/implementation-plan.json plus a Markdown mirror inside the project. Refuses to overwrite an existing plan unless overwrite is true.")]
+    [McpServerTool(UseStructuredContent = true), Description("Creates an implementation plan for a UiPath project from a goal and an ordered task list. Writes docs/implementation-plan.json plus a Markdown mirror inside the project. Refuses to overwrite an existing plan unless overwrite is true.")]
     public ToolResult CreateImplementationPlan(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Overall goal of the implementation plan.")] string goal,

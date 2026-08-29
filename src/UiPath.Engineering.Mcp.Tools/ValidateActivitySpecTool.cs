@@ -9,7 +9,7 @@ namespace UiPath.Engineering.Mcp.Tools;
 
 [McpServerToolType]
 public sealed class ValidateActivitySpecTool {
-    [McpServerTool, Description("Validates a JSON activity spec against the UiPath activity catalog without reading or writing any files. Returns every violation as a structured error (errorCode, message, fixHint), or the list of catalog activities the spec uses. Use this as a dry-run before authoring or editing workflows. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only) }. An If spec has no Else branch — Children is the Then branch.")]
+    [McpServerTool(UseStructuredContent = true), Description("Validates a JSON activity spec against the UiPath activity catalog without reading or writing any files. Returns every violation as a structured error (errorCode, message, fixHint), or the list of catalog activities the spec uses. Use this as a dry-run before authoring or editing workflows. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only) }. An If spec has no Else branch — Children is the Then branch.")]
     public ToolResult ValidateActivitySpec(
         [Description("JSON activity spec to validate (no files are read or written).")] string specJson) {
 

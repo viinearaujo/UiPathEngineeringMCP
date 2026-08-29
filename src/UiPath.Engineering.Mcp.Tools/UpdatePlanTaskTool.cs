@@ -17,7 +17,7 @@ public sealed class UpdatePlanTaskTool {
         _planStore = planStore;
     }
 
-    [McpServerTool, Description("Updates the status (pending/in_progress/done/blocked) and optional notes of a single task in the project's implementation plan.")]
+    [McpServerTool(UseStructuredContent = true), Description("Updates the status (pending/in_progress/done/blocked) and optional notes of a single task in the project's implementation plan.")]
     public ToolResult UpdatePlanTask(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("ID of the task to update (e.g. 'task-1').")] string taskId,

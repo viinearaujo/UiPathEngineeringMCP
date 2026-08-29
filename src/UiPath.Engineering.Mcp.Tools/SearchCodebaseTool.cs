@@ -18,7 +18,7 @@ public sealed class SearchCodebaseTool {
         _search = search;
     }
 
-    [McpServerTool, Description("Searches a UiPath project's .xaml and .cs files by case-insensitive substring. Modes: 'text' (matching lines), 'symbol' (C# symbols via Roslyn, optional kind filter), 'activity' (XAML activities by display name or type), 'workflow' (workflows by file name or description). For exact-name C# lookup prefer find_code_symbol / find_code_references.")]
+    [McpServerTool(UseStructuredContent = true), Description("Searches a UiPath project's .xaml and .cs files by case-insensitive substring. Modes: 'text' (matching lines), 'symbol' (C# symbols via Roslyn, optional kind filter), 'activity' (XAML activities by display name or type), 'workflow' (workflows by file name or description). For exact-name C# lookup prefer find_code_symbol / find_code_references.")]
     public async Task<ToolResult> SearchCodebase(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Case-insensitive substring to search for, e.g. 'queue'.")] string query,

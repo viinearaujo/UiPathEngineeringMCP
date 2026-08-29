@@ -12,7 +12,7 @@ public sealed class SearchRepositoryTool {
 
     public SearchRepositoryTool(IGitLabProvider gitLab) => _gitLab = gitLab;
 
-    [McpServerTool, Description("Searches GitLab issues in the configured project and returns matching issue summaries.")]
+    [McpServerTool(UseStructuredContent = true), Description("Searches GitLab issues in the configured project and returns matching issue summaries.")]
     public async Task<ToolResult> SearchRepository(
         [Description("Search text matched against issue titles and descriptions.")] string query,
         [Description("Maximum number of issues to return (1-100).")] int maxResults = 10,

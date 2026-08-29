@@ -16,7 +16,7 @@ public sealed class BuildWorkflowTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool, Description("Creates a real .xaml workflow file in a UiPath project from a JSON activity spec. Run validate_activity_spec first to dry-run the spec and see every violation before writing. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only) }. Strings enclosed in square brackets ([expr]) are interpreted as expressions in the project's configured expression language. All other values are treated as literals.")]
+    [McpServerTool(UseStructuredContent = true), Description("Creates a real .xaml workflow file in a UiPath project from a JSON activity spec. Run validate_activity_spec first to dry-run the spec and see every violation before writing. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only) }. Strings enclosed in square brackets ([expr]) are interpreted as expressions in the project's configured expression language. All other values are treated as literals.")]
     public ToolResult BuildWorkflow(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file to create relative to the project root, e.g. 'Workflows/Process.xaml'.")] string relativePath,

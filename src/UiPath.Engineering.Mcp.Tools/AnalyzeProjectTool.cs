@@ -17,7 +17,7 @@ public sealed class AnalyzeProjectTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool, Description("Analyzes a UiPath project and returns structured metadata, workflows, and dependencies.")]
+    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project and returns structured metadata, workflows, and dependencies.")]
     public async Task<ToolResult> AnalyzeProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {

@@ -16,7 +16,7 @@ public sealed class CreateCodedWorkflowTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool, Description("Adds a Coded Workflow (.cs class inheriting CodedWorkflow with a [Workflow] entry method) or a plain coded source file to an existing UiPath project. Coded workflows are also registered in project.json entryPoints.")]
+    [McpServerTool(UseStructuredContent = true), Description("Adds a Coded Workflow (.cs class inheriting CodedWorkflow with a [Workflow] entry method) or a plain coded source file to an existing UiPath project. Coded workflows are also registered in project.json entryPoints.")]
     public ToolResult AddCodedWorkflow(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Class name for the new file; must be a valid C# identifier and becomes the file name (<ClassName>.cs).")] string className,

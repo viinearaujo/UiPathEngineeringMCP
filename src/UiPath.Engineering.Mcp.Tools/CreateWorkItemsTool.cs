@@ -23,7 +23,7 @@ public sealed class CreateWorkItemsTool {
 
     public CreateWorkItemsTool(IGitLabProvider gitLab) => _gitLab = gitLab;
 
-    [McpServerTool, Description("Creates GitLab issues (work items) in the configured project and reports which ones were created and which failed.")]
+    [McpServerTool(UseStructuredContent = true), Description("Creates GitLab issues (work items) in the configured project and reports which ones were created and which failed.")]
     public async Task<ToolResult> CreateWorkItems(
         [Description("Array of work items to create, each with title, description, and optional labels.")] List<WorkItemInput> items,
         CancellationToken cancellationToken = default) {

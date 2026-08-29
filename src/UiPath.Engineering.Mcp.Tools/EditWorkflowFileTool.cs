@@ -16,7 +16,7 @@ public sealed class EditWorkflowFileTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool, Description("Replaces an exact string in a .xaml or .cs workflow file inside an existing UiPath project. Fails when oldString is not found or matches multiple locations unless replaceAll is true. Prefer this over write_workflow_file for small changes.")]
+    [McpServerTool(UseStructuredContent = true), Description("Replaces an exact string in a .xaml or .cs workflow file inside an existing UiPath project. Fails when oldString is not found or matches multiple locations unless replaceAll is true. Prefer this over write_workflow_file for small changes.")]
     public ToolResult EditWorkflowFile(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the file relative to the project root, e.g. 'Main.xaml' or 'Workflows/SendEmail.cs'.")] string relativePath,

@@ -17,7 +17,7 @@ public sealed class InsertActivitiesTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool, Description("Inserts activities described by a JSON activity spec into an existing .xaml workflow, as children of the container activity targeted by activityId (preferred, from find_activity) or by DisplayName (the spec-based sibling of edit_workflow_activity). Run validate_activity_spec first to dry-run the spec and see every violation before writing. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only) }. A root Sequence without variables inserts its children directly; any other root is inserted as a single node. Strings enclosed in square brackets ([expr]) are interpreted as expressions; all other values are literals.")]
+    [McpServerTool(UseStructuredContent = true), Description("Inserts activities described by a JSON activity spec into an existing .xaml workflow, as children of the container activity targeted by activityId (preferred, from find_activity) or by DisplayName (the spec-based sibling of edit_workflow_activity). Run validate_activity_spec first to dry-run the spec and see every violation before writing. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only) }. A root Sequence without variables inserts its children directly; any other root is inserted as a single node. Strings enclosed in square brackets ([expr]) are interpreted as expressions; all other values are literals.")]
     public ToolResult InsertActivities(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,

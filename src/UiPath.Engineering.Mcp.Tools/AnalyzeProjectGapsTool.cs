@@ -21,7 +21,7 @@ public sealed class AnalyzeProjectGapsTool {
         _planStore = planStore;
     }
 
-    [McpServerTool, Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging/descriptions/tests, unresolved invocations), cross-checks the implementation plan, and names the MCP tool that fixes each gap.")]
+    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging/descriptions/tests, unresolved invocations), cross-checks the implementation plan, and names the MCP tool that fixes each gap.")]
     public async Task<ToolResult> AnalyzeProjectGaps(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {
