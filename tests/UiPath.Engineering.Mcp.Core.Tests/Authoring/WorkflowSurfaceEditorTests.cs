@@ -14,6 +14,18 @@ public class WorkflowSurfaceEditorTests {
         </Activity>
         """;
 
+    private const string WorkflowWithMembers = """
+        <Activity x:Class="Main"
+          xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+          <x:Members>
+          </x:Members>
+          <Sequence DisplayName="Main">
+            <WriteLine DisplayName="Say" Text="hi" />
+          </Sequence>
+        </Activity>
+        """;
+
     private const string WorkflowWithVariable = """
         <Activity x:Class="Main"
           xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
@@ -83,13 +95,31 @@ public class WorkflowSurfaceEditorTests {
     }
 
     [Fact]
-    public void Edit_AddInArgument_RendersInArgumentProperty() {
+    public void Edit_AddInArgument_InsertsPropertyInsideMembers() {
+        var result = WorkflowSurfaceEditor.Edit(WorkflowWithMembers, "add", "argument", "input",
+            type: "String", direction: "In");
+
+        Assert.True(result.Success, result.Error);
+        Assert.Contains("<x:Members>", result.UpdatedContent);
+        var membersStart = result.UpdatedContent!.IndexOf("<x:Members>", StringComparison.Ordinal);
+        var membersEnd = result.UpdatedContent.IndexOf("</x:Members>", StringComparison.Ordinal);
+        var members = result.UpdatedContent[membersStart..membersEnd];
+        Assert.Contains("<x:Property Name=\"input\" Type=\"InArgument(x:String)\" />", members);
+        var afterMembers = result.UpdatedContent[membersEnd..];
+        Assert.DoesNotContain("<x:Property Name=\"input\"", afterMembers);
+    }
+
+    [Fact]
+    public void Edit_AddInArgument_CreatesMembersWhenMissing() {
         var result = WorkflowSurfaceEditor.Edit(Workflow, "add", "argument", "input",
             type: "String", direction: "In");
 
         Assert.True(result.Success, result.Error);
+        Assert.Contains("<x:Members>", result.UpdatedContent);
+        var membersStart = result.UpdatedContent!.IndexOf("<x:Members>", StringComparison.Ordinal);
+        var membersEnd = result.UpdatedContent.IndexOf("</x:Members>", StringComparison.Ordinal);
         Assert.Contains("<x:Property Name=\"input\" Type=\"InArgument(x:String)\" />",
-            result.UpdatedContent);
+            result.UpdatedContent[membersStart..membersEnd]);
     }
 
     [Fact]
@@ -98,8 +128,11 @@ public class WorkflowSurfaceEditorTests {
             type: "Int32", direction: "Out");
 
         Assert.True(result.Success, result.Error);
+        var membersStart = result.UpdatedContent!.IndexOf("<x:Members>", StringComparison.Ordinal);
+        var membersEnd = result.UpdatedContent.IndexOf("</x:Members>", StringComparison.Ordinal);
+        Assert.True(membersStart >= 0 && membersEnd > membersStart);
         Assert.Contains("<x:Property Name=\"result\" Type=\"OutArgument(x:Int32)\" />",
-            result.UpdatedContent);
+            result.UpdatedContent[membersStart..membersEnd]);
     }
 
     [Fact]
@@ -108,15 +141,18 @@ public class WorkflowSurfaceEditorTests {
             type: "String", direction: "In/Out");
 
         Assert.True(result.Success, result.Error);
+        var membersStart = result.UpdatedContent!.IndexOf("<x:Members>", StringComparison.Ordinal);
+        var membersEnd = result.UpdatedContent.IndexOf("</x:Members>", StringComparison.Ordinal);
+        Assert.True(membersStart >= 0 && membersEnd > membersStart);
         Assert.Contains("<x:Property Name=\"buffer\" Type=\"InOutArgument(x:String)\" />",
-            result.UpdatedContent);
+            result.UpdatedContent[membersStart..membersEnd]);
     }
 
     [Fact]
     public void Edit_AddDuplicateArgument_DeclarationConflict() {
         var withArg = Workflow.Replace(
             "<Sequence DisplayName=\"Main\">",
-            "<x:Property Name=\"input\" Type=\"InArgument(x:String)\" />\n  <Sequence DisplayName=\"Main\">");
+            "<x:Members>\n    <x:Property Name=\"input\" Type=\"InArgument(x:String)\" />\n  </x:Members>\n  <Sequence DisplayName=\"Main\">");
 
         var result = WorkflowSurfaceEditor.Edit(withArg, "add", "argument", "input",
             type: "String", direction: "In");

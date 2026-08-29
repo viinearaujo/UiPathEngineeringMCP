@@ -62,6 +62,7 @@ public class AddXamlWorkflowToolTests {
         var target = Path.Combine(Path.GetFullPath(ProjectPath), "Workflows", "SendEmail.xaml");
         Assert.True(fs.Writes.ContainsKey(target));
         Assert.Contains("x:Class=\"Workflows_SendEmail\"", fs.Writes[target]);
+        Assert.Contains("<x:Members>", fs.Writes[target]);
     }
 }
 

@@ -5,7 +5,7 @@ namespace UiPath.Engineering.Mcp.Core.Authoring;
 
 /// <summary>
 /// Surface-level edits on a UiPath .xaml workflow: add, remove, or rename arguments
-/// (<x:Property> children of the root Activity) and variables (in the root Sequence's
+/// (<x:Property> children of root <x:Members>) and variables (in the root Sequence's
 /// <Sequence.Variables> block, created when absent). Whitespace is preserved so
 /// untouched regions stay byte-identical; edits never throw, failures come back as
 /// <see cref="SurfaceEditResult.Error"/> with a typed <see cref="SurfaceEditResult.ErrorCode"/>.
@@ -118,7 +118,9 @@ public static class WorkflowSurfaceEditor {
         if (root is null || root.Name.LocalName != "Activity") {
             return SurfaceEditResult.Failure("No root <Activity> element found in the workflow.");
         }
-        var existing = root.Elements(X + "Property")
+        var members = root.Elements(X + "Members").FirstOrDefault();
+        var existing = (members?.Elements(X + "Property") ?? Enumerable.Empty<XElement>())
+            .Concat(root.Elements(X + "Property"))
             .FirstOrDefault(p => string.Equals(p.Attribute("Name")?.Value, name, StringComparison.Ordinal));
 
         switch (operation) {
@@ -197,18 +199,25 @@ public static class WorkflowSurfaceEditor {
     }
 
     private static void AddArgumentProperty(XElement root, XElement property) {
-        // x:Property declarations sit before the workflow body, right after any existing ones.
-        var lastProperty = root.Elements(X + "Property").LastOrDefault();
-        var ownIndent = GetIndent(lastProperty ?? root);
+        var members = root.Elements(X + "Members").FirstOrDefault();
+        if (members is null) {
+            members = new XElement(X + "Members");
+            var ownIndent = GetIndent(root);
+            if (root.FirstNode is not null) {
+                root.FirstNode.AddBeforeSelf(new XText("\n" + ownIndent + "  "), members);
+            } else {
+                root.Add(new XText("\n" + ownIndent + "  "), members, new XText("\n" + ownIndent));
+            }
+        }
+
+        var lastProperty = members.Elements(X + "Property").LastOrDefault();
+        var indent = GetIndent(lastProperty ?? members);
         if (lastProperty is not null) {
-            lastProperty.AddAfterSelf(new XText("\n" + ownIndent), property);
+            lastProperty.AddAfterSelf(new XText("\n" + indent), property);
             return;
         }
-        if (root.FirstNode is not null) {
-            root.FirstNode.AddBeforeSelf(new XText("\n" + ownIndent + "  "), property);
-        } else {
-            root.Add(new XText("\n" + ownIndent + "  "), property, new XText("\n" + ownIndent));
-        }
+
+        members.Add(new XText("\n" + indent + "  "), property, new XText("\n" + indent));
     }
 
     private static void RemoveElement(XElement element) {

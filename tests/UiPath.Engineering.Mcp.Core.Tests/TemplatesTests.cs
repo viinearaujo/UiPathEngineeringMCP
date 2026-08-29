@@ -11,6 +11,7 @@ public class TemplatesTests {
         var doc = XDocument.Parse(xaml);
         Assert.Equal("Workflows_SendEmail", doc.Root!.Attribute(XName.Get("Class", "http://schemas.microsoft.com/winfx/2006/xaml"))!.Value);
         Assert.Contains("netfx/2009/xaml/activities", doc.Root.Name.NamespaceName);
+        Assert.NotNull(doc.Root!.Element(XName.Get("Members", "http://schemas.microsoft.com/winfx/2006/xaml")));
     }
 
     [Theory]

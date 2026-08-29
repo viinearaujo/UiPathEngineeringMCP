@@ -11,6 +11,8 @@ public static class XamlWorkflowTemplates {
           xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
           xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation"
           xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+          <x:Members>
+          </x:Members>
           <Sequence DisplayName="{{xamlClassName}}" />
         </Activity>
         """;
