@@ -22,10 +22,12 @@ verify after every task, and stop when told to.
 
 ## Phase 1 — Plan
 
-1. Call `create_implementation_plan` with the goal and an ordered task list. Each task
-   must be small enough to verify independently (one workflow, one edit, one data change).
-2. If a plan already exists (`get_implementation_plan`), resume it instead of creating a
-   new one — never silently overwrite. Ask the user before replacing an existing plan.
+1. Call `get_implementation_plan` first. If no plan exists, call `create_implementation_plan`
+   with the goal and an ordered task list. Each task must be small enough to verify
+   independently (one workflow, one edit, one data change).
+2. If a plan already exists, resume it — do not call `create_implementation_plan` unless
+   none exists. Never pass `overwrite: true` unless the user explicitly asked to replace
+   the plan.
 3. Present the task list to the user before implementing. Proceed on approval, or on the
    user's original instruction if they already said "implement it".
 
@@ -51,19 +53,17 @@ For each task, in order:
 
 ## Phase 3 — Verify after every task
 
-1. Call `verify_work` for the task(s) just completed. It re-runs CLI validation and marks
-   tasks `done` or `blocked`.
-2. **Never mark a task done yourself, and never declare it done to the user, without a
-   passing verification.** If `verify_work` reports the CLI cannot run, say so plainly —
-   the task stays unverified.
-3. If verification fails: read the errors, fix with another implement pass, and verify
-   again. Do not move to the next task while the current one is red.
+1. Call `validate_project` with `build: false` and `pack: false`.
+2. Confirm the files you wrote with `read_workflow_file` or `search_codebase`.
+3. Call `update_plan_task` → `done` only when validation succeeded and the files exist.
+   On failure, `update_plan_task` → `blocked` with the validation errors in notes.
+4. Do not call `verify_work` to close the task (it forces CLI build).
 
 ## Phase 4 — Close out
 
 When all tasks are `done` (or the remaining ones are explicitly `blocked`):
 
-1. Call `validate_project` once more for a final full-project check.
+1. Call `validate_project` with `build: false` and `pack: false` for a final project check.
 2. Report: what was implemented per task, final validation status, and any blocked tasks
    with their notes. Suggest the next step (e.g. `generate_documentation` or committing).
 

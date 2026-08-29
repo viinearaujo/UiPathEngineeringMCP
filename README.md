@@ -124,6 +124,8 @@ npx @modelcontextprotocol/inspector
 # generate_documentation, search_repository and create_work_items listed.
 ```
 
+Local agent stdio: see [docs/agent-connection.md](docs/agent-connection.md) (available after the stdio host ships).
+
 ---
 
 ## 4. Expose via Microsoft Dev Tunnel
@@ -208,28 +210,26 @@ Strings enclosed in square brackets ([expr]) are interpreted as expressions in t
 
 ---
 
-## 5b. Autonomous loop (Copilot-driven)
+## 5b. Autonomous loop (client-driven)
 
-The plan/gap/verify tools let Copilot run a full autonomous development loop. The
-server stays passive — it answers one deterministic tool call at a time and never
-runs a loop itself; Copilot drives the sequence inside a single request, and only
-when you ask for it:
+The server answers one deterministic tool call at a time. The client drives the sequence:
 
 ```
-analyze_project → analyze_project_gaps → create_implementation_plan
-   → (authoring tools implement each task) → verify_work → repeat
+analyze_project (summary) → analyze_project_gaps
+   → get_implementation_plan (create_implementation_plan only if none exists)
+   → authoring tools implement each task
+   → validate_project(build:false, pack:false) → update_plan_task
 ```
 
 Example prompt:
 
-> Analyze my UiPath project, create an implementation plan for the remaining work,
-> implement it task by task, and verify each step with `verify_work`.
+> Analyze my UiPath project (summary), resume the existing implementation plan if present,
+> implement the next pending task, validate with `validate_project` build false pack false,
+> then mark the task done with `update_plan_task`.
 
-Plans live inside the target project at `docs/implementation-plan.json` (source of
-truth) plus a regenerated Markdown mirror. `verify_work` re-validates via the UiPath
-CLI and marks plan tasks `done`/`blocked`; when the CLI cannot run it reports the
-error and leaves task statuses unchanged. Stopping the loop = ending the Copilot
-request.
+Plans live at `docs/implementation-plan.json` (source of truth) plus a Markdown mirror.
+Do not use `verify_work` as the done gate (it currently forces a CLI build). Connection
+recipes and traps: [docs/agent-connection.md](docs/agent-connection.md).
 
 ---
 
