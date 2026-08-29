@@ -154,7 +154,7 @@ public class ProjectGapAnalyzerTests : IDisposable {
     }
 
     [Fact]
-    public void Analyze_PendingTaskWithAllTargetFilesPresent_SuggestsVerifyWork() {
+    public void Analyze_PendingTaskWithAllTargetFilesPresent_SuggestsUpdatePlanTask() {
         Directory.CreateDirectory(_projectPath);
         File.WriteAllText(Path.Combine(_projectPath, "Main.xaml"), "<Activity />");
         var model = CleanModel(projectPath: _projectPath);

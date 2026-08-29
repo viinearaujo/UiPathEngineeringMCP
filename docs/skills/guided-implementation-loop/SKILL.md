@@ -57,7 +57,7 @@ For each task, in order:
 2. Confirm the files you wrote with `read_workflow_file` or `search_codebase`.
 3. Call `update_plan_task` → `done` only when validation succeeded and the files exist.
    On failure, `update_plan_task` → `blocked` with the validation errors in notes.
-4. Do not call `verify_work` to close the task (it forces CLI build).
+4. Prefer `validate_project` to close the task. Do not treat `verify_work` as the green gate.
 
 ## Phase 4 — Close out
 

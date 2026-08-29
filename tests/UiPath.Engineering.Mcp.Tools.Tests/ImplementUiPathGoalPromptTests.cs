@@ -13,6 +13,7 @@ public class ImplementUiPathGoalPromptTests {
         Assert.Contains("detail=summary", text);
         Assert.Contains("validate_project", text);
         Assert.Contains("build:false", text);
+        Assert.Contains("pack:false", text);
         Assert.Contains("update_plan_task", text);
         Assert.Contains("docs/implementation-plan.json", text);
         Assert.Contains("get_implementation_plan", text);

@@ -32,7 +32,7 @@ analyze_project (detail=summary) → analyze_project_gaps (treat many hits as no
   → update_plan_task(done|blocked)
 ```
 
-Do **not** close a task with `verify_work` until its `build` flag defaults to false (Task 10). `verify_work` currently forces CLI **build** and can mark a healthy task `blocked`.
+Close tasks with `validate_project(build:false, pack:false)` then `update_plan_task`. `verify_work` defaults `build: false` and does not auto-block on a build-only failure; it is still not the green gate.
 
 File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` alone.
 
@@ -40,17 +40,10 @@ File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` al
 
 | Symptom | What to do |
 |---------|------------|
-| `verify_work` flips `done` work to `blocked` | Use `validate_project(build:false)` + `update_plan_task`. File-existence checks on `verify_work` are fine; the BUILD step is not. |
-| `analyze_project` is huge / truncated by the host | Call with default `detail=summary`. Use `workflowFile` or `detail=full` + `page`. |
-| `analyze_project` lists a path that is gone | Rebuild after Task 5; otherwise trust `read_workflow_file`. |
-| `manage_workflow_data` add-argument / `add_xaml_workflow` — Studio will not open | Property must live under `x:Members` (Task 11). Do not keep adding root-level `x:Property`. |
-| `find_activity` crashes on Main.xaml | Use `edit_workflow_activity` by DisplayName until Task 12. |
-| `write_workflow_file` reports bytes but wrong body | Re-read with `read_workflow_file` (Task 13 adds a hash). |
-| `get_compile_errors` CS0103 flood | Read `analysisMode`. `partial` / `syntaxOnly` is an artifact baseline, not a full compile. |
 | `edit_workflow_file` twice on the same file in parallel | Serialize writes to one file. |
 | MCP cannot edit `project.json` | Punch-list in Studio. |
-| Read of a credential file is masked | Keep the mask. Never write the redacted body back. |
 | Host timeout / JSON-RPC `-32603` | Retry once. Do not send the identical payload three times; change flags (`detail`, `page`, `build:false`) or split the call. |
+| Read of a credential file is masked | Keep the mask. Never write the redacted body back. |
 | `create_implementation_plan` on an existing 20+ task plan | `overwrite: true` wipes it. Use `update_plan_task`. |
 
 ## validate_project flags
@@ -60,3 +53,18 @@ The agent green gate is `validate=true`, `build=false`, `pack=false` (typically 
 ## Prompt
 
 Clients that support MCP Prompts can load `implement_uipath_goal` with `projectPath` and `goal`. It encodes the loop above.
+
+## Resources
+
+URI templates (MCP resources):
+
+- `uipath://skills/{name}`
+- `uipath://project/{projectPath}/model`
+- `uipath://project/{projectPath}/plan`
+- `uipath://project/{projectPath}/workflow/{relativePath}`
+
+`projectPath` and `relativePath` must be percent-encoded, including forward slashes. A raw `C:/...` URI fails.
+
+Worked example for a Windows project root:
+
+`uipath://project/C%3A%2FUsers%2Farauj%2FDocuments%2Fuipath%2Fperf/model`

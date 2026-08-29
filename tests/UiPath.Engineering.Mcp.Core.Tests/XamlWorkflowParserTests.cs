@@ -133,7 +133,7 @@ public class XamlWorkflowParserTests {
 
         // Log error sits under TryCatch.Catch > Catch > ActivityAction, all transparent.
         var logError = model.Activities.Single(a => a.DisplayName == "Log error");
-        Assert.Equal("sequence.1/trycatch.2/logmessage.1", logError.Id);
+        Assert.Equal("sequence.1/trycatch.2/logmessage.2", logError.Id);
 
         Assert.Equal(Enumerable.Range(0, model.Activities.Count).ToArray(),
             model.Activities.Select(a => a.Order).ToArray());
@@ -147,7 +147,7 @@ public class XamlWorkflowParserTests {
         Assert.Equal(["sequence.1/logmessage.1", "sequence.1/trycatch.2"],
             sequence.Children.Select(c => c.Id).ToArray());
         var tryCatch = model.Activities.Single(a => a.Id == "sequence.1/trycatch.2");
-        Assert.Equal(["sequence.1/trycatch.2/invokeworkflowfile.1", "sequence.1/trycatch.2/logmessage.1"],
+        Assert.Equal(["sequence.1/trycatch.2/invokeworkflowfile.1", "sequence.1/trycatch.2/logmessage.2"],
             tryCatch.Children.Select(c => c.Id).ToArray());
     }
 

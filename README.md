@@ -233,7 +233,9 @@ Example prompt:
 > then mark the task done with `update_plan_task`.
 
 Plans live at `docs/implementation-plan.json` (source of truth) plus a Markdown mirror.
-Do not use `verify_work` as the done gate (it currently forces a CLI build). Connection
+Do not use `verify_work` as the done gate. It defaults `build: false` and does not
+auto-block on a build-only failure; the green gate is still
+`validate_project(build:false, pack:false)` then `update_plan_task`. Connection
 recipes and traps: [docs/agent-connection.md](docs/agent-connection.md).
 
 ---

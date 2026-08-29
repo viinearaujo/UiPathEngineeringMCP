@@ -45,6 +45,8 @@ public sealed class ProjectResources {
 
             var (redacted, _) = SecretRedactor.Redact(result.Content);
             return redacted;
+        } catch (OperationCanceledException) {
+            throw;
         } catch (Exception) {
             return "Skill read failed.";
         }
@@ -60,6 +62,8 @@ public sealed class ProjectResources {
 
             var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
             return JsonSerializer.Serialize(ProjectAnalysisView.ToSummary(model), JsonOptions);
+        } catch (OperationCanceledException) {
+            throw;
         } catch (Exception) {
             return "Project model failed.";
         }
@@ -79,6 +83,8 @@ public sealed class ProjectResources {
             }
 
             return File.ReadAllText(path);
+        } catch (OperationCanceledException) {
+            throw;
         } catch (Exception) {
             return "Project plan read failed.";
         }
@@ -111,6 +117,8 @@ public sealed class ProjectResources {
             var raw = _filesystem.ReadAllText(targetPath);
             var (redacted, _) = SecretRedactor.Redact(raw);
             return redacted;
+        } catch (OperationCanceledException) {
+            throw;
         } catch (Exception) {
             return "Workflow read failed.";
         }
