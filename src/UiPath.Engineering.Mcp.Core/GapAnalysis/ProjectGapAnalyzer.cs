@@ -143,8 +143,8 @@ public static class ProjectGapAnalyzer {
                         Severity = Gap.Info,
                         Category = "plan",
                         Message = $"Task '{task.Id}' ({task.Title}) is '{task.Status}' but all its target files already exist.",
-                        SuggestedTool = "verify_work",
-                        SuggestedAction = $"Run verify_work for task '{task.Id}' to confirm and mark it done."
+                        SuggestedTool = "update_plan_task",
+                        SuggestedAction = $"Run validate_project(build:false, pack:false), then update_plan_task for '{task.Id}' to mark it done."
                     });
                 } else {
                     gaps.Add(new Gap {

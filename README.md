@@ -31,7 +31,7 @@ This is the **MVP / POC (v4)** milestone. Thirty-three tools are implemented:
 | `update_plan_task` | Updates a single plan task's status (`pending`/`in_progress`/`done`/`blocked`) and optional notes. |
 | `get_implementation_plan` | Returns the project's implementation plan with derived per-status task counts. |
 | `analyze_project_gaps` | Deterministic hygiene gap analysis over the project model (entry point, orphan workflows, exception handling, logging, descriptions, tests, unresolved invokes) plus plan cross-checks; each gap names the MCP tool that fixes it. |
-| `verify_work` | Rebuilds the model, runs CLI validation (`uip rpa validate` + `build`), checks expected/planned files exist, and marks the given plan tasks `done` or `blocked` accordingly (statuses untouched when the CLI cannot run). |
+| `verify_work` | Rebuilds the model, runs CLI validation (`uip rpa validate`; optional `build`, default `build: false`), checks expected/planned files exist, and marks the given plan tasks `done` or `blocked` accordingly (statuses untouched when the CLI cannot run; BUILD failure does not auto-block). |
 | `find_code_symbol` | Finds C# symbols (methods, classes, properties, fields, interfaces) by exact name using Roslyn semantic analysis; returns kind, file, line, containing type, signature. |
 | `find_code_references` | Finds all usage sites of a C# symbol across the project's `.cs` files (semantic matching with an identifier-matching fallback for external symbols). |
 | `get_code_context` | Returns the semantic context of one C# member (located by symbol name or file+line): signature, containing type, called methods, referenced types, and the member's source. |

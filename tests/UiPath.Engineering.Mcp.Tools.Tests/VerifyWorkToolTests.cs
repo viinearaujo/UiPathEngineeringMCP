@@ -74,7 +74,7 @@ public class VerifyWorkToolTests : IDisposable {
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
-        Assert.Equal((true, true, false), _cli.LastValidateFlags);
+        Assert.Equal((true, false, false), _cli.LastValidateFlags);
         Assert.True(data.GetProperty("validation").GetProperty("success").GetBoolean());
         var updated = Assert.Single(data.GetProperty("tasksUpdated").EnumerateArray());
         Assert.Equal("task-1", updated.GetProperty("taskId").GetString());
@@ -136,6 +136,34 @@ public class VerifyWorkToolTests : IDisposable {
         Assert.Empty(data.GetProperty("tasksUpdated").EnumerateArray());
         Assert.Equal("Main.xaml", data.GetProperty("expectations").GetProperty("missing")[0].GetString());
         Assert.Equal(PlanTask.Pending, _store.Load(_projectPath)!.Tasks[0].Status);
+    }
+
+    [Fact]
+    public async Task VerifyWork_BuildTrue_ForwardsBuildFlag() {
+        SeedPlanWithExistingTarget();
+        _cli.Result = new UiPathCliResult { Success = true, Summary = "Validation completed." };
+
+        await CreateTool().VerifyWork(_projectPath, ["task-1"], build: true);
+
+        Assert.Equal((true, true, false), _cli.LastValidateFlags);
+    }
+
+    [Fact]
+    public async Task VerifyWork_BuildFailsButValidateOk_LeavesTasksUnchanged() {
+        SeedPlanWithExistingTarget();
+        _cli.Result = new UiPathCliResult {
+            Success = false,
+            Summary = "Build failed.",
+            Errors = ["[build] timed out"],
+            Validate = new CliStepResult { Executed = true, Success = true },
+            Build = new CliStepResult { Executed = true, Success = false, Errors = ["timed out"] }
+        };
+
+        var result = await CreateTool().VerifyWork(_projectPath, ["task-1"], build: true);
+
+        Assert.Equal("error", result.Status);
+        Assert.Equal(PlanTask.Pending, _store.Load(_projectPath)!.Tasks[0].Status);
+        Assert.Contains("timed out", result.Errors[0]);
     }
 
     [Fact]

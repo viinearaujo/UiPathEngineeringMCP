@@ -27,11 +27,12 @@ public sealed class VerifyWorkTool {
         _planStore = planStore;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Verifies completed work on a UiPath project: rebuilds the project model, runs CLI validation (validate + build), checks that expected files exist, and marks the given implementation-plan tasks done or blocked accordingly.")]
+    [McpServerTool(UseStructuredContent = true), Description("Verifies completed work on a UiPath project: rebuilds the project model, runs CLI validation (validate; optional build), checks that expected files exist, and marks the given implementation-plan tasks done or blocked accordingly. Build failure does not auto-block tasks.")]
     public async Task<ToolResult> VerifyWork(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Implementation-plan task IDs to verify and update (e.g. ['task-1']).")] List<string>? taskIds = null,
         [Description("Additional project-relative files that must exist for verification to pass.")] List<string>? expectedFiles = null,
+        [Description("Run CLI build as part of verification? Default false. Prefer validate_project(build:false) plus update_plan_task for the agent loop.")] bool build = false,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
@@ -69,7 +70,7 @@ public sealed class VerifyWorkTool {
 
         UiPathCliResult cliResult;
         try {
-            cliResult = await _cliProvider.ValidateAsync(projectPath, validate: true, build: true, pack: false, cancellationToken);
+            cliResult = await _cliProvider.ValidateAsync(projectPath, validate: true, build: build, pack: false, cancellationToken);
         } catch (Exception ex) {
             // CLI unavailable: report the error and leave plan task statuses unchanged.
             return ToolResults.Failure("Validation could not run.", ex.Message, sw);
@@ -101,7 +102,11 @@ public sealed class VerifyWorkTool {
             }, sw, cliResult.Warnings);
         }
 
-        if (!cliResult.Success) {
+        var buildOnlyFailure = build
+            && cliResult.Validate.Executed && cliResult.Validate.Success
+            && cliResult.Build.Executed && !cliResult.Build.Success;
+
+        if (!cliResult.Success && !buildOnlyFailure) {
             foreach (var task in tasks) {
                 task.Status = PlanTask.Blocked;
                 task.Notes = $"verify_work failed: {string.Join("; ", cliResult.Errors)}";

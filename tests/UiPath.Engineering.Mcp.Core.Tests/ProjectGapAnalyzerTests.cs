@@ -167,7 +167,10 @@ public class ProjectGapAnalyzerTests : IDisposable {
 
         var gap = Assert.Single(gaps, g => g.Id == "plan-task-possibly-complete:task-1");
         Assert.Equal(Gap.Info, gap.Severity);
-        Assert.Equal("verify_work", gap.SuggestedTool);
+        Assert.Equal("update_plan_task", gap.SuggestedTool);
+        Assert.Equal(
+            "Run validate_project(build:false, pack:false), then update_plan_task for 'task-1' to mark it done.",
+            gap.SuggestedAction);
     }
 
     [Fact]
