@@ -56,3 +56,7 @@ File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` al
 ## validate_project flags
 
 The agent green gate is `validate=true`, `build=false`, `pack=false` (typically 24–91s, 0/0). The tool default for `build` remains `true` for callers that omit the flag — **always pass `build: false` in this loop**.
+
+## Prompt
+
+Clients that support MCP Prompts can load `implement_uipath_goal` with `projectPath` and `goal`. It encodes the loop above.

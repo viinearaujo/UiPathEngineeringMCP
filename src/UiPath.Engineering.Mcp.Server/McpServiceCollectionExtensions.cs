@@ -56,6 +56,7 @@ public static class McpServiceCollectionExtensions {
         return services.AddMcpServer()
             .WithToolsFromAssembly(typeof(AnalyzeProjectTool).Assembly)
             .WithResourcesFromAssembly(typeof(AnalyzeProjectTool).Assembly)
+            .WithPromptsFromAssembly(typeof(AnalyzeProjectTool).Assembly)
             .WithRequestFilters(filters => {
                 filters.AddCallToolFilter(next => async (context, cancellationToken) => {
                     var result = await next(context, cancellationToken);
