@@ -8,7 +8,7 @@ This is the **MVP / POC (v4)** milestone. Thirty-three tools are implemented:
 
 | Tool | What it does |
 |------|--------------|
-| `analyze_project` | Parses `project.json` + deep-parses every `.xaml` workflow (arguments, variables, activities, try/catch, invokes, log messages) and every `.cs` coded workflow/source file (namespace, class, `[Workflow]` entry methods, public methods) and returns structured JSON with risks (cycles, orphan workflows). |
+| `analyze_project` | Parses project.json + workflows/coded files into a cached project model. Default response is a summary (counts, workflow index, packages, risks, folder tree). Pass detail='full' to page complete workflow models (page/pageSize), or workflowFile to load one workflow fully. |
 | `validate_project` | Runs the UiPath CLI (`uip rpa validate` / `build` / `pack` with `--output json`) and returns structured per-step results (`executed`/`success`/`errors`/`warnings` each) plus recommendations. |
 | `explain_workflow` | Returns the structured breakdown of a single workflow: arguments, variables, activity outline, exception handlers, invoked workflows, log messages. Coded (`.cs`) workflows return class name, namespace, entry methods, and public methods. |
 | `generate_documentation` | Returns deterministic structured documentation data for the whole project: metadata, per-workflow summaries, dependency graph (edges, cycles, orphans), risks. |
@@ -283,11 +283,11 @@ src/
   generated GUID; plain source files are deliberately not registered.
 - Publish/deploy to Orchestrator (`uip solution publish/deploy`) is a separate future phase.
 
-- `analyze_project` deep-parses `.xaml` workflows (arguments, variables, activity outline,
-  try/catch, invokes, log messages) and `.cs` coded workflows/source files (namespace,
-  class, `[Workflow]` entry methods, public methods), includes the project folder
-  structure, and flags cycles/orphan workflows as risks. Project models are cached
-  across requests (fingerprint: file count + newest write time, xaml + cs + project.json).
+- `analyze_project` caches a full project model (fingerprint: file count + newest write
+  time, xaml + cs + project.json) but the default MCP response is a **summary** (counts,
+  workflow index, packages, risks, folder tree) without activity trees. Pass `detail='full'`
+  to page complete workflow models (`page`/`pageSize`), or `workflowFile` to load one
+  workflow fully. Cycles and orphan workflows are flagged as risks.
 - `validate_project` requires the UiPath CLI (`uip`, npm `@uipath/cli`); the executable
   is resolved on PATH among `uip.exe`/`uip.cmd`/`uip.bat`/`uip.ps1` (script shims are
   launched via `cmd.exe`/`powershell.exe`). On non-Windows / missing CLI it returns a

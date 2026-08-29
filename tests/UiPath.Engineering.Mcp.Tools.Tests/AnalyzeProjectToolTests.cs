@@ -27,8 +27,44 @@ public class AnalyzeProjectToolTests {
 
         Assert.Equal("success", result.Status);
         Assert.Equal("Project analyzed successfully.", result.Summary);
-        Assert.Same(model, result.Data);
+        var data = Assert.IsType<ProjectAnalysisResult>(result.Data);
+        Assert.Equal("summary", data.Detail);
+        Assert.Equal("testProcess", data.Summary.ProjectName);
+        Assert.Null(data.Workflows);
         Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public async Task AnalyzeProject_Full_ReturnsPagedWorkflows() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var model = new UiPathProjectModel {
+            ProjectName = "testProcess",
+            Workflows = [
+                new WorkflowModel { FileName = "Main.xaml" },
+                new WorkflowModel { FileName = "Child.xaml" }
+            ]
+        };
+        var tool = new AnalyzeProjectTool(fs, new FakeProjectModelBuilder { Model = model });
+
+        var result = await tool.AnalyzeProject("/projects/testProcess", detail: "full", page: 1, pageSize: 1);
+
+        var data = Assert.IsType<ProjectAnalysisResult>(result.Data);
+        Assert.Equal("full", data.Detail);
+        Assert.NotNull(data.Workflows);
+        Assert.Single(data.Workflows);
+        Assert.Equal("Main.xaml", data.Workflows[0].FileName);
+        Assert.True(data.Truncated);
+    }
+
+    [Fact]
+    public async Task AnalyzeProject_InvalidDetail_ReturnsError() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var tool = new AnalyzeProjectTool(fs, new FakeProjectModelBuilder());
+
+        var result = await tool.AnalyzeProject("/projects/testProcess", detail: "tiny");
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains("detail", result.Summary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
