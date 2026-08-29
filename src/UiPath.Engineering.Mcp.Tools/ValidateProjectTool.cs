@@ -17,7 +17,7 @@ public sealed class ValidateProjectTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Validates a UiPath project using the UiPath CLI (uip rpa validate / build / pack) and returns structured per-step results plus recommendations.")]
+    [McpServerTool(UseStructuredContent = true), Description("Runs UiPath CLI validate / build / pack and returns structured per-step results. Agent green gate is validate:true, build:false, pack:false, then update_plan_task. Do not use verify_work as the done gate. For an authoritative compile only, use compile_project.")]
     public async Task<ToolResult> ValidateProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Run validate (project diagnostics)?")] bool validate = true,

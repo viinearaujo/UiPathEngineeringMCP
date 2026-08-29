@@ -18,7 +18,7 @@ public sealed class WriteWorkflowFileTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Creates or fully overwrites a .xaml or .cs workflow file inside an existing UiPath project with the supplied content. Use this to modify workflows end-to-end.")]
+    [McpServerTool(UseStructuredContent = true), Description("Creates or fully overwrites a .xaml or .cs file with caller-supplied content. Use only for full rewrites. Do not use for small string edits (edit_workflow_file) or spec-based activity insert (validate_activity_spec then build_workflow / insert_activities).")]
     public ToolResult WriteWorkflowFile(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the file relative to the project root, e.g. 'Main.xaml' or 'Workflows/SendEmail.xaml'.")] string relativePath,

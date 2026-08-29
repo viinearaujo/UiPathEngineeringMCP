@@ -3,9 +3,9 @@ using UiPath.Engineering.Mcp.Core.Configuration;
 
 namespace UiPath.Engineering.Mcp.Providers.Skills;
 
-// Serves the uip skills catalog (<SkillsRoot>/*/SKILL.md) to MCP tools.
+// Serves RPA playbooks (<SkillsRoot>/*/SKILL.md) to MCP tools.
 // Re-scans per call: a directory listing plus a frontmatter header parse is
-// cheap and avoids cache invalidation complexity.
+// cheap and avoids cache invalidation complexity. Keep SkillsRoot RPA-only.
 public sealed class SkillsProvider : ISkillsProvider {
     private readonly SkillsOptions _options;
 

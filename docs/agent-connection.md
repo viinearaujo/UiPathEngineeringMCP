@@ -21,6 +21,22 @@ Logs go to stderr. stdin/stdout are the MCP stream. Spawn this process from the 
 
 Tools resolve **only** `docs/implementation-plan.json` inside the target UiPath project (`ImplementationPlanStore`). Do not move it. `create_implementation_plan` overwrites that file when `overwrite: true` — on a mature plan, call `get_implementation_plan` / `update_plan_task` instead.
 
+## Copilot Studio (RPA default tool set)
+
+This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions: [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt).
+
+Enable these tools on the default Copilot connector:
+
+- `analyze_project`, `search_codebase`, `read_workflow_file`
+- `list_skills`, `read_skill` (`uipath-rpa`, `guided-implementation-loop`)
+- `get_implementation_plan`, `update_plan_task`, `analyze_project_gaps`
+- `validate_project` (always pass `build: false`, `pack: false` in the loop)
+- `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`
+
+Leave off the default connector unless the scenario needs them: GitLab (`search_repository`, `create_work_items`), `run_ui_path_cli`, `verify_work`, `compile_project`.
+
+Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
+
 ## Safe authoring loop
 
 ```text

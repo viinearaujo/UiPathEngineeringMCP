@@ -1,12 +1,26 @@
 ---
 name: uipath-rpa
-description: "Always invoke for `.xaml` or `.cs` workflow files. UiPath RPA — create, edit, build, run, debug `.cs` coded workflows and `.xaml` workflows. UI automation with Object Repository selectors, test case authoring, Integration Service connector calls. Live desktop/browser UI exploration and control. Deploy via `.uipx`→uipath-solution. Non-solution Orchestrator ops→uipath-platform. Test reports→uipath-test. Agents→uipath-agents."
-when_to_use: "User wants to create, edit, debug, or run a UiPath automation — '.cs' coded workflows or '.xaml' files. Triggers: 'build a workflow', 'automate Excel/email/web/PDF/queue items', 'add a try-catch', 'fix this XAML error', 'scrape this site', 'process invoices', 'create a test case', or project.json shows UiPath dependencies. NOT for '.flow' files (→uipath-maestro-flow), Python agents (→uipath-agents)."
+description: "Always invoke for `.xaml` or `.cs` workflow files. UiPath RPA — create, edit, build, run, and debug coded (`.cs`) and low-code (`.xaml`) workflows. Use this Engineering MCP's tools for authoring (validate_activity_spec → build_workflow / insert_activities) and validate_project. Live Object Repository capture, Maestro, IXP, Insights, Agents, Admin, and Orchestrator publish/deploy are out of scope."
+when_to_use: "User wants to create, edit, debug, or run a UiPath RPA automation — '.cs' coded workflows or '.xaml' files. Triggers: 'build a workflow', 'automate Excel/email/web/PDF/queue items', 'add a try-catch', 'fix this XAML error'. Decline Maestro (.flow/.bpmn), IXP, Insights, Agents, and Orchestrator runtime/publish."
 ---
 
 # UiPath RPA Assistant
 
 Full assistant for creating, editing, managing, and running UiPath automation projects — both coded workflows (C#) and low-code RPA workflows (XAML).
+
+## Out of scope
+
+This playbook is **RPA project files only** (`.xaml` / `.cs`). If the user asks for Maestro (`.flow` / `.bpmn` / case), IXP, Insights, Agents, Coded Apps, Connector Builder, Admin, Governance, Solution packaging (`.uipx`), or Orchestrator jobs/queues/assets/publish, decline: this Engineering MCP does not expose those products. Do not invent or load another UiPath product skill.
+
+## MCP clients (Copilot Studio)
+
+When working through the UiPath Engineering MCP:
+
+1. Read this SKILL.md once per implementation. For multi-step feature work, also read `guided-implementation-loop`.
+2. Author with MCP tools — never hand-write XAML: `validate_activity_spec` then `build_workflow` / `insert_activities` / `manage_workflow_data`. Confirm writes with `read_workflow_file` or `search_codebase`.
+3. Green gate: `validate_project` with `build: false` and `pack: false`, then `update_plan_task`. Do not use `verify_work` as the done gate.
+4. Live selector indication and Object Repository capture are out of Copilot scope. Use the Placeholder-Selector Stub Pattern and leave Indicate work for Studio.
+5. Prefer MCP tools over recalling `uip` flags from memory. `run_ui_path_cli` is allowlisted and mutation-restricted; do not treat it as a product-catalog shell.
 
 > **Reading the referenced files is imperative — read each required file in full.** This SKILL.md is a router: it tells you *which* reference to open, not *what* it says. When a rule, the Task Navigation table, or a section points you to a reference for the task at hand, open it and read the **whole** file before acting — do not grep it for a keyword, skim the first screen, fall back to `--help`, or substitute prior knowledge. Most errors that slip past `validate` and surface at `build` or runtime trace back to a reference that was skipped or only partially read.
 
@@ -187,7 +201,7 @@ uip rpa activities find --query log --output json > /dev/null 2>&1 &
 
 ### Destination Preflight (Both Modes)
 
-**Studio Web destination → Solution-wrapped deliverable, not a bare project.** Studio Web ingests Solutions only; a bare project folder is invisible in both SW workspace tabs. Treat these phrases as SW signals in the request: "Studio Web", "SW", "upload to web", "browser editor", "cloud workspace edit". On match, build the RPA project normally per the rest of this skill, then hand off to `uipath-solution` to wrap and ship it: `uip solution init <NAME>` → `uip solution project import "<PROJECT_DIR>" --solutionFile <SOLUTION>.uipx` → `uip solution upload "<SOLUTION_DIR>"`. The final deliverable is the Solution, not the bare project folder. Local execution (`uip rpa run`) and the Orchestrator package flow (`uip rpa pack` → `uip or packages upload` — there is no `uip rpa publish`) are fine with a bare project — only an SW destination changes the deliverable shape.
+Studio Web, `.uipx` solution wrap, and Orchestrator publish/deploy are **out of scope** for this MCP. Build and validate the RPA project locally (`create_project`, spec authoring, `validate_project`). If the user needs Studio Web upload or Orchestrator publish, say that is a Studio punch-list — do not hand off to another product skill.
 
 ### Execution Discipline (Both Modes)
 
@@ -266,7 +280,7 @@ uip rpa activities find --query log --output json > /dev/null 2>&1 &
 | **Use mock testing** | XAML | [testing-guide.md § Mock Testing (WIP)](references/testing-guide.md) — requires CLI command not yet available |
 | **Use XAML test activities** | XAML | [testing-guide.md § XAML Test Activities](references/testing-guide.md) |
 | **Use execution templates** | XAML | [testing-guide.md § Execution Templates](references/testing-guide.md) |
-| **Set up Test Manager for the project** (server URL + default project) | Both | [cli-reference.md § Test Manager](references/cli-reference.md) — `uip rpa tm connect` / `set-default-project` |
+| **Set up Test Manager for the project** (server URL + default project) | Both | Out of scope for this MCP. Decline Test Manager / tenant ops. |
 | **Create/edit XAML workflow** | XAML | [xaml/workflow-guide.md](references/xaml/workflow-guide.md) → [xaml/xaml-basics-and-rules.md](references/xaml/xaml-basics-and-rules.md) |
 | **Add error handling / resilience** (Try/Catch, Retry Scope, BusinessRuleException, ContinueOnError, screenshot-on-error, Global Exception Handler, recover app state, transaction boundary, idempotency / avoid duplicate creates, queue vs local retry ownership) | Both | [error-handling-guide.md](references/error-handling-guide.md) |
 | **Use a common activity** (`Sequence` / `If` / `Switch<T>` / `TryCatch` / `While` / `DoWhile` / `ForEach<T>` / `Assign` / `LogMessage` / `WriteLine` / `Delay` / `Throw` / `Rethrow`) | XAML | [common-activity-card.md](references/common-activity-card.md) |
@@ -288,7 +302,7 @@ uip rpa activities find --query log --output json > /dev/null 2>&1 &
 | **Read or edit an existing `ui:TriggerScope` workflow** | XAML | [trigger-pattern-guide.md § Reading and Editing Existing TriggerScope XAML](references/trigger-pattern-guide.md) |
 | **Build/run/validate** | Both | [cli-reference.md](references/cli-reference.md) → [validation-guide.md](references/validation-guide.md) |
 | **Profile a slow workflow / verify UI automation correctness** | Both | [debugging.md § Profiling Workflow Performance](references/debugging.md) |
-| **Pack & publish project to Orchestrator** | Both | [publishing-guide.md](references/publishing-guide.md) |
+| **Pack the project locally** | Both | `validate_project` with `pack: true` if the user asked to pack. Orchestrator publish/deploy is out of scope. |
 | **List project best-practice / analyzer rules** | Both | [cli-reference.md § analyzer-rules list](references/cli-reference.md) |
 | **Add a NuGet package** | Coded | [coded/operations-guide.md § Add Dependency](references/coded/operations-guide.md) → [coded/third-party-packages-guide.md](references/coded/third-party-packages-guide.md) |
 | **Find / reuse existing tenant libraries** | Both | [tenant-library-search-guide.md](references/tenant-library-search-guide.md) |
@@ -475,7 +489,7 @@ When you finish a task, report to the user:
 2. **Validation status** — per-file `validate` result (all files passed, or remaining errors) **and** project-level `uip rpa build` result. Both must be clean to claim verification — `validate` clean alone is insufficient (it does not detect unknown member names or invalid enum values). If `build` has not run since the last edit, say so explicitly rather than claiming success.
 3. **Plan completion** — which task checkboxes in `docs/plans/*.md` are now `[x]`; list any still `[ ]` and, for each, the Stop-condition item that interrupted it (or "not reached" if execution was cut short another way)
 4. **How to run** — the `uip rpa run` (or `uip rpa debug start`) command (if applicable)
-5. **Next steps** — follow-up actions (configure connections, add OR elements, fill placeholders)
-6. **Trouble?** — if the user hit issues during this session, mention: "If something didn't work as expected, use `/uipath-feedback` to send a report."
+5. **Next steps** — follow-up actions (configure connections, fill placeholder selectors in Studio)
+6. **Trouble?** — if something failed, report the MCP `errorCode` / `fixHint` and the `validate_project` output. Do not route to another UiPath product skill.
 
 Do NOT use framing like "complete", "done", "finished", or "the automation is built" unless every plan task is checked off. "Partial", "stopped at <task N>", or "blocked by <stop condition>" is the honest framing otherwise.

@@ -17,7 +17,7 @@ public sealed class FindCodeReferencesTool {
         _analysis = analysis;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Finds all usage sites of a C# symbol (method, class, property, field) across a UiPath project's .cs files using Roslyn semantic analysis. When the symbol is not declared in project source, falls back to identifier matching and says so in the result.")]
+    [McpServerTool(UseStructuredContent = true), Description("Finds all usage sites of a C# symbol by exact name across a project's .cs files (Roslyn, with identifier fallback for external symbols). Do not use for XAML activity search — that is search_codebase mode=activity.")]
     public async Task<ToolResult> FindCodeReferences(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Exact symbol name whose references to find, e.g. 'ProcessTransaction'.")] string symbol,

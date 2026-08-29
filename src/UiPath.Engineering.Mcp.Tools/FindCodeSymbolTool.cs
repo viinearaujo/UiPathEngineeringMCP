@@ -17,7 +17,7 @@ public sealed class FindCodeSymbolTool {
         _analysis = analysis;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Finds C# symbols (methods, classes, properties, fields, interfaces) by exact name in a UiPath project using Roslyn semantic analysis. Prefer this over reading whole .cs files when you need to locate a definition.")]
+    [McpServerTool(UseStructuredContent = true), Description("Finds a C# symbol definition by exact name (method, class, property, field, interface) using Roslyn. Prefer this over reading whole .cs files. Do not use for substring search across XAML or text — that is search_codebase.")]
     public async Task<ToolResult> FindCodeSymbol(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Exact symbol name to find, e.g. 'ProcessTransaction'.")] string symbol,

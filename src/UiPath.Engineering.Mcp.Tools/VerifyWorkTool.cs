@@ -27,7 +27,7 @@ public sealed class VerifyWorkTool {
         _planStore = planStore;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Verifies completed work on a UiPath project: rebuilds the project model, runs CLI validation (validate; optional build), checks that expected files exist, and marks the given implementation-plan tasks done or blocked accordingly. Build failure does not auto-block tasks.")]
+    [McpServerTool(UseStructuredContent = true), Description("Bundled check: rebuilds the project model, runs CLI validate (optional build), checks expected files, and marks plan tasks done or blocked. Not the agent done gate — close tasks with validate_project(build:false, pack:false) then update_plan_task.")]
     public async Task<ToolResult> VerifyWork(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Implementation-plan task IDs to verify and update (e.g. ['task-1']).")] List<string>? taskIds = null,

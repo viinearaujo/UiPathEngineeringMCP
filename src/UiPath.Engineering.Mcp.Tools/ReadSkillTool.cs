@@ -15,7 +15,7 @@ public sealed class ReadSkillTool {
         _skills = skills;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Reads the full content of a UiPath skill (its SKILL.md playbook, or an auxiliary file inside the skill directory via the file parameter). Use list_skills first to discover names.")]
+    [McpServerTool(UseStructuredContent = true), Description("Reads one RPA skill file (SKILL.md by default, or an auxiliary file under that skill). Use list_skills if the name is unknown. This server only serves RPA playbooks (uipath-rpa, guided-implementation-loop), not Maestro/IXP/Agents.")]
     public async Task<ToolResult> ReadSkill(
         [Description("Skill name or directory, e.g. 'uipath-rpa' (case-insensitive).")] string name,
         [Description("Optional file inside the skill directory, e.g. 'references/auth.md'. Defaults to SKILL.md.")] string? file = null,

@@ -4,7 +4,8 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, etc.) analyze and validate UiPath
 RPA projects over HTTP, exposed to the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Thirty-three tools are implemented:
+This is the **MVP / POC (v4)** milestone. Thirty-three tools are implemented.
+The skills feed under `.agents/skills` is **RPA-only** (do not reinstall the full UiPath marketplace catalog).
 
 | Tool | What it does |
 |------|--------------|
@@ -39,8 +40,8 @@ This is the **MVP / POC (v4)** milestone. Thirty-three tools are implemented:
 | `compile_project` | Authoritative UiPath CLI build (`uip rpa build`) returning structured compiler errors/warnings. |
 | `search_codebase` | Substring search across a project's `.xaml` and `.cs` files in four modes: `text` (matching lines), `symbol` (C# symbols via Roslyn, optional `kind` filter), `activity` (XAML activities by display name/type), `workflow` (workflows by file name/description). Exact-case matches order first; capped at 200 matches with a `truncated` flag. |
 | `run_ui_path_cli` | Runs an allowlisted UiPath CLI (`uip`) command (default verbs: `rpa`, `solution`); mutating subcommands are blocked unless enabled in config, shell metacharacters are rejected, and stdout/stderr are redacted and capped. |
-| `list_skills` | Lists the UiPath skills catalog (name + description) — the playbooks for UiPath tasks. |
-| `read_skill` | Reads the full content of a UiPath skill (its SKILL.md playbook, or an auxiliary file via the `file` parameter). |
+| `list_skills` | Lists RPA playbooks only (`uipath-rpa`, `guided-implementation-loop`). Not a full UiPath product catalog. |
+| `read_skill` | Reads one RPA skill (`SKILL.md` or an auxiliary file). |
 
 ---
 
@@ -170,7 +171,12 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Tools:** `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `read_workflow_file`, `edit_workflow_file`, `find_activity`, `get_workflow_dependencies`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`, `find_code_symbol`, `find_code_references`, `get_code_context`, `get_compile_errors`, `compile_project`, `search_codebase`, `run_ui_path_cli`, `list_skills`, `read_skill`
+- **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (RPA-only; green gate is `validate_project(build:false, pack:false)` then `update_plan_task`).
+- **Recommended tools (default connector):** `analyze_project`, `search_codebase`, `read_workflow_file`, `list_skills`, `read_skill`, `get_implementation_plan`, `update_plan_task`, `analyze_project_gaps`, `validate_project`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`
+- **Leave off the default connector unless needed:** `search_repository`, `create_work_items`, `run_ui_path_cli`, `verify_work`, `compile_project`, `create_implementation_plan` (create only when no plan exists; prefer get/update)
+- **Full tool surface** (Inspector / local agents): `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `read_workflow_file`, `edit_workflow_file`, `find_activity`, `get_workflow_dependencies`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`, `find_code_symbol`, `find_code_references`, `get_code_context`, `get_compile_errors`, `compile_project`, `search_codebase`, `run_ui_path_cli`, `list_skills`, `read_skill`
+
+This server is **RPA only** (`.xaml` / `.cs`). Do not install the full `uip skills` marketplace catalog into `.agents/skills`.
 
 ---
 
