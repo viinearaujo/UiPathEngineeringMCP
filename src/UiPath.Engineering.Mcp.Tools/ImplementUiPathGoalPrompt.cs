@@ -26,9 +26,9 @@ public sealed class ImplementUiPathGoalPrompt {
         4. Source of truth is docs/implementation-plan.json. Do not move it.
         5. Author one task. Prefer spec tools (validate_activity_spec → build_workflow / insert_activities / manage_workflow_data).
         6. Confirm writes with search_codebase or read_workflow_file (file truth). Never "fix" a redacted credential body; never rewrite redacted text to disk.
-        7. validate_project with build:false and pack:false. That is the green gate.
-        8. update_plan_task to done or blocked. Do not call verify_work as the done gate.
-        9. You cannot edit project.json through MCP — leave that as a Studio punch-list.
+        7. After authoring: manage_project_docs (search/write) for conventions, pitfalls, and ADRs; sync_project_context when file counts or dependencies changed. Never emit a patch; use patch_project_json for project.json and manage_project_file for other .md/.json/.txt.
+        8. validate_project with build:false and pack:false. That is the CLI green gate. Then validate_project_docs (or rely on the done-gate).
+        9. update_plan_task to done or blocked. done requires current docs (generated context + knowledge/ADRs). Do not call verify_work as the done gate.
         10. If a call times out or returns JSON-RPC -32603, retry once with different flags; do not send the same payload three times.
 
         Stop when the user interrupts, the project path is ambiguous, or a task stays blocked after a real validate_project failure.

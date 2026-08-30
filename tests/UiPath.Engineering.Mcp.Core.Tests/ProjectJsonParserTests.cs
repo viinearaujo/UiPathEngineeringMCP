@@ -95,4 +95,22 @@ public class ProjectJsonParserTests {
 
         Assert.Equal("net6.0", model.TargetFramework);
     }
+
+    [Fact]
+    public void Parse_ExpressionLanguageAndOutputType_AreCaptured() {
+        var fs = new FakeFilesystemProvider { ProjectJsonPath = ProjectJsonPath };
+        fs.FileContents[ProjectJsonPath] = """
+            {
+              "name": "testProcess",
+              "expressionLanguage": "CSharp",
+              "designOptions": { "outputType": "Process" }
+            }
+            """;
+        var parser = new ProjectJsonParser(fs);
+
+        var model = parser.Parse(ProjectJsonPath, ProjectRoot);
+
+        Assert.Equal("CSharp", model.ExpressionLanguage);
+        Assert.Equal("Process", model.OutputType);
+    }
 }

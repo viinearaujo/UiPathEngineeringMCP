@@ -3,6 +3,7 @@ using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.CodeSearch;
 using UiPath.Engineering.Mcp.Core.Configuration;
+using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Core.Planning;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
@@ -37,6 +38,11 @@ public static class McpServiceCollectionExtensions {
                 sp.GetRequiredService<IFilesystemProvider>()));
 
         services.AddSingleton<ImplementationPlanStore>();
+        services.AddSingleton<ProjectKnowledgeStore>();
+        services.AddSingleton<ProjectAdrStore>();
+        services.AddSingleton<ProjectContextRenderer>();
+        services.AddSingleton<ProjectDocsSearch>();
+        services.AddSingleton<ProjectDocsValidator>();
 
         services.AddSingleton<NuGetReferenceResolver>();
         services.AddSingleton<CSharpContextBuilder>();

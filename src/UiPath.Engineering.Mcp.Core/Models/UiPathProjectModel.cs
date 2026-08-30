@@ -7,6 +7,8 @@ public sealed class UiPathProjectModel {
     public string? ProjectJsonPath { get; init; }
     public string? Description { get; set; }
     public string? TargetFramework { get; init; }
+    public string? ExpressionLanguage { get; init; }
+    public string? OutputType { get; init; }
     public string? ReadmeSummary { get; set; }
     public DirectoryTreeNode? FolderStructure { get; set; }
     public List<WorkflowModel> Workflows { get; init; } = [];

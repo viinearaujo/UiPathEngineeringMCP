@@ -3,6 +3,7 @@ using System.Text.Json;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Core.Planning;
 using UiPath.Engineering.Mcp.Providers.Skills;
@@ -22,16 +23,25 @@ public sealed class ProjectResources {
     private readonly IProjectModelBuilder _modelBuilder;
     private readonly ImplementationPlanStore _planStore;
     private readonly ISkillsProvider _skills;
+    private readonly ProjectKnowledgeStore _knowledge;
+    private readonly ProjectAdrStore _adrs;
+    private readonly ProjectDocsValidator _docsValidator;
 
     public ProjectResources(
         IFilesystemProvider filesystem,
         IProjectModelBuilder modelBuilder,
         ImplementationPlanStore planStore,
-        ISkillsProvider skills) {
+        ISkillsProvider skills,
+        ProjectKnowledgeStore knowledge,
+        ProjectAdrStore adrs,
+        ProjectDocsValidator docsValidator) {
         _filesystem = filesystem;
         _modelBuilder = modelBuilder;
         _planStore = planStore;
         _skills = skills;
+        _knowledge = knowledge;
+        _adrs = adrs;
+        _docsValidator = docsValidator;
     }
 
     [McpServerResource(UriTemplate = "uipath://skills/{name}", MimeType = "text/markdown", Name = "skill")]
@@ -121,6 +131,43 @@ public sealed class ProjectResources {
             throw;
         } catch (Exception) {
             return "Workflow read failed.";
+        }
+    }
+
+    [McpServerResource(UriTemplate = "uipath://project/{projectPath}/knowledge", MimeType = "application/json", Name = "project-knowledge")]
+    [Description("Combined knowledge + ADR index and whether generated context is missing or stale.")]
+    public async Task<string> GetProjectKnowledge(string projectPath, CancellationToken cancellationToken = default) {
+        try {
+            if (!_filesystem.IsPathAllowed(projectPath) || _filesystem.FindProjectJson(projectPath) is null) {
+                return "Invalid UiPath project directory.";
+            }
+
+            var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
+            var findings = _docsValidator.Validate(projectPath, model);
+            var contextStale = findings.Any(f =>
+                f.Severity == DocsFinding.Error
+                && f.Code == ToolErrorCodes.DocsStale
+                && (f.SuggestedTool == "sync_project_context"
+                    || (f.TargetFile is not null && (
+                        f.TargetFile.EndsWith("AGENTS.md", StringComparison.OrdinalIgnoreCase)
+                        || f.TargetFile.EndsWith("project-context.md", StringComparison.OrdinalIgnoreCase)))));
+            var contextMissing = findings.Any(f =>
+                f.Severity == DocsFinding.Error
+                && f.Message.Contains("Generated project context is missing", StringComparison.OrdinalIgnoreCase));
+
+            var payload = new {
+                memory = _knowledge.Load(projectPath).Articles,
+                adrs = _adrs.Load(projectPath).Adrs,
+                context = new {
+                    stale = contextStale,
+                    missing = contextMissing
+                }
+            };
+            return JsonSerializer.Serialize(payload, JsonOptions);
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception) {
+            return "Project knowledge read failed.";
         }
     }
 }

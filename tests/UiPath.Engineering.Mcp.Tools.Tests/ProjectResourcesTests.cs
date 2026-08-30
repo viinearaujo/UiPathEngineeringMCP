@@ -24,7 +24,8 @@ public class ProjectResourcesTests : IDisposable {
         }
     }
 
-    private ProjectResources Create() => new(_fs, _models, _plans, _skills);
+    private ProjectResources Create() =>
+        new(_fs, _models, _plans, _skills, DocsSupport.Knowledge(_fs), DocsSupport.Adrs(_fs), DocsSupport.Validator(_fs));
 
     [Fact]
     public async Task Skill_ReturnsRedactedPlaybook() {
@@ -79,6 +80,16 @@ public class ProjectResourcesTests : IDisposable {
     public void Workflow_RefusesUppercasePemExtension() {
         var text = Create().GetWorkflow(_projectPath, "certs/server.PEM");
         Assert.Contains("cannot be read", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Knowledge_ReturnsCombinedIndexAndContextFlags() {
+        var json = await Create().GetProjectKnowledge(_projectPath);
+
+        Assert.Contains("\"memory\":", json);
+        Assert.Contains("\"adrs\":", json);
+        Assert.Contains("\"stale\":", json);
+        Assert.Contains("\"missing\":", json);
     }
 
     [Fact]

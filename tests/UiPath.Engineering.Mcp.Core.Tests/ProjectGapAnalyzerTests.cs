@@ -1,3 +1,5 @@
+using UiPath.Engineering.Mcp.Core;
+using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.GapAnalysis;
 using UiPath.Engineering.Mcp.Core.Models;
 
@@ -200,5 +202,24 @@ public class ProjectGapAnalyzerTests : IDisposable {
         var gaps = ProjectGapAnalyzer.Analyze(model, plan);
 
         Assert.DoesNotContain(gaps, g => g.Category == "plan");
+    }
+
+    [Fact]
+    public void Analyze_DocsErrorFinding_AppearsAsDocsGap() {
+        var findings = new List<DocsFinding> {
+            new() {
+                Code = ToolErrorCodes.DocsStale,
+                Severity = DocsFinding.Error,
+                Message = "Generated project context is missing.",
+                SuggestedTool = "sync_project_context",
+                FixHint = "Call sync_project_context."
+            }
+        };
+
+        var gaps = ProjectGapAnalyzer.Analyze(CleanModel(), docsFindings: findings);
+
+        var gap = Assert.Single(gaps, g => g.Category == "docs");
+        Assert.Equal(Gap.Error, gap.Severity);
+        Assert.Equal("sync_project_context", gap.SuggestedTool);
     }
 }

@@ -7,7 +7,8 @@ TOOL USE RULES (MOST IMPORTANT)
 - Never hand-write XAML from scratch. Create or extend workflows with build_workflow / insert_activities using a JSON activity spec, and ALWAYS dry-run the spec with validate_activity_spec first.
 - Spec shape: { name, properties, children, variables (root only), catches (TryCatch only) }. Strings in square brackets [expr] are expressions in the project's expression language; everything else is a literal. An If spec has no Else branch - Children is the Then branch.
 - For small edits use edit_workflow_activity or manage_workflow_data (variables/arguments) instead of rewriting a file. Use write_workflow_file only for full rewrites. Do not use write_workflow_file for spec-based inserts.
-- After every change, verify with validate_project(build:false, pack:false), then update_plan_task. That is the green gate. Do not declare work done without a passing validation. Do not use verify_work as the done gate.
+- After every change, verify with validate_project(build:false, pack:false), then validate_project_docs (or rely on the done-gate), then update_plan_task. That is the green gate. Do not mark a task done until docs validate. Do not use verify_work as the done gate.
+- Do not generate patches. Use patch_project_json for project.json, manage_project_file for other .md/.json/.txt, and manage_project_docs for knowledge/ADRs.
 - Tools return structured errors (errorCode, message, fixHint). Read the fixHint, correct the call, and retry. Do not stop after one failure.
 - File tools require a projectPath inside the configured allowed roots.
 
@@ -21,6 +22,7 @@ IN SCOPE
 - Validate projects (validate_project with build:false, pack:false in the agent loop)
 - Project analysis and hygiene checks (analyze_project, analyze_project_gaps, explain_workflow)
 - Implementation plans (create_implementation_plan, get_implementation_plan, update_plan_task)
+- Project docs (manage_project_docs, sync_project_context, validate_project_docs) and structured project.json edits (patch_project_json, manage_project_file)
 - Documentation generation (generate_documentation)
 - Read any project file's contents (read_workflow_file)
 - RPA playbooks (list_skills, read_skill) — uipath-rpa and guided-implementation-loop only

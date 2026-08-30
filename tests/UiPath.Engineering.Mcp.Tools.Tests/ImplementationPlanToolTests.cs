@@ -115,7 +115,8 @@ public class UpdatePlanTaskToolTests : IDisposable {
         }
     }
 
-    private UpdatePlanTaskTool CreateTool() => new(_fs, _store);
+    private UpdatePlanTaskTool CreateTool() =>
+        new(_fs, _store, new FakeProjectModelBuilder(), DocsSupport.Validator(_fs));
 
     private void SeedPlan() => _store.Save(_projectPath, new ImplementationPlan {
         Goal = "g",
@@ -123,18 +124,18 @@ public class UpdatePlanTaskToolTests : IDisposable {
     });
 
     [Fact]
-    public void UpdatePlanTask_WhenPathNotAllowed_ReturnsError() {
+    public async Task UpdatePlanTask_WhenPathNotAllowed_ReturnsError() {
         _fs.Allowed = false;
 
-        var result = CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
+        var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
 
         Assert.Equal("error", result.Status);
         Assert.Null(result.Data);
     }
 
     [Fact]
-    public void UpdatePlanTask_WhenNoPlan_ReturnsError() {
-        var result = CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
+    public async Task UpdatePlanTask_WhenNoPlan_ReturnsError() {
+        var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
 
         Assert.Equal("error", result.Status);
         Assert.Contains("No implementation plan", result.Summary);
@@ -142,10 +143,10 @@ public class UpdatePlanTaskToolTests : IDisposable {
     }
 
     [Fact]
-    public void UpdatePlanTask_WhenTaskUnknown_ReturnsError() {
+    public async Task UpdatePlanTask_WhenTaskUnknown_ReturnsError() {
         SeedPlan();
 
-        var result = CreateTool().UpdatePlanTask(_projectPath, "task-99", PlanTask.Done);
+        var result = await CreateTool().UpdatePlanTask(_projectPath, "task-99", PlanTask.Done);
 
         Assert.Equal("error", result.Status);
         Assert.Contains("task-99", result.Summary);
@@ -153,20 +154,20 @@ public class UpdatePlanTaskToolTests : IDisposable {
     }
 
     [Fact]
-    public void UpdatePlanTask_WhenStatusInvalid_ReturnsError() {
+    public async Task UpdatePlanTask_WhenStatusInvalid_ReturnsError() {
         SeedPlan();
 
-        var result = CreateTool().UpdatePlanTask(_projectPath, "task-1", "finished");
+        var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", "finished");
 
         Assert.Equal("error", result.Status);
         Assert.Equal(PlanTask.Pending, _store.Load(_projectPath)!.Tasks[0].Status);
     }
 
     [Fact]
-    public void UpdatePlanTask_HappyPath_PersistsStatusAndNotes() {
+    public async Task UpdatePlanTask_HappyPath_PersistsStatusAndNotes() {
         SeedPlan();
 
-        var result = CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.InProgress, "started");
+        var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.InProgress, "started");
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
@@ -176,6 +177,29 @@ public class UpdatePlanTaskToolTests : IDisposable {
         var persisted = _store.Load(_projectPath)!.Tasks[0];
         Assert.Equal(PlanTask.InProgress, persisted.Status);
         Assert.Equal("started", persisted.Notes);
+    }
+
+    [Fact]
+    public async Task UpdatePlanTask_Done_RefusedWhenGeneratedContextIsStale() {
+        SeedPlan();
+        await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.InProgress);
+
+        var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains(result.ErrorDetails, e => e.ErrorCode == UiPath.Engineering.Mcp.Core.ToolErrorCodes.DocsStale);
+        Assert.Equal(PlanTask.InProgress, _store.Load(_projectPath)!.Tasks[0].Status);
+    }
+
+    [Fact]
+    public async Task UpdatePlanTask_Done_AllowedAfterSync() {
+        SeedPlan();
+        DocsSupport.SeedGeneratedContext(_fs, _projectPath);
+
+        var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal(PlanTask.Done, _store.Load(_projectPath)!.Tasks[0].Status);
     }
 }
 

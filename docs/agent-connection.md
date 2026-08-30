@@ -32,6 +32,7 @@ Enable these tools on the default Copilot connector:
 - `get_implementation_plan`, `update_plan_task`, `analyze_project_gaps`
 - `validate_project` (always pass `build: false`, `pack: false` in the loop)
 - `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`
+- `manage_project_file`, `patch_project_json`, `manage_project_docs`, `sync_project_context`, `validate_project_docs`
 
 Leave off the default connector unless the scenario needs them: GitLab (`search_repository`, `create_work_items`), `run_ui_path_cli`, `verify_work`, `compile_project`.
 
@@ -44,11 +45,13 @@ analyze_project (detail=summary) → analyze_project_gaps (treat many hits as no
   → get_implementation_plan; create_implementation_plan only if none exists
   → author one task
   → search_codebase / read_workflow_file to confirm the write
+  → manage_project_docs (search/write) and sync_project_context when structure or decisions changed
   → validate_project(build:false, pack:false)
+  → validate_project_docs (or rely on the done-gate)
   → update_plan_task(done|blocked)
 ```
 
-Close tasks with `validate_project(build:false, pack:false)` then `update_plan_task`. `verify_work` defaults `build: false` and does not auto-block on a build-only failure; it is still not the green gate.
+Close tasks with `validate_project(build:false, pack:false)` then `update_plan_task`. `update_plan_task(done)` and `verify_work` auto-done refuse when `validate_project_docs` would report error findings. `verify_work` defaults `build: false` and does not auto-block on a build-only failure; it is still not the green gate.
 
 File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` alone.
 
@@ -57,9 +60,10 @@ File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` al
 | Symptom | What to do |
 |---------|------------|
 | `edit_workflow_file` twice on the same file in parallel | Serialize writes to one file. |
-| MCP cannot edit `project.json` | Punch-list in Studio. |
+| `project.json` change needed | `patch_project_json`. Do not emit a patch or overwrite the file. |
 | Host timeout / JSON-RPC `-32603` | Retry once. Do not send the identical payload three times; change flags (`detail`, `page`, `build:false`) or split the call. |
 | Read of a credential file is masked | Keep the mask. Never write the redacted body back. |
+| `update_plan_task(done)` refused with `DOCS_STALE` / `DOCS_INCONSISTENT` | `sync_project_context` and/or `manage_project_docs` (`write`/`delete`), then retry. |
 | `create_implementation_plan` on an existing 20+ task plan | `overwrite: true` wipes it. Use `update_plan_task`. |
 
 ## validate_project flags
@@ -78,6 +82,7 @@ URI templates (MCP resources):
 - `uipath://project/{projectPath}/model`
 - `uipath://project/{projectPath}/plan`
 - `uipath://project/{projectPath}/workflow/{relativePath}`
+- `uipath://project/{projectPath}/knowledge`
 
 `projectPath` and `relativePath` must be percent-encoded, including forward slashes. A raw `C:/...` URI fails.
 

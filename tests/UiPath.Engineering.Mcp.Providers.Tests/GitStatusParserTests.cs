@@ -122,6 +122,7 @@ public class GitStatusParserTests {
         public UiPath.Engineering.Mcp.Core.Models.DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) => new();
         public void CreateDirectory(string path) { }
         public void WriteAllText(string filePath, string content) { }
+        public void DeleteFile(string filePath) { }
         public bool FileExists(string path) => false;
     }
 }

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Core.Planning;
@@ -15,16 +16,19 @@ public sealed class VerifyWorkTool {
     private readonly IProjectModelBuilder _modelBuilder;
     private readonly IUiPathCliProvider _cliProvider;
     private readonly ImplementationPlanStore _planStore;
+    private readonly ProjectDocsValidator _docsValidator;
 
     public VerifyWorkTool(
         IFilesystemProvider filesystem,
         IProjectModelBuilder modelBuilder,
         IUiPathCliProvider cliProvider,
-        ImplementationPlanStore planStore) {
+        ImplementationPlanStore planStore,
+        ProjectDocsValidator docsValidator) {
         _filesystem = filesystem;
         _modelBuilder = modelBuilder;
         _cliProvider = cliProvider;
         _planStore = planStore;
+        _docsValidator = docsValidator;
     }
 
     [McpServerTool(UseStructuredContent = true), Description("Bundled check: rebuilds the project model, runs CLI validate (optional build), checks expected files, and marks plan tasks done or blocked. Not the agent done gate — close tasks with validate_project(build:false, pack:false) then update_plan_task.")]
@@ -61,8 +65,9 @@ public sealed class VerifyWorkTool {
         }
 
         // Fresh model so the checks below see the post-edit state of the project.
+        UiPathProjectModel model;
         try {
-            await _modelBuilder.BuildAsync(projectPath, cancellationToken);
+            model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
         } catch (Exception ex) {
             // Never surface a raw exception/stack trace to the MCP client.
             return ToolResults.FromException(ex, "Project analysis failed.", sw);
@@ -87,6 +92,16 @@ public sealed class VerifyWorkTool {
 
         var tasksUpdated = new List<object>();
         if (cliResult.Success && missing.Count == 0) {
+            var docsFindings = _docsValidator.Validate(projectPath, model);
+            var docsErrors = docsFindings.Where(f => f.Severity == DocsFinding.Error).ToList();
+            if (docsErrors.Count > 0) {
+                return ToolResults.Failure(
+                    "Verification passed CLI checks but project docs have error findings; tasks were not marked done.",
+                    docsErrors.Select(DocsGate.ToToolError).ToList(),
+                    sw);
+            }
+
+            var docsWarnings = docsFindings.Where(f => f.Severity == DocsFinding.Warning).Select(f => f.Message).ToList();
             foreach (var task in tasks) {
                 task.Status = PlanTask.Done;
                 tasksUpdated.Add(new { taskId = task.Id, status = task.Status });
@@ -95,11 +110,13 @@ public sealed class VerifyWorkTool {
                 _planStore.Save(projectPath, plan!);
             }
 
+            var warnings = cliResult.Warnings.Concat(docsWarnings).ToList();
             return ToolResults.Ok("Verification passed.", new {
                 validation = new { success = true, errors = cliResult.Errors, warnings = cliResult.Warnings },
                 tasksUpdated,
-                expectations = new { @checked = expected.Count, missing }
-            }, sw, cliResult.Warnings);
+                expectations = new { @checked = expected.Count, missing },
+                docs = new { findings = docsFindings }
+            }, sw, warnings);
         }
 
         var buildOnlyFailure = build

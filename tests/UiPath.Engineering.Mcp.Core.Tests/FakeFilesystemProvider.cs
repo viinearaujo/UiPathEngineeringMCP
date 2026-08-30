@@ -24,9 +24,6 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
 
     public IReadOnlyList<string> FindCSharpFiles(string projectPath) => CSharpFiles;
 
-    public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) =>
-        DirectoryTree ?? new DirectoryTreeNode { Name = Path.GetFileName(root) ?? root, Path = root, IsDirectory = true };
-
     public string ReadAllText(string filePath) =>
         FileContents.TryGetValue(filePath, out var content)
             ? content
@@ -41,14 +38,36 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
             : throw new FileNotFoundException(filePath);
     }
 
-    public DateTime GetLastWriteTimeUtc(string filePath) =>
-        WriteTimesUtc.TryGetValue(filePath, out var timestamp)
-            ? timestamp
-            : throw new FileNotFoundException(filePath);
+    public DateTime GetLastWriteTimeUtc(string filePath) {
+        if (WriteTimesUtc.TryGetValue(filePath, out var timestamp)) {
+            return timestamp;
+        }
+        if (FileContents.ContainsKey(filePath)) {
+            return DateTime.UnixEpoch;
+        }
+        throw new FileNotFoundException(filePath);
+    }
 
     public void CreateDirectory(string path) { }
 
-    public void WriteAllText(string filePath, string content) => FileContents[filePath] = content;
+    public void WriteAllText(string filePath, string content) {
+        FileContents[filePath] = content;
+        WriteTimesUtc[filePath] = DateTime.UtcNow;
+    }
+
+    public void DeleteFile(string filePath) {
+        FileContents.Remove(filePath);
+        FileSizes.Remove(filePath);
+        WriteTimesUtc.Remove(filePath);
+    }
 
     public bool FileExists(string path) => FileContents.ContainsKey(path);
+
+    public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) {
+        if (DirectoryTree is not null) {
+            return DirectoryTree;
+        }
+
+        return FakeDirectoryTrees.FromPaths(root, FileContents.Keys, maxDepth);
+    }
 }

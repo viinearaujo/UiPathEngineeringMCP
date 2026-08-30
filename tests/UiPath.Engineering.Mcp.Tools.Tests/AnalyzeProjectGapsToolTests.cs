@@ -21,7 +21,7 @@ public class AnalyzeProjectGapsToolTests : IDisposable {
     }
 
     private AnalyzeProjectGapsTool CreateTool(FakeProjectModelBuilder modelBuilder) =>
-        new(_fs, modelBuilder, _store);
+        new(_fs, modelBuilder, _store, DocsSupport.Validator(_fs));
 
     private static UiPathProjectModel CleanModel(string projectPath) => new() {
         ProjectPath = projectPath,
@@ -78,7 +78,9 @@ public class AnalyzeProjectGapsToolTests : IDisposable {
 
     [Fact]
     public async Task AnalyzeProjectGaps_CleanProjectWithoutPlan_ReportsZeroGapsAndNoPlan() {
-        var tool = CreateTool(new FakeProjectModelBuilder { Model = CleanModel(_projectPath) });
+        var model = CleanModel(_projectPath);
+        DocsSupport.SeedGeneratedContext(_fs, _projectPath, model);
+        var tool = CreateTool(new FakeProjectModelBuilder { Model = model });
 
         var result = await tool.AnalyzeProjectGaps(_projectPath);
         var data = JsonSerializer.SerializeToElement(result.Data);
@@ -101,6 +103,7 @@ public class AnalyzeProjectGapsToolTests : IDisposable {
         });
         var model = CleanModel(_projectPath);
         model.Workflows.Add(new WorkflowModel { FileName = "Unused.xaml", Description = "Orphan." });
+        DocsSupport.SeedGeneratedContext(_fs, _projectPath, model);
         var tool = CreateTool(new FakeProjectModelBuilder { Model = model });
 
         var result = await tool.AnalyzeProjectGaps(_projectPath);

@@ -25,4 +25,7 @@ public static class ToolErrorCodes {
     public const string ActivityNotFound = "ACTIVITY_NOT_FOUND";
     public const string ActivityIdStale = "ACTIVITY_ID_STALE";
     public const string AmbiguousActivity = "AMBIGUOUS_ACTIVITY";
+    public const string DocsStale = "DOCS_STALE";
+    public const string DocsInconsistent = "DOCS_INCONSISTENT";
+    public const string DocsAdrIncomplete = "DOCS_ADR_INCOMPLETE";
 }

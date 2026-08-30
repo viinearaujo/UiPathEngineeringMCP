@@ -1,3 +1,4 @@
+using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -10,7 +11,7 @@ namespace UiPath.Engineering.Mcp.Core.GapAnalysis;
 /// loop autonomously.
 /// </summary>
 public static class ProjectGapAnalyzer {
-    public static List<Gap> Analyze(UiPathProjectModel model, ImplementationPlan? plan = null) {
+    public static List<Gap> Analyze(UiPathProjectModel model, ImplementationPlan? plan = null, IReadOnlyList<DocsFinding>? docsFindings = null) {
         var gaps = new List<Gap>();
         var graph = DependencyGraphBuilder.Build(model.Workflows, model.MainWorkflow);
         var workflowsByName = new Dictionary<string, WorkflowModel>(StringComparer.OrdinalIgnoreCase);
@@ -157,6 +158,20 @@ public static class ProjectGapAnalyzer {
                         SuggestedAction = "Create the planned file(s), or adjust the plan if they are no longer needed."
                     });
                 }
+            }
+        }
+
+        if (docsFindings is not null) {
+            foreach (var finding in docsFindings.Where(f => f.Severity == DocsFinding.Error)) {
+                gaps.Add(new Gap {
+                    Id = $"docs:{finding.Code}:{finding.TargetFile ?? finding.Message}",
+                    Severity = Gap.Error,
+                    Category = "docs",
+                    Message = finding.Message,
+                    TargetFile = finding.TargetFile,
+                    SuggestedTool = finding.SuggestedTool,
+                    SuggestedAction = finding.FixHint
+                });
             }
         }
 

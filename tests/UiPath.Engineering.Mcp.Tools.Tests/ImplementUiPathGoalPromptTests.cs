@@ -21,5 +21,9 @@ public class ImplementUiPathGoalPromptTests {
         Assert.Contains("Do not call verify_work", text);
         Assert.Contains("create_implementation_plan only if none exists", text);
         Assert.Contains("never rewrite redacted", text);
+        Assert.Contains("patch_project_json", text);
+        Assert.Contains("manage_project_docs", text);
+        Assert.Contains("sync_project_context", text);
+        Assert.Contains("done requires current docs", text);
     }
 }

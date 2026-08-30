@@ -46,8 +46,18 @@ public sealed class ProjectJsonParser {
             EntryPoints = entryPoints,
             Description = root.TryGetProperty("description", out var desc) ? desc.GetString() : null,
             TargetFramework = root.TryGetProperty("targetFramework", out var tf) ? tf.GetString() : null,
+            ExpressionLanguage = root.TryGetProperty("expressionLanguage", out var el) ? el.GetString() : null,
+            OutputType = ReadOutputType(root),
             Dependencies = dependencies,
             Packages = packages
         };
+    }
+
+    private static string? ReadOutputType(JsonElement root) {
+        if (!root.TryGetProperty("designOptions", out var design) || design.ValueKind != JsonValueKind.Object) {
+            return null;
+        }
+
+        return design.TryGetProperty("outputType", out var outputType) ? outputType.GetString() : null;
     }
 }

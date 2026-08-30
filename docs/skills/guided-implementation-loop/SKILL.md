@@ -58,9 +58,14 @@ For each task, in order:
 
 1. Call `validate_project` with `build: false` and `pack: false`.
 2. Confirm the files you wrote with `read_workflow_file` or `search_codebase`.
-3. Call `update_plan_task` → `done` only when validation succeeded and the files exist.
+3. If the task changed file counts or dependencies, call `sync_project_context`.
+   If it recorded a decision, call `manage_project_docs` action `write` kind `adr`.
+   If it recorded a convention or pitfall, call `manage_project_docs` action `write` kind `memory`.
+   If it deleted a feature, call `manage_project_docs` action `delete` (or update `relatedFiles`).
+4. Call `update_plan_task` → `done` only when validation succeeded, the files exist, and docs are current.
+   `update_plan_task(done)` will fail if those docs steps were skipped.
    On failure, `update_plan_task` → `blocked` with the validation errors in notes.
-4. Prefer `validate_project` to close the task. Do not treat `verify_work` as the green gate.
+5. Prefer `validate_project` to close the CLI gate. Do not treat `verify_work` as the green gate.
 
 ## Phase 4 — Close out
 

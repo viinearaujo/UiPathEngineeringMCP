@@ -1,6 +1,7 @@
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.CodeSearch;
+using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.Git;
@@ -19,7 +20,10 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
     public Dictionary<string, string> FileContents { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, long> FileSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> Writes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, DateTime> WriteTimesUtc { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> CreatedDirectories { get; } = [];
+    public List<string> DeletedFiles { get; } = [];
+    public DirectoryTreeNode? DirectoryTree { get; set; }
 
     public bool IsPathAllowed(string requestedPath) => Allowed;
     public string? FindProjectJson(string projectPath) => ProjectJson;
@@ -34,12 +38,30 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
         }
         return FileContents.TryGetValue(filePath, out var content) ? content.Length : ProjectJsonContent.Length;
     }
-    public DateTime GetLastWriteTimeUtc(string filePath) => DateTime.UnixEpoch;
-    public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) =>
-        new() { Name = Path.GetFileName(root) ?? root, Path = root, IsDirectory = true };
+    public DateTime GetLastWriteTimeUtc(string filePath) =>
+        WriteTimesUtc.TryGetValue(filePath, out var timestamp) ? timestamp : DateTime.UnixEpoch;
+    public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) {
+        if (DirectoryTree is not null) {
+            return DirectoryTree;
+        }
+
+        return FakeDirectoryTrees.FromKnownFiles(root, FileContents.Keys.Concat(Writes.Keys), maxDepth);
+    }
 
     public void CreateDirectory(string path) => CreatedDirectories.Add(path);
-    public void WriteAllText(string filePath, string content) => Writes[filePath] = content;
+    public void WriteAllText(string filePath, string content) {
+        Writes[filePath] = content;
+        FileContents[filePath] = content;
+        WriteTimesUtc[filePath] = DateTime.UtcNow;
+    }
+    public void DeleteFile(string filePath) {
+        DeletedFiles.Add(filePath);
+        FileContents.Remove(filePath);
+        Writes.Remove(filePath);
+        ExistingFiles.Remove(filePath);
+        FileSizes.Remove(filePath);
+        WriteTimesUtc.Remove(filePath);
+    }
     public bool FileExists(string path) => ExistingFiles.Contains(path) || FileContents.ContainsKey(path) || Writes.ContainsKey(path);
 }
 
@@ -205,4 +227,15 @@ internal sealed class FakeCodebaseSearchService : ICodebaseSearchService {
         LastProjectPath = projectPath; LastQuery = query;
         return Task.FromResult(WorkflowResult);
     }
+}
+
+internal static class DocsSupport {
+    public static ProjectKnowledgeStore Knowledge(IFilesystemProvider fs) => new(fs);
+    public static ProjectAdrStore Adrs(IFilesystemProvider fs) => new(fs);
+    public static ProjectDocsSearch Search(IFilesystemProvider fs) => new(fs, Knowledge(fs), Adrs(fs));
+    public static ProjectDocsValidator Validator(IFilesystemProvider fs) => new(fs, Knowledge(fs), Adrs(fs));
+    public static ProjectContextRenderer Renderer(IFilesystemProvider fs) => new(fs);
+
+    public static void SeedGeneratedContext(IFilesystemProvider fs, string projectPath, UiPathProjectModel? model = null) =>
+        Renderer(fs).Sync(projectPath, model ?? new UiPathProjectModel { ProjectName = "testProcess" });
 }

@@ -245,6 +245,35 @@ public class FilesystemProviderTests {
     }
 
     [Fact]
+    public void DeleteFile_InsideAllowedRoot_DeletesFile() {
+        using var temp = new TempDir();
+        var sut = CreateSut(temp.Path);
+        var target = Path.Combine(temp.Path, "notes.md");
+        File.WriteAllText(target, "x");
+
+        sut.DeleteFile(target);
+
+        Assert.False(File.Exists(target));
+        Assert.False(sut.FileExists(target));
+    }
+
+    [Fact]
+    public void DeleteFile_OutsideAllowedRoot_Throws() {
+        using var temp = new TempDir();
+        var sut = CreateSut(temp.Path);
+        var outside = Path.Combine(Path.GetTempPath(), "outside-" + Guid.NewGuid().ToString("N"), "notes.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(outside)!);
+        File.WriteAllText(outside, "x");
+
+        try {
+            Assert.Throws<UnauthorizedAccessException>(() => sut.DeleteFile(outside));
+            Assert.True(File.Exists(outside));
+        } finally {
+            try { File.Delete(outside); Directory.Delete(Path.GetDirectoryName(outside)!); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
     public void GetFileSize_ReturnsByteLength() {
         using var temp = new TempDir();
         var target = Path.Combine(temp.Path, "Main.xaml");

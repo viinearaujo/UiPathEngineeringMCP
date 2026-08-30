@@ -174,6 +174,14 @@ public sealed class FilesystemProvider : IFilesystemProvider {
         File.WriteAllText(Path.GetFullPath(filePath), content);
     }
 
+    public void DeleteFile(string filePath) {
+        EnsureAllowed(filePath);
+        var fullPath = Path.GetFullPath(filePath);
+        if (File.Exists(fullPath)) {
+            File.Delete(fullPath);
+        }
+    }
+
     public bool FileExists(string path) => File.Exists(Path.GetFullPath(path));
 
     private void EnsureAllowed(string path) {

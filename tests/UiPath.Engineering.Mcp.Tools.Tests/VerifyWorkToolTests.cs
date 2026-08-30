@@ -22,7 +22,8 @@ public class VerifyWorkToolTests : IDisposable {
         }
     }
 
-    private VerifyWorkTool CreateTool() => new(_fs, new FakeProjectModelBuilder(), _cli, _store);
+    private VerifyWorkTool CreateTool() =>
+        new(_fs, new FakeProjectModelBuilder(), _cli, _store, DocsSupport.Validator(_fs));
 
     // Seeds a plan whose task-1 expects Main.xaml, and registers Main.xaml as
     // existing for the filesystem fake (resolved the same way the tool resolves it).
@@ -32,6 +33,7 @@ public class VerifyWorkToolTests : IDisposable {
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main workflow", TargetFiles = ["Main.xaml"] }]
         });
         _fs.ExistingFiles.Add(Path.Combine(Path.GetFullPath(_projectPath), "Main.xaml"));
+        DocsSupport.SeedGeneratedContext(_fs, _projectPath);
     }
 
     [Fact]
@@ -169,6 +171,7 @@ public class VerifyWorkToolTests : IDisposable {
     [Fact]
     public async Task VerifyWork_WithoutTaskIds_OnlyChecksExpectedFiles() {
         _fs.ExistingFiles.Add(Path.Combine(Path.GetFullPath(_projectPath), "Out", "report.xaml"));
+        DocsSupport.SeedGeneratedContext(_fs, _projectPath);
         _cli.Result = new UiPathCliResult { Success = true, Summary = "Validation completed." };
 
         var result = await CreateTool().VerifyWork(_projectPath, expectedFiles: ["Out/report.xaml"]);

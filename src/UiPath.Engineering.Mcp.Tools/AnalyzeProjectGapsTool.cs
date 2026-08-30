@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.GapAnalysis;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
@@ -14,14 +15,20 @@ public sealed class AnalyzeProjectGapsTool {
     private readonly IFilesystemProvider _filesystem;
     private readonly IProjectModelBuilder _modelBuilder;
     private readonly ImplementationPlanStore _planStore;
+    private readonly ProjectDocsValidator _docsValidator;
 
-    public AnalyzeProjectGapsTool(IFilesystemProvider filesystem, IProjectModelBuilder modelBuilder, ImplementationPlanStore planStore) {
+    public AnalyzeProjectGapsTool(
+        IFilesystemProvider filesystem,
+        IProjectModelBuilder modelBuilder,
+        ImplementationPlanStore planStore,
+        ProjectDocsValidator docsValidator) {
         _filesystem = filesystem;
         _modelBuilder = modelBuilder;
         _planStore = planStore;
+        _docsValidator = docsValidator;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging/descriptions/tests, unresolved invocations), cross-checks the implementation plan, and names the MCP tool that fixes each gap.")]
+    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging/descriptions/tests, unresolved invocations), docs errors, and plan cross-checks, and names the MCP tool that fixes each gap.")]
     public async Task<ToolResult> AnalyzeProjectGaps(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {
@@ -35,7 +42,8 @@ public sealed class AnalyzeProjectGapsTool {
         try {
             var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
             var plan = _planStore.Load(projectPath);
-            var gaps = ProjectGapAnalyzer.Analyze(model, plan);
+            var docsFindings = _docsValidator.Validate(projectPath, model);
+            var gaps = ProjectGapAnalyzer.Analyze(model, plan, docsFindings);
 
             return ToolResults.Ok($"{gaps.Count} gap(s) found.", new {
                 gaps,
