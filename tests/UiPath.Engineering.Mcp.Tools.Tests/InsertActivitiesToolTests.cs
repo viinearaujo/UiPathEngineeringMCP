@@ -25,14 +25,14 @@ public class InsertActivitiesToolTests {
         var fs = new FakeFilesystemProvider();
         var target = Path.Combine(Path.GetFullPath(ProjectPath), "Main.xaml");
         fs.FileContents[target] = Workflow;
-        return (fs, new InsertActivitiesTool(fs), target);
+        return (fs, new InsertActivitiesTool(fs, TestCatalogs.Resolver(fs)), target);
     }
 
     [Fact]
-    public void InsertActivities_HappyPath_WritesOriginalContentPlusNewActivity() {
+    public async Task InsertActivities_HappyPath_WritesOriginalContentPlusNewActivity() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec, displayName: "Main");
+        var result = await tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec, displayName: "Main");
 
         Assert.Equal("success", result.Status);
         var written = fs.Writes[target];
@@ -42,10 +42,10 @@ public class InsertActivitiesToolTests {
     }
 
     [Fact]
-    public void InsertActivities_WhenSpecInvalid_ReturnsErrorAndDoesNotWrite() {
+    public async Task InsertActivities_WhenSpecInvalid_ReturnsErrorAndDoesNotWrite() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml",
+        var result = await tool.InsertActivities(ProjectPath, "Main.xaml",
             """{ "name": "NoSuchActivity", "properties": { "DisplayName": "X" } }""", displayName: "Main");
 
         Assert.Equal("error", result.Status);
@@ -53,20 +53,20 @@ public class InsertActivitiesToolTests {
     }
 
     [Fact]
-    public void InsertActivities_WhenSpecJsonMalformed_ReturnsErrorAndDoesNotWrite() {
+    public async Task InsertActivities_WhenSpecJsonMalformed_ReturnsErrorAndDoesNotWrite() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", "{ not json", displayName: "Main");
+        var result = await tool.InsertActivities(ProjectPath, "Main.xaml", "{ not json", displayName: "Main");
 
         Assert.Equal("error", result.Status);
         Assert.False(fs.Writes.ContainsKey(target));
     }
 
     [Fact]
-    public void InsertActivities_WhenTargetNotFound_SurfacesEditorError() {
+    public async Task InsertActivities_WhenTargetNotFound_SurfacesEditorError() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec, displayName: "Missing");
+        var result = await tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec, displayName: "Missing");
 
         Assert.Equal("error", result.Status);
         Assert.Contains("No activity found", result.Summary);
@@ -74,10 +74,10 @@ public class InsertActivitiesToolTests {
     }
 
     [Fact]
-    public void InsertActivities_SequenceRootWithoutVariables_InsertsChildrenNotWrapper() {
+    public async Task InsertActivities_SequenceRootWithoutVariables_InsertsChildrenNotWrapper() {
         var (fs, tool, target) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml",
+        var result = await tool.InsertActivities(ProjectPath, "Main.xaml",
             """
             {
               "name": "Sequence",
@@ -97,10 +97,10 @@ public class InsertActivitiesToolTests {
     }
 
     [Fact]
-    public void InsertActivities_RejectsNonXamlFile() {
+    public async Task InsertActivities_RejectsNonXamlFile() {
         var (_, tool, _) = CreateTool();
 
-        var result = tool.InsertActivities(ProjectPath, "Main.cs", AssignSpec, displayName: "Main");
+        var result = await tool.InsertActivities(ProjectPath, "Main.cs", AssignSpec, displayName: "Main");
 
         Assert.Equal("error", result.Status);
         Assert.Contains(".xaml", result.Summary);

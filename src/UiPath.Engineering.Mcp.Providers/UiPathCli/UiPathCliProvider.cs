@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Configuration;
+using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 
@@ -28,6 +29,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         // runs sequentially and the results are aggregated into a single structured response.
         var errors = new List<string>();
         var warnings = new List<string>();
+        var diagnostics = new List<CliDiagnostic>();
         var rawOutput = new List<string>();
         var executedCommands = new List<string>();
         var overallSuccess = true;
@@ -71,12 +73,14 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
                 Executed = true,
                 Success = stepResult.Success,
                 Errors = stepResult.Errors,
-                Warnings = stepResult.Warnings
+                Warnings = stepResult.Warnings,
+                Diagnostics = stepResult.Diagnostics
             };
 
             executedCommands.Add(stepResult.Command);
             errors.AddRange(stepResult.Errors);
             warnings.AddRange(stepResult.Warnings);
+            diagnostics.AddRange(stepResult.Diagnostics);
             rawOutput.AddRange(stepResult.RawOutputLines);
             lastExitCode = stepResult.ExitCode;
 
@@ -98,6 +102,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             Pack = stepResults["pack"],
             Errors = errors,
             Warnings = warnings,
+            Diagnostics = diagnostics,
             RawOutputLines = _options.IncludeRawOutput ? rawOutput : []
         };
     }
@@ -187,7 +192,9 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             };
         }
 
-        var (errors, warnings) = UiPathCliOutputParser.Parse(verb, run.StdOut, run.StdErr);
+        var parsed = UiPathCliOutputParser.Parse(verb, run.StdOut, run.StdErr);
+        var errors = parsed.Errors;
+        var warnings = parsed.Warnings;
 
         if (run.ExitCode != 0 && errors.Count == 0) {
             // The process failed without emitting any recognizable error line;
@@ -210,6 +217,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             Summary = run.ExitCode == 0 ? $"'{verb}' completed." : $"'{verb}' failed.",
             Errors = errors,
             Warnings = warnings,
+            Diagnostics = parsed.Diagnostics,
             RawOutputLines = rawLines,
             StdOut = stdout,
             StdErr = stderr

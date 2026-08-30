@@ -113,11 +113,11 @@ public class EditActivityByIdToolTests {
     }
 
     [Fact]
-    public void InsertActivities_ById_InsertsIntoResolvedContainer() {
+    public async Task InsertActivities_ById_InsertsIntoResolvedContainer() {
         var (fs, target) = FilesystemWithWorkflow();
-        var tool = new InsertActivitiesTool(fs);
+        var tool = new InsertActivitiesTool(fs, TestCatalogs.Resolver(fs));
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec,
+        var result = await tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec,
             activityId: "sequence.1");
 
         Assert.Equal("success", result.Status);
@@ -125,11 +125,11 @@ public class EditActivityByIdToolTests {
     }
 
     [Fact]
-    public void InsertActivities_NeitherIdNorDisplayName_ReturnsInvalidArgument() {
+    public async Task InsertActivities_NeitherIdNorDisplayName_ReturnsInvalidArgument() {
         var (fs, _) = FilesystemWithWorkflow();
-        var tool = new InsertActivitiesTool(fs);
+        var tool = new InsertActivitiesTool(fs, TestCatalogs.Resolver(fs));
 
-        var result = tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec);
+        var result = await tool.InsertActivities(ProjectPath, "Main.xaml", AssignSpec);
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.InvalidArgument);

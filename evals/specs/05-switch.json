@@ -1,0 +1,21 @@
+{
+  "name": "Switch",
+  "properties": { "expression": "[status]", "typeArgument": "Int32" },
+  "cases": [
+    {
+      "key": "1",
+      "children": [
+        { "name": "WriteLine", "properties": { "text": "\"open\"" } }
+      ]
+    },
+    {
+      "key": "2",
+      "children": [
+        { "name": "LogMessage", "properties": { "message": "\"closed\"", "level": "Info" } }
+      ]
+    }
+  ],
+  "default": [
+    { "name": "Rethrow" }
+  ]
+}

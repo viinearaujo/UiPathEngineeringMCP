@@ -5,7 +5,10 @@ namespace UiPath.Engineering.Mcp.Core.Authoring;
 public static class SpecValidator
 {
     // Returns all violations; empty list == valid. path e.g. "children[0].children[0]"
-    public static List<ToolError> Validate(ActivitySpec spec)
+    public static List<ToolError> Validate(ActivitySpec spec) =>
+        Validate(spec, ActivityCatalog.Fallback);
+
+    public static List<ToolError> Validate(ActivitySpec spec, IActivityCatalog catalog)
     {
         var errors = new List<ToolError>();
         if (spec is null || string.IsNullOrWhiteSpace(spec.Name))
@@ -18,22 +21,23 @@ public static class SpecValidator
             return errors;
         }
 
-        Walk(spec, path: spec.Name, isRoot: true, errors);
+        Walk(spec, path: spec.Name, isRoot: true, errors, catalog);
         return errors;
     }
 
-    private static void Walk(ActivitySpec spec, string path, bool isRoot, List<ToolError> errors)
+    private static void Walk(ActivitySpec spec, string path, bool isRoot, List<ToolError> errors, IActivityCatalog catalog)
     {
-        if (!ActivityCatalog.TryGet(spec.Name, out var schema))
+        if (!catalog.TryGet(spec.Name, out var schema))
         {
-            var suggestion = ActivityCatalog.Suggest(spec.Name);
+            var suggestion = catalog.Suggest(spec.Name);
             var fixHint = suggestion is null
-                ? "Pick an activity name from the catalog (case-insensitive)."
+                ? "Pick an activity name from the catalog (case-insensitive), or call recommend_activities."
                 : $"Did you mean \"{suggestion}\"? Use a catalog activity name (case-insensitive).";
             errors.Add(new ToolError(
                 ToolErrorCodes.SpecUnknownActivity,
                 $"Unknown activity \"{spec.Name}\" at {path}.",
-                fixHint));
+                fixHint,
+                "recommend_activities"));
             // Skip validating inside the unknown activity itself (no schema to check
             // against); its children are still validated below to avoid cascaded noise.
         }
@@ -46,7 +50,36 @@ public static class SpecValidator
         {
             for (var i = 0; i < spec.Children.Count; i++)
             {
-                Walk(spec.Children[i], $"{path}.children[{i}]", isRoot: false, errors);
+                Walk(spec.Children[i], $"{path}.children[{i}]", isRoot: false, errors, catalog);
+            }
+        }
+
+        if (spec.Else is not null)
+        {
+            for (var i = 0; i < spec.Else.Count; i++)
+            {
+                Walk(spec.Else[i], $"{path}.else[{i}]", isRoot: false, errors, catalog);
+            }
+        }
+
+        if (spec.Default is not null)
+        {
+            for (var i = 0; i < spec.Default.Count; i++)
+            {
+                Walk(spec.Default[i], $"{path}.default[{i}]", isRoot: false, errors, catalog);
+            }
+        }
+
+        if (spec.Cases is not null)
+        {
+            for (var i = 0; i < spec.Cases.Count; i++)
+            {
+                var catchChildren = spec.Cases[i].Children;
+                if (catchChildren is null) continue;
+                for (var j = 0; j < catchChildren.Count; j++)
+                {
+                    Walk(catchChildren[j], $"{path}.cases[{i}].children[{j}]", isRoot: false, errors, catalog);
+                }
             }
         }
 
@@ -58,7 +91,7 @@ public static class SpecValidator
                 if (catchChildren is null) continue;
                 for (var j = 0; j < catchChildren.Count; j++)
                 {
-                    Walk(catchChildren[j], $"{path}.catches[{i}].children[{j}]", isRoot: false, errors);
+                    Walk(catchChildren[j], $"{path}.catches[{i}].children[{j}]", isRoot: false, errors, catalog);
                 }
             }
         }
@@ -118,6 +151,96 @@ public static class SpecValidator
                 $"Activity \"{schema.Name}\" at {path} declares catches, which are only allowed on TryCatch.",
                 "Move the 'catches' list onto a TryCatch activity."));
         }
+
+        if (spec.Else is { Count: > 0 } && schema.Name != "If")
+        {
+            errors.Add(new ToolError(
+                ToolErrorCodes.SpecInvalidNesting,
+                $"Activity \"{schema.Name}\" at {path} declares else, which is only allowed on If.",
+                "Move the 'else' list onto an If activity (Children is the Then branch)."));
+        }
+
+        if (spec.Cases is { Count: > 0 } && schema.Name != "Switch")
+        {
+            errors.Add(new ToolError(
+                ToolErrorCodes.SpecInvalidNesting,
+                $"Activity \"{schema.Name}\" at {path} declares cases, which are only allowed on Switch.",
+                "Move the 'cases' list onto a Switch activity."));
+        }
+
+        if (spec.Default is { Count: > 0 } && schema.Name != "Switch")
+        {
+            errors.Add(new ToolError(
+                ToolErrorCodes.SpecInvalidNesting,
+                $"Activity \"{schema.Name}\" at {path} declares default, which is only allowed on Switch.",
+                "Move the 'default' list onto a Switch activity."));
+        }
+
+        if (spec.Arguments is { Count: > 0 } && schema.Name != "InvokeWorkflowFile")
+        {
+            errors.Add(new ToolError(
+                ToolErrorCodes.SpecInvalidNesting,
+                $"Activity \"{schema.Name}\" at {path} declares arguments, which are only allowed on InvokeWorkflowFile.",
+                "Move the 'arguments' list onto an InvokeWorkflowFile activity."));
+        }
+
+        if (schema.Name == "Switch" && spec.Children is { Count: > 0 })
+        {
+            errors.Add(new ToolError(
+                ToolErrorCodes.SpecInvalidNesting,
+                $"Switch at {path} uses 'children'; Switch branches belong in 'cases' and 'default'.",
+                "Replace 'children' with 'cases': [{ \"key\": \"1\", \"children\": [...] }] and optional 'default'."));
+        }
+
+        if (schema.Name == "Switch" && spec.Cases is not null)
+        {
+            for (var i = 0; i < spec.Cases.Count; i++)
+            {
+                if (string.IsNullOrWhiteSpace(spec.Cases[i].Key))
+                {
+                    errors.Add(new ToolError(
+                        ToolErrorCodes.SpecMissingRequiredProperty,
+                        $"Switch case at {path}.cases[{i}] is missing required property \"key\".",
+                        "Set \"key\" to the literal compared against Expression, e.g. \"1\" or \"Open\"."));
+                }
+            }
+        }
+
+        if (schema.Name == "InvokeWorkflowFile" && spec.Arguments is not null)
+        {
+            for (var i = 0; i < spec.Arguments.Count; i++)
+            {
+                var argument = spec.Arguments[i];
+                if (string.IsNullOrWhiteSpace(argument.Name))
+                {
+                    errors.Add(new ToolError(
+                        ToolErrorCodes.SpecMissingRequiredProperty,
+                        $"Invoke argument at {path}.arguments[{i}] is missing required property \"name\".",
+                        "Set \"name\" to the target workflow argument, e.g. \"in_FilePath\"."));
+                }
+
+                if (!IsKnownDirection(argument.Direction))
+                {
+                    errors.Add(new ToolError(
+                        ToolErrorCodes.SpecValueFormMismatch,
+                        $"Invoke argument \"{argument.Name}\" at {path}.arguments[{i}] has direction \"{argument.Direction}\".",
+                        "Use direction \"In\", \"Out\", or \"InOut\"."));
+                }
+            }
+        }
+    }
+
+    internal static bool IsKnownDirection(string? direction)
+    {
+        if (string.IsNullOrWhiteSpace(direction))
+        {
+            return true; // defaults to In at render time
+        }
+
+        return direction.Equals("In", StringComparison.OrdinalIgnoreCase)
+            || direction.Equals("Out", StringComparison.OrdinalIgnoreCase)
+            || direction.Equals("InOut", StringComparison.OrdinalIgnoreCase)
+            || direction.Equals("In/Out", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ContainsProperty(Dictionary<string, string> properties, string name) =>

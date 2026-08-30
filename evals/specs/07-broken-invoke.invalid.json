@@ -1,0 +1,11 @@
+{
+  "name": "Sequence",
+  "children": [
+    {
+      "name": "InvokeWorkflowFile",
+      "arguments": [
+        { "name": "in_Path", "direction": "In", "type": "String", "value": "[filePath]" }
+      ]
+    }
+  ]
+}

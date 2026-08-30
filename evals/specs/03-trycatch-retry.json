@@ -1,0 +1,25 @@
+{
+  "name": "Sequence",
+  "children": [
+    {
+      "name": "RetryScope",
+      "properties": { "numberOfRetries": "3", "retryInterval": "00:00:05" },
+      "children": [
+        {
+          "name": "TryCatch",
+          "children": [
+            { "name": "LogMessage", "properties": { "message": "\"attempt\"", "level": "Info" } }
+          ],
+          "catches": [
+            {
+              "exception": "System.Exception",
+              "children": [
+                { "name": "LogMessage", "properties": { "message": "[ex.Message]", "level": "Error" } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 using System.ComponentModel;
 
@@ -17,7 +18,7 @@ public sealed class ValidateProjectTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Runs UiPath CLI validate / build / pack and returns structured per-step results. Agent green gate is validate:true, build:false, pack:false, then update_plan_task. Do not use verify_work as the done gate. For an authoritative compile only, use compile_project.")]
+    [McpServerTool(UseStructuredContent = true), Description("Runs UiPath CLI validate / build / pack and returns structured per-step results plus diagnostics mapped to snapshot activity IDs. Each diagnostic is { activityId, property, message, specFix }. Agent green gate is validate:true, build:false, pack:false, then update_plan_task. Do not use verify_work as the done gate. For an authoritative compile only, use compile_project.")]
     public async Task<ToolResult> ValidateProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Run validate (project diagnostics)?")] bool validate = true,
@@ -33,6 +34,7 @@ public sealed class ValidateProjectTool {
 
         try {
             var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, cancellationToken);
+            var diagnostics = ProjectDiagnostics(projectPath, cliResult);
 
             return new ToolResult {
                 Status = cliResult.Success ? "success" : "error",
@@ -44,7 +46,8 @@ public sealed class ValidateProjectTool {
                     pack = StepData(cliResult.Pack),
                     errors = cliResult.Errors,
                     warnings = cliResult.Warnings,
-                    recommendations = BuildRecommendations(cliResult)
+                    diagnostics,
+                    recommendations = BuildRecommendations(cliResult, diagnostics)
                 },
                 Errors = cliResult.Errors,
                 Warnings = cliResult.Warnings,
@@ -55,6 +58,22 @@ public sealed class ValidateProjectTool {
         }
     }
 
+    private List<object> ProjectDiagnostics(string projectPath, UiPathCliResult cliResult) {
+        var mapped = ValidateDiagnosticMapper.Map(projectPath, _filesystem, cliResult.Diagnostics);
+        return mapped.Select(ToPayload).ToList();
+    }
+
+    private static object ToPayload(ValidateFixDiagnostic diagnostic) => new {
+        activityId = diagnostic.ActivityId,
+        property = diagnostic.Property,
+        message = diagnostic.Message,
+        specFix = diagnostic.SpecFix is null ? null : new {
+            workflowFile = diagnostic.SpecFix.WorkflowFile,
+            properties = diagnostic.SpecFix.Properties,
+            hint = diagnostic.SpecFix.Hint
+        }
+    };
+
     private static object StepData(CliStepResult step) => new {
         executed = step.Executed,
         success = step.Executed && step.Success,
@@ -62,11 +81,16 @@ public sealed class ValidateProjectTool {
         warnings = step.Warnings
     };
 
-    private static List<string> BuildRecommendations(UiPathCliResult result) {
+    private static List<string> BuildRecommendations(UiPathCliResult result, List<object> diagnostics) {
         var recommendations = new List<string>();
         AddRecommendation(recommendations, "validate", result.Validate);
         AddRecommendation(recommendations, "build", result.Build);
         AddRecommendation(recommendations, "pack", result.Pack);
+        if (diagnostics.Count > 0) {
+            recommendations.Add(
+                "Apply diagnostics[].specFix to the activity at diagnostics[].activityId (edit_workflow_activity / insert_activities), then re-run validate_project.");
+        }
+
         return recommendations;
     }
 

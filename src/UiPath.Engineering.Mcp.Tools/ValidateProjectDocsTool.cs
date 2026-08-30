@@ -23,7 +23,7 @@ public sealed class ValidateProjectDocsTool {
         _validator = validator;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Inspects project docs without changing plan state. Returns the same findings used by update_plan_task(done) and verify_work. Error findings block marking a task done.")]
+    [McpServerTool(UseStructuredContent = true), Description("Inspects project docs without changing plan state. Wiki hygiene only — findings do not block update_plan_task(done). verify_work still refuses auto-done on docs errors.")]
     public async Task<ToolResult> ValidateProjectDocs(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         CancellationToken cancellationToken = default) {

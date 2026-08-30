@@ -11,4 +11,5 @@ public sealed record PropertySchema(string Name, bool Required, PropertyKind Kin
 
 public sealed record ActivitySchema(
     string Name, string Prefix, string XmlNamespace, bool IsContainer,
-    IReadOnlyList<PropertySchema> Properties, bool Experimental = false);
+    IReadOnlyList<PropertySchema> Properties, bool Experimental = false,
+    string? PackageId = null, string? PackageVersion = null, string? FullTypeName = null);

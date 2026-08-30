@@ -115,8 +115,7 @@ public class UpdatePlanTaskToolTests : IDisposable {
         }
     }
 
-    private UpdatePlanTaskTool CreateTool() =>
-        new(_fs, _store, new FakeProjectModelBuilder(), DocsSupport.Validator(_fs));
+    private UpdatePlanTaskTool CreateTool() => new(_fs, _store);
 
     private void SeedPlan() => _store.Save(_projectPath, new ImplementationPlan {
         Goal = "g",
@@ -180,21 +179,20 @@ public class UpdatePlanTaskToolTests : IDisposable {
     }
 
     [Fact]
-    public async Task UpdatePlanTask_Done_RefusedWhenGeneratedContextIsStale() {
+    public async Task UpdatePlanTask_Done_SucceedsWhenGeneratedContextIsStale() {
         SeedPlan();
         await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.InProgress);
 
         var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
 
-        Assert.Equal("error", result.Status);
-        Assert.Contains(result.ErrorDetails, e => e.ErrorCode == UiPath.Engineering.Mcp.Core.ToolErrorCodes.DocsStale);
-        Assert.Equal(PlanTask.InProgress, _store.Load(_projectPath)!.Tasks[0].Status);
+        Assert.Equal("success", result.Status);
+        Assert.Equal(PlanTask.Done, _store.Load(_projectPath)!.Tasks[0].Status);
+        Assert.DoesNotContain(result.ErrorDetails, e => e.ErrorCode == UiPath.Engineering.Mcp.Core.ToolErrorCodes.DocsStale);
     }
 
     [Fact]
-    public async Task UpdatePlanTask_Done_AllowedAfterSync() {
+    public async Task UpdatePlanTask_Done_DoesNotRequireDocsSync() {
         SeedPlan();
-        DocsSupport.SeedGeneratedContext(_fs, _projectPath);
 
         var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
 

@@ -13,3 +13,7 @@ appsettings.Local.json
 *.env
 .uipath/.skills/
 .worktrees/
+.repowise/
+
+# CocoIndex Code (ccc)
+/.cocoindex_code/

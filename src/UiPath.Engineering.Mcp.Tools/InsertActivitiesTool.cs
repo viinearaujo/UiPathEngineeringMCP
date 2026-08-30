@@ -12,20 +12,23 @@ namespace UiPath.Engineering.Mcp.Tools;
 [McpServerToolType]
 public sealed class InsertActivitiesTool {
     private readonly IFilesystemProvider _filesystem;
+    private readonly IActivityCatalogResolver _catalogResolver;
 
-    public InsertActivitiesTool(IFilesystemProvider filesystem) {
+    public InsertActivitiesTool(IFilesystemProvider filesystem, IActivityCatalogResolver catalogResolver) {
         _filesystem = filesystem;
+        _catalogResolver = catalogResolver;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Inserts activities described by a JSON activity spec into an existing .xaml workflow, as children of the container activity targeted by activityId (preferred, from find_activity) or by DisplayName (the spec-based sibling of edit_workflow_activity). Run validate_activity_spec first to dry-run the spec and see every violation before writing. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only) }. A root Sequence without variables inserts its children directly; any other root is inserted as a single node. Strings enclosed in square brackets ([expr]) are interpreted as expressions; all other values are literals.")]
-    public ToolResult InsertActivities(
+    [McpServerTool(UseStructuredContent = true), Description("Inserts activities described by a JSON activity spec into an existing .xaml workflow, as children of the container activity targeted by activityId (preferred, from find_activity) or by DisplayName (the spec-based sibling of edit_workflow_activity). Run validate_activity_spec first to dry-run the spec and see every violation before writing. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }. A root Sequence without variables inserts its children directly; any other root is inserted as a single node. Strings enclosed in square brackets ([expr]) are interpreted as expressions; all other values are literals.")]
+    public async Task<ToolResult> InsertActivities(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,
         [Description("JSON activity spec describing what to insert, e.g. { \"name\": \"Sequence\", \"children\": [...] }. Run validate_activity_spec on it first.")] string specJson,
         [Description("DisplayName of the container activity that receives the new activities. Optional when activityId is supplied.")] string? displayName = null,
         [Description("Activity ID of the container, from find_activity — the preferred way to target it.")] string? activityId = null,
         [Description("Where to add the activities inside the container — first or last (default).")] string position = XamlActivityEditor.Last,
-        [Description("Optional activity type (e.g. 'Sequence') to disambiguate when several activities share the DisplayName.")] string? activityType = null) {
+        [Description("Optional activity type (e.g. 'Sequence') to disambiguate when several activities share the DisplayName.")] string? activityType = null,
+        CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
 
@@ -62,7 +65,8 @@ public sealed class InsertActivitiesTool {
             return ToolResults.Failure(deserializeError!, sw);
         }
 
-        if (!TryRenderFragment(spec!, out var fragment, out var renderErrors)) {
+        var catalog = await _catalogResolver.ResolveAsync(projectPath, cancellationToken);
+        if (!TryRenderFragment(spec!, catalog, out var fragment, out var renderErrors)) {
             return ToolResults.Failure($"The activity spec has {renderErrors.Count} violation(s).", renderErrors, sw);
         }
 
@@ -93,13 +97,13 @@ public sealed class InsertActivitiesTool {
     // A root Sequence without variables is a convenience wrapper for multiple
     // siblings: render each child separately and concatenate. Anything else
     // (including a Sequence with variables) is rendered as one node.
-    private static bool TryRenderFragment(ActivitySpec spec, out string fragment, out List<ToolError> errors) {
+    private static bool TryRenderFragment(ActivitySpec spec, IActivityCatalog catalog, out string fragment, out List<ToolError> errors) {
         if (string.Equals(spec.Name, "Sequence", StringComparison.OrdinalIgnoreCase)
             && spec.Variables is not { Count: > 0 }) {
             var parts = new List<string>();
             errors = [];
             foreach (var child in spec.Children ?? []) {
-                var build = XamlBuilder.RenderFragment(child);
+                var build = XamlBuilder.RenderFragment(child, catalog);
                 if (!build.Success) {
                     errors = build.Errors;
                     fragment = string.Empty;
@@ -111,7 +115,7 @@ public sealed class InsertActivitiesTool {
             return true;
         }
 
-        var rootBuild = XamlBuilder.RenderFragment(spec);
+        var rootBuild = XamlBuilder.RenderFragment(spec, catalog);
         if (!rootBuild.Success) {
             fragment = string.Empty;
             errors = rootBuild.Errors;

@@ -7,7 +7,7 @@ public class ActivityCatalogTests
     [Theory]
     [InlineData("Sequence", true)]
     [InlineData("sequence", true)]   // case-insensitive
-    [InlineData("LogMessage", true)]
+    [InlineData("Switch", true)]
     [InlineData("NotAnActivity", false)]
     public void TryGet_KnownAndUnknown(string name, bool expected) =>
         Assert.Equal(expected, ActivityCatalog.TryGet(name, out _));

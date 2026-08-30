@@ -199,4 +199,32 @@ public class XamlWorkflowParserTests {
         Assert.Contains(invoke.ArgumentMappings,
             m => m.Direction == "Out" && m.TargetArgument == "out_Result" && m.Expression == "[result]");
     }
+
+    [Fact]
+    public void Parse_ExtractsInvokeArgumentsInsideDictionary() {
+        const string xaml = """
+        <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                  xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:scg="clr-namespace:System.Collections.Generic;assembly=System.Private.CoreLib">
+          <Sequence DisplayName="Main">
+            <ui:InvokeWorkflowFile DisplayName="Invoke child" WorkflowFileName="Child.xaml">
+              <ui:InvokeWorkflowFile.Arguments>
+                <scg:Dictionary x:TypeArguments="x:String, Argument">
+                  <InArgument x:TypeArguments="x:String" x:Key="in_Path">[filePath]</InArgument>
+                </scg:Dictionary>
+              </ui:InvokeWorkflowFile.Arguments>
+            </ui:InvokeWorkflowFile>
+          </Sequence>
+        </Activity>
+        """;
+
+        var model = Parse(xaml);
+
+        var invoke = Assert.Single(model.InvokeWorkflows);
+        var mapping = Assert.Single(invoke.ArgumentMappings);
+        Assert.Equal("In", mapping.Direction);
+        Assert.Equal("in_Path", mapping.TargetArgument);
+        Assert.Equal("[filePath]", mapping.Expression);
+    }
 }

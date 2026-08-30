@@ -14,13 +14,7 @@ This playbook is **RPA project files only** (`.xaml` / `.cs`). If the user asks 
 
 ## MCP clients (Copilot Studio)
 
-When working through the UiPath Engineering MCP:
-
-1. Read this SKILL.md once per implementation. For multi-step feature work, also read `guided-implementation-loop`.
-2. Author with MCP tools — never hand-write XAML: `validate_activity_spec` then `build_workflow` / `insert_activities` / `manage_workflow_data`. Confirm writes with `read_workflow_file` or `search_codebase`.
-3. Green gate: `validate_project` with `build: false` and `pack: false`, then `update_plan_task`. Do not use `verify_work` as the done gate.
-4. Live selector indication and Object Repository capture are out of Copilot scope. Use the Placeholder-Selector Stub Pattern and leave Indicate work for Studio.
-5. Prefer MCP tools over recalling `uip` flags from memory. `run_ui_path_cli` is allowlisted and mutation-restricted; do not treat it as a product-catalog shell.
+When Copilot has `read_skill`, open this file once to see which reference to read for the task at hand. The Copilot authoring loop (analyze → spec author → `validate_project(build:false, pack:false)` → `update_plan_task`) is in `docs/copilot-studio-agent-instructions.txt`. Live selector indication and Object Repository capture are out of Copilot scope; use the Placeholder-Selector Stub Pattern and leave Indicate work for Studio.
 
 > **Reading the referenced files is imperative — read each required file in full.** This SKILL.md is a router: it tells you *which* reference to open, not *what* it says. When a rule, the Task Navigation table, or a section points you to a reference for the task at hand, open it and read the **whole** file before acting — do not grep it for a keyword, skim the first screen, fall back to `--help`, or substitute prior knowledge. Most errors that slip past `validate` and surface at `build` or runtime trace back to a reference that was skipped or only partially read.
 

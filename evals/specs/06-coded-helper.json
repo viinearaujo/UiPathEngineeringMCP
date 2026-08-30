@@ -1,0 +1,12 @@
+{
+  "name": "Sequence",
+  "children": [
+    {
+      "name": "InvokeCode",
+      "properties": {
+        "code": "var normalized = InvoiceHelper.Normalize(\"  ABC  \");",
+        "language": "CSharp"
+      }
+    }
+  ]
+}

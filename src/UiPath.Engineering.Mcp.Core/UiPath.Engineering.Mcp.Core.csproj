@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Tools" />
+    <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Core.Tests" />
+    <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Tools.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -129,4 +129,72 @@ public class SpecValidatorTests
         var spec = JsonSerializer.Deserialize<ActivitySpec>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
         Assert.Empty(SpecValidator.Validate(spec));
     }
+
+    [Fact]
+    public void Validate_IfElse_NoErrors()
+    {
+        var spec = new ActivitySpec
+        {
+            Name = "If",
+            Properties = new() { ["condition"] = "[flag]" },
+            Children = [new ActivitySpec { Name = "Rethrow" }],
+            Else = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"no\"" } }]
+        };
+        Assert.Empty(SpecValidator.Validate(spec));
+    }
+
+    [Fact]
+    public void Validate_ElseOnNonIf_InvalidNesting()
+    {
+        var spec = new ActivitySpec { Name = "Sequence", Else = [new ActivitySpec { Name = "Rethrow" }] };
+        Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
+    }
+
+    [Fact]
+    public void Validate_Switch_MissingKey_MissingRequired()
+    {
+        var spec = new ActivitySpec
+        {
+            Name = "Switch",
+            Properties = new() { ["expression"] = "[status]", ["typeArgument"] = "Int32" },
+            Cases = [new SwitchCaseSpec { Key = "", Children = [new ActivitySpec { Name = "Rethrow" }] }]
+        };
+        Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecMissingRequiredProperty);
+    }
+
+    [Fact]
+    public void Validate_Switch_ChildrenInsteadOfCases_InvalidNesting()
+    {
+        var spec = new ActivitySpec
+        {
+            Name = "Switch",
+            Properties = new() { ["expression"] = "[status]", ["typeArgument"] = "Int32" },
+            Children = [new ActivitySpec { Name = "Rethrow" }]
+        };
+        Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
+    }
+
+    [Fact]
+    public void Validate_InvokeArguments_InvalidDirection()
+    {
+        var spec = new ActivitySpec
+        {
+            Name = "InvokeWorkflowFile",
+            Properties = new() { ["workflowFileName"] = "Child.xaml" },
+            Arguments = [new ArgumentMappingSpec { Name = "in_X", Direction = "Sideways", Value = "[x]" }]
+        };
+        Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecValueFormMismatch);
+    }
+
+    [Fact]
+    public void Validate_ArgumentsOnNonInvoke_InvalidNesting()
+    {
+        var spec = new ActivitySpec
+        {
+            Name = "LogMessage",
+            Properties = new() { ["message"] = "[x]" },
+            Arguments = [new ArgumentMappingSpec { Name = "in_X" }]
+        };
+        Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
+    }
 }

@@ -26,4 +26,8 @@
     <ProjectReference Include="..\..\src\UiPath.Engineering.Mcp.Tools\UiPath.Engineering.Mcp.Tools.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\evals\specs\*.json" CopyToOutputDirectory="PreserveNewest" Link="evals\specs\%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

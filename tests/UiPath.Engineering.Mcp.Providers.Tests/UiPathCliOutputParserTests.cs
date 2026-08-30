@@ -200,4 +200,103 @@ public class UiPathCliOutputParserTests {
         Assert.DoesNotContain("abc123secret", warning);
         Assert.Contains("***REDACTED***", warning);
     }
+
+    [Fact]
+    public void Parse_JsonDataErrorArray_ExtractsActivityFields() {
+        const string stdOut = """
+            {"Result":"Failure","Message":"Validation failed.","Data":{"Errors":[{"filePath":"Main.xaml","line":8,"activityIdRef":"LogMessage_1","property":"Message","message":"'foo' is not declared.","recommendation":"Bind Message to a declared variable."}]}}
+            """;
+
+        var parsed = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        var diagnostic = Assert.Single(parsed.Diagnostics);
+        Assert.Equal("Main.xaml", diagnostic.FilePath);
+        Assert.Equal(8, diagnostic.Line);
+        Assert.Equal("LogMessage_1", diagnostic.IdRef);
+        Assert.Equal("Message", diagnostic.Property);
+        Assert.Equal("'foo' is not declared.", diagnostic.Message);
+        Assert.Equal("Bind Message to a declared variable.", diagnostic.Recommendation);
+        var error = Assert.Single(parsed.Errors);
+        Assert.Contains("Main.xaml(8)", error);
+        Assert.Contains("'foo' is not declared.", error);
+        Assert.DoesNotContain("Validation failed.", error);
+    }
+
+    [Fact]
+    public void Parse_AnalyzerViolationArray_ReadsItemPropertyAndDisplayName() {
+        const string stdOut = """
+            {"Result":"Failure","Data":[{"FilePath":"Main.xaml","ErrorCode":"ST-NMG-002","ActivityDisplayName":"Log Message","ErrorSeverity":"Error","Description":"Activity names should follow the naming convention.","Recommendation":"Rename the activity.","Item":{"Name":"DisplayName","Type":"Property"}}]}
+            """;
+
+        var parsed = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        var diagnostic = Assert.Single(parsed.Diagnostics);
+        Assert.Equal("Main.xaml", diagnostic.FilePath);
+        Assert.Equal("ST-NMG-002", diagnostic.Code);
+        Assert.Equal("Log Message", diagnostic.DisplayName);
+        Assert.Equal("DisplayName", diagnostic.Property);
+        Assert.Equal("Rename the activity.", diagnostic.Recommendation);
+        Assert.Contains("ST-NMG-002", parsed.Errors[0]);
+    }
+
+    [Fact]
+    public void Parse_BuildCompilerLineInDataErrors_ExtractsFileAndLine() {
+        const string stdOut = """
+            {"Result":"Failure","Message":"Build failed.","Data":{"Errors":["Main.xaml(12,5): error BC30451: 'foo' is not declared."]}}
+            """;
+
+        var parsed = UiPathCliOutputParser.Parse("build", stdOut, "");
+
+        var diagnostic = Assert.Single(parsed.Diagnostics);
+        Assert.Equal("Main.xaml", diagnostic.FilePath);
+        Assert.Equal(12, diagnostic.Line);
+        Assert.Equal("BC30451", diagnostic.Code);
+        Assert.Equal("'foo' is not declared.", diagnostic.Message);
+        Assert.Contains("Main.xaml(12)", parsed.Errors[0]);
+        Assert.Contains("BC30451", parsed.Errors[0]);
+    }
+
+    [Fact]
+    public void Parse_CompilerLineOnStdout_ExtractsDiagnosticWithoutJson() {
+        const string stdOut = "Main.xaml(8,10): error BC30451: The property 'Value' does not exist.";
+
+        var parsed = UiPathCliOutputParser.Parse("build", stdOut, "");
+
+        var diagnostic = Assert.Single(parsed.Diagnostics);
+        Assert.Equal("Main.xaml", diagnostic.FilePath);
+        Assert.Equal(8, diagnostic.Line);
+        Assert.Equal("Value", diagnostic.Property);
+        Assert.Equal("BC30451", diagnostic.Code);
+        Assert.Single(parsed.Errors);
+    }
+
+    [Fact]
+    public void Parse_JsonDataWarning_GoesToWarningsNotErrors() {
+        const string stdOut = """
+            {"Result":"Success","Data":{"Warnings":[{"filePath":"Main.xaml","message":"Activity 'Write Line' should not be used.","errorCode":"ST-DBP-020"}]}}
+            """;
+
+        var parsed = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        Assert.Empty(parsed.Errors);
+        var warning = Assert.Single(parsed.Warnings);
+        Assert.Contains("ST-DBP-020", warning);
+        var diagnostic = Assert.Single(parsed.Diagnostics);
+        Assert.Equal("warning", diagnostic.Severity);
+        Assert.Equal("Main.xaml", diagnostic.FilePath);
+    }
+
+    [Fact]
+    public void Parse_JsonDiagnosticMessageContainingSecret_IsRedacted() {
+        const string stdOut = """
+            {"Result":"Failure","Data":{"Errors":[{"filePath":"Main.xaml","message":"Auth failed: token=abc123secret was rejected"}]}}
+            """;
+
+        var parsed = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        var diagnostic = Assert.Single(parsed.Diagnostics);
+        Assert.DoesNotContain("abc123secret", diagnostic.Message);
+        Assert.Contains("***REDACTED***", diagnostic.Message);
+        Assert.DoesNotContain("abc123secret", parsed.Errors[0]);
+    }
 }

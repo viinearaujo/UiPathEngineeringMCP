@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -70,33 +71,33 @@ public class WriteWorkflowFileToolTests {
     private const string ProjectPath = "/projects/testProcess";
 
     [Fact]
-    public void WriteWorkflowFile_RejectsDisallowedExtension() {
+    public async Task WriteWorkflowFile_RejectsDisallowedExtension() {
         var fs = new FakeFilesystemProvider();
-        var tool = new WriteWorkflowFileTool(fs);
+        var tool = new WriteWorkflowFileTool(fs, TestCatalogs.Resolver(fs));
 
-        var result = tool.WriteWorkflowFile(ProjectPath, "notes.txt", "hello");
+        var result = await tool.WriteWorkflowFile(ProjectPath, "notes.txt", "hello");
 
         Assert.Equal("error", result.Status);
         Assert.Empty(fs.Writes);
     }
 
     [Fact]
-    public void WriteWorkflowFile_RejectsPathOutsideProject() {
+    public async Task WriteWorkflowFile_RejectsPathOutsideProject() {
         var fs = new FakeFilesystemProvider();
-        var tool = new WriteWorkflowFileTool(fs);
+        var tool = new WriteWorkflowFileTool(fs, TestCatalogs.Resolver(fs));
 
-        var result = tool.WriteWorkflowFile(ProjectPath, "../../evil.xaml", "<x/>");
+        var result = await tool.WriteWorkflowFile(ProjectPath, "../../evil.xaml", "<x/>");
 
         Assert.Equal("error", result.Status);
         Assert.Empty(fs.Writes);
     }
 
     [Fact]
-    public void WriteWorkflowFile_CreatesNewFile() {
+    public async Task WriteWorkflowFile_CreatesNewFile() {
         var fs = new FakeFilesystemProvider();
-        var tool = new WriteWorkflowFileTool(fs);
+        var tool = new WriteWorkflowFileTool(fs, TestCatalogs.Resolver(fs));
 
-        var result = tool.WriteWorkflowFile(ProjectPath, "Main.xaml", "<Activity />");
+        var result = await tool.WriteWorkflowFile(ProjectPath, "Main.xaml", "<Activity />");
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
@@ -105,13 +106,13 @@ public class WriteWorkflowFileToolTests {
     }
 
     [Fact]
-    public void WriteWorkflowFile_OverwritesExistingFile() {
+    public async Task WriteWorkflowFile_OverwritesExistingFile() {
         var fs = new FakeFilesystemProvider();
         var target = Path.Combine(Path.GetFullPath(ProjectPath), "Main.xaml");
         fs.ExistingFiles.Add(target);
-        var tool = new WriteWorkflowFileTool(fs);
+        var tool = new WriteWorkflowFileTool(fs, TestCatalogs.Resolver(fs));
 
-        var result = tool.WriteWorkflowFile(ProjectPath, "Main.xaml", "<Activity />");
+        var result = await tool.WriteWorkflowFile(ProjectPath, "Main.xaml", "<Activity />");
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
@@ -119,9 +120,9 @@ public class WriteWorkflowFileToolTests {
     }
 
     [Fact]
-    public void WriteWorkflowFile_Success_IncludesSha256AndXamlClass() {
+    public async Task WriteWorkflowFile_Success_IncludesSha256AndXamlClass() {
         var fs = new FakeFilesystemProvider();
-        var tool = new WriteWorkflowFileTool(fs);
+        var tool = new WriteWorkflowFileTool(fs, TestCatalogs.Resolver(fs));
         var content = """
             <Activity x:Class="Main" xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -129,7 +130,7 @@ public class WriteWorkflowFileToolTests {
             </Activity>
             """;
 
-        var result = tool.WriteWorkflowFile(ProjectPath, "Main.xaml", content);
+        var result = await tool.WriteWorkflowFile(ProjectPath, "Main.xaml", content);
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
@@ -140,15 +141,63 @@ public class WriteWorkflowFileToolTests {
     }
 
     [Fact]
-    public void WriteWorkflowFile_Cs_IncludesClassName() {
+    public async Task WriteWorkflowFile_Cs_IncludesClassName() {
         var fs = new FakeFilesystemProvider();
-        var tool = new WriteWorkflowFileTool(fs);
+        var tool = new WriteWorkflowFileTool(fs, TestCatalogs.Resolver(fs));
         var content = "namespace N;\npublic class InvoiceFlow : CodedWorkflow { }";
 
-        var result = tool.WriteWorkflowFile(ProjectPath, "InvoiceFlow.cs", content);
+        var result = await tool.WriteWorkflowFile(ProjectPath, "InvoiceFlow.cs", content);
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("InvoiceFlow", data.GetProperty("className").GetString());
+    }
+
+    [Fact]
+    public async Task WriteWorkflowFile_XamlUnknownActivity_FailsClosed() {
+        var fs = new FakeFilesystemProvider();
+        var tool = new WriteWorkflowFileTool(fs, TestCatalogs.Resolver(fs));
+        var content = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities">
+              <ui:Click DisplayName="Click ok" />
+            </Activity>
+            """;
+
+        var result = await tool.WriteWorkflowFile(ProjectPath, "Main.xaml", content);
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.SpecUnknownActivity);
+        Assert.Contains(result.ErrorDetails, e => e.Message.Contains("Click"));
+        Assert.Empty(fs.Writes);
+    }
+
+    [Fact]
+    public async Task WriteWorkflowFile_XamlUnknownActivity_EscapeHatchWrites() {
+        var fs = new FakeFilesystemProvider();
+        var tool = new WriteWorkflowFileTool(fs, TestCatalogs.Resolver(fs));
+        var content = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities">
+              <ui:Click DisplayName="Click ok" />
+            </Activity>
+            """;
+
+        var result = await tool.WriteWorkflowFile(ProjectPath, "Main.xaml", content, allowUnknownActivities: true);
+
+        Assert.Equal("success", result.Status);
+        Assert.True(fs.Writes.ContainsKey(Path.Combine(Path.GetFullPath(ProjectPath), "Main.xaml")));
+    }
+
+    [Fact]
+    public async Task WriteWorkflowFile_UnparseableXaml_FailsClosed() {
+        var fs = new FakeFilesystemProvider();
+        var tool = new WriteWorkflowFileTool(fs, TestCatalogs.Resolver(fs));
+
+        var result = await tool.WriteWorkflowFile(ProjectPath, "Main.xaml", "<not-xml");
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.XamlParseFailed);
+        Assert.Empty(fs.Writes);
     }
 }
 

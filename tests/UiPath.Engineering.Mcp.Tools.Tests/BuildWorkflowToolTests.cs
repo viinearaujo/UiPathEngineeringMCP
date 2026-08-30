@@ -33,25 +33,25 @@ public class BuildWorkflowToolTests {
 
     private static (BuildWorkflowTool Tool, FakeFilesystemProvider Fs) CreateTool() {
         var fs = new FakeFilesystemProvider();
-        return (new BuildWorkflowTool(fs), fs);
+        return (new BuildWorkflowTool(fs, TestCatalogs.Resolver(fs)), fs);
     }
 
     [Fact]
-    public void BuildWorkflow_PathNotAllowed_Error() {
+    public async Task BuildWorkflow_PathNotAllowed_Error() {
         var (tool, fs) = CreateTool();
         fs.Allowed = false;
 
-        var result = tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", DesignDocSpecJson);
+        var result = await tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", DesignDocSpecJson);
 
         Assert.Equal("error", result.Status);
     }
 
     [Fact]
-    public void BuildWorkflow_ExistingFileWithoutOverwrite_ErrorAndNoWrite() {
+    public async Task BuildWorkflow_ExistingFileWithoutOverwrite_ErrorAndNoWrite() {
         var (tool, fs) = CreateTool();
         fs.ExistingFiles.Add(Target);
 
-        var result = tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", DesignDocSpecJson);
+        var result = await tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", DesignDocSpecJson);
 
         Assert.Equal("error", result.Status);
         Assert.Contains("overwrite", result.Summary, StringComparison.OrdinalIgnoreCase);
@@ -59,7 +59,7 @@ public class BuildWorkflowToolTests {
     }
 
     [Fact]
-    public void BuildWorkflow_InvalidSpec_ErrorDetailsAndNoWrite() {
+    public async Task BuildWorkflow_InvalidSpec_ErrorDetailsAndNoWrite() {
         var (tool, fs) = CreateTool();
         var specJson = """
             {
@@ -68,7 +68,7 @@ public class BuildWorkflowToolTests {
             }
             """;
 
-        var result = tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", specJson);
+        var result = await tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", specJson);
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.SpecUnknownActivity);
@@ -76,10 +76,10 @@ public class BuildWorkflowToolTests {
     }
 
     [Fact]
-    public void BuildWorkflow_InvalidJson_ErrorDetailsAndNoWrite() {
+    public async Task BuildWorkflow_InvalidJson_ErrorDetailsAndNoWrite() {
         var (tool, fs) = CreateTool();
 
-        var result = tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", "{ not json");
+        var result = await tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", "{ not json");
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.SpecInvalidSpecJson);
@@ -87,10 +87,10 @@ public class BuildWorkflowToolTests {
     }
 
     [Fact]
-    public void BuildWorkflow_ValidSpec_WritesFileAndSummary() {
+    public async Task BuildWorkflow_ValidSpec_WritesFileAndSummary() {
         var (tool, fs) = CreateTool();
 
-        var result = tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", DesignDocSpecJson);
+        var result = await tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", DesignDocSpecJson);
 
         Assert.Equal("success", result.Status);
         var xaml = fs.Writes[Target];
@@ -104,10 +104,10 @@ public class BuildWorkflowToolTests {
     }
 
     [Fact]
-    public void BuildWorkflow_NestedRelativePath_CreatesDirectoryBeforeWrite() {
+    public async Task BuildWorkflow_NestedRelativePath_CreatesDirectoryBeforeWrite() {
         var (tool, fs) = CreateTool();
 
-        var result = tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", DesignDocSpecJson);
+        var result = await tool.BuildWorkflow(ProjectPath, "Workflows/Process.xaml", DesignDocSpecJson);
 
         Assert.Equal("success", result.Status);
         Assert.Contains(Path.GetDirectoryName(Target)!, fs.CreatedDirectories);
@@ -115,10 +115,10 @@ public class BuildWorkflowToolTests {
     }
 
     [Fact]
-    public void BuildWorkflow_NonXamlExtension_Error() {
+    public async Task BuildWorkflow_NonXamlExtension_Error() {
         var (tool, fs) = CreateTool();
 
-        var result = tool.BuildWorkflow(ProjectPath, "Workflows/Process.json", DesignDocSpecJson);
+        var result = await tool.BuildWorkflow(ProjectPath, "Workflows/Process.json", DesignDocSpecJson);
 
         Assert.Equal("error", result.Status);
         Assert.Contains(".xaml", result.Summary);

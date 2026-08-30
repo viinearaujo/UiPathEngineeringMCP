@@ -1,9 +1,11 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.CodeSearch;
 using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Docs;
+using UiPath.Engineering.Mcp.Core.Authoring;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Core.Planning;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
@@ -25,6 +27,8 @@ public static class McpServiceCollectionExtensions {
 
         services.AddSingleton<IFilesystemProvider, FilesystemProvider>();
         services.AddSingleton<IUiPathCliProvider, UiPathCliProvider>();
+        services.AddSingleton<IActivityDiscovery, CliActivityDiscovery>();
+        services.AddSingleton<IActivityCatalogResolver, ActivityCatalogResolver>();
         services.AddSingleton<ISkillsProvider, SkillsProvider>();
         services.AddSingleton(sp =>
             new CliCommandPolicy(sp.GetRequiredService<IOptions<UiPathCliOptions>>().Value));
@@ -58,12 +62,32 @@ public static class McpServiceCollectionExtensions {
         return services;
     }
 
-    public static IMcpServerBuilder AddUiPathMcpServer(this IServiceCollection services) {
+    public static IMcpServerBuilder AddUiPathMcpServer(this IServiceCollection services, bool restrictToCopilotDefault = true) {
         return services.AddMcpServer()
             .WithToolsFromAssembly(typeof(AnalyzeProjectTool).Assembly)
             .WithResourcesFromAssembly(typeof(AnalyzeProjectTool).Assembly)
             .WithPromptsFromAssembly(typeof(AnalyzeProjectTool).Assembly)
             .WithRequestFilters(filters => {
+                if (restrictToCopilotDefault) {
+                    filters.AddListToolsFilter(next => async (context, cancellationToken) => {
+                        var result = await next(context, cancellationToken);
+                        if (!CopilotDefaultSurfaceActive(context.Services)) {
+                            return result;
+                        }
+
+                        CopilotToolSurface.FilterListedTools(result);
+                        return result;
+                    });
+                    filters.AddCallToolFilter(next => async (context, cancellationToken) => {
+                        if (CopilotDefaultSurfaceActive(context.Services)
+                            && CopilotToolSurface.RejectIfHidden(context.Params?.Name) is { } rejected) {
+                            return rejected;
+                        }
+
+                        return await next(context, cancellationToken);
+                    });
+                }
+
                 filters.AddCallToolFilter(next => async (context, cancellationToken) => {
                     var result = await next(context, cancellationToken);
                     if (result.IsError is true) {
@@ -77,5 +101,14 @@ public static class McpServiceCollectionExtensions {
                     return result;
                 });
             });
+    }
+
+    private static bool CopilotDefaultSurfaceActive(IServiceProvider? services) {
+        if (services is null) {
+            return true;
+        }
+
+        var surface = services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolSurface;
+        return CopilotConnectorTools.RestrictsSurface(surface);
     }
 }

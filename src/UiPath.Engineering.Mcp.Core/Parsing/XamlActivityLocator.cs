@@ -19,7 +19,8 @@ public sealed record LocatedActivity(
     string? ParentId,
     int Order,
     int Line,
-    int Depth);
+    int Depth,
+    string? IdRef);
 
 /// <summary>
 /// Single traversal that classifies elements and assigns activity IDs. Both
@@ -53,9 +54,23 @@ public static class XamlActivityLocator {
             var segment = $"{local.ToLowerInvariant()}.{ordinal}";
             var id = parentId is null ? segment : $"{parentId}/{segment}";
             var line = child is IXmlLineInfo info && info.HasLineInfo() ? info.LineNumber : 0;
-            results.Add(new LocatedActivity(child, id, parentId, results.Count, line, depth));
+            results.Add(new LocatedActivity(child, id, parentId, results.Count, line, depth, ReadIdRef(child)));
             var childOrdinal = 0;
             Walk(child, id, depth + 1, results, ref childOrdinal);
         }
+    }
+
+    // sap2010:WorkflowViewState.IdRef (LocalName "WorkflowViewState.IdRef") is the value
+    // uip rpa validate / build JSON diagnostics use to name an activity.
+    private static string? ReadIdRef(XElement element) {
+        foreach (var attr in element.Attributes()) {
+            var local = attr.Name.LocalName;
+            if (local.Equals("IdRef", StringComparison.Ordinal)
+                || local.EndsWith(".IdRef", StringComparison.Ordinal)) {
+                return string.IsNullOrWhiteSpace(attr.Value) ? null : attr.Value;
+            }
+        }
+
+        return null;
     }
 }

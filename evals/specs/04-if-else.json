@@ -1,0 +1,10 @@
+{
+  "name": "If",
+  "properties": { "condition": "[in_IsValid]" },
+  "children": [
+    { "name": "LogMessage", "properties": { "message": "\"ok\"", "level": "Info" } }
+  ],
+  "else": [
+    { "name": "WriteLine", "properties": { "text": "\"invalid\"" } }
+  ]
+}

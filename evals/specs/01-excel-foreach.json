@@ -1,0 +1,24 @@
+{
+  "name": "Sequence",
+  "variables": [{ "name": "dt", "type": "DataTable" }],
+  "children": [
+    {
+      "name": "ReadRange",
+      "properties": {
+        "range": "A1:D10",
+        "sheetName": "Sheet1",
+        "dataTable": "[dt]"
+      }
+    },
+    {
+      "name": "ForEachRow",
+      "properties": { "dataTable": "[dt]" },
+      "children": [
+        {
+          "name": "LogMessage",
+          "properties": { "message": "[CurrentRow(0).ToString()]", "level": "Info" }
+        }
+      ]
+    }
+  ]
+}

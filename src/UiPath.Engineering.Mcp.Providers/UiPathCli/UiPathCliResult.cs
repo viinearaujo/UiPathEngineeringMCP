@@ -1,3 +1,5 @@
+using UiPath.Engineering.Mcp.Core.Parsing;
+
 namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 public sealed class UiPathCliResult {
     public bool Success { get; init; }
@@ -9,6 +11,7 @@ public sealed class UiPathCliResult {
     public CliStepResult Pack { get; init; } = new();
     public List<string> Errors { get; init; } = [];
     public List<string> Warnings { get; init; } = [];
+    public List<CliDiagnostic> Diagnostics { get; init; } = [];
     public List<string> RawOutputLines { get; init; } = [];
     public string StdOut { get; init; } = string.Empty;
     public string StdErr { get; init; } = string.Empty;

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using UiPath.Engineering.Mcp.Core;
+using UiPath.Engineering.Mcp.Core.Authoring;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
@@ -27,25 +28,28 @@ public class ValidateActivitySpecToolTests {
         }
         """;
 
+    private static ValidateActivitySpecTool Tool() =>
+        new(new ActivityCatalogResolver());
+
     [Fact]
-    public void ValidateActivitySpec_InvalidJson_StructuredError() {
-        var result = new ValidateActivitySpecTool().ValidateActivitySpec("{ not json");
+    public async Task ValidateActivitySpec_InvalidJson_StructuredError() {
+        var result = await Tool().ValidateActivitySpec("{ not json");
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.SpecInvalidSpecJson);
     }
 
     [Fact]
-    public void ValidateActivitySpec_NullJson_TreatedAsEmptySpec() {
-        var result = new ValidateActivitySpecTool().ValidateActivitySpec("null");
+    public async Task ValidateActivitySpec_NullJson_TreatedAsEmptySpec() {
+        var result = await Tool().ValidateActivitySpec("null");
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.SpecEmptySpec);
     }
 
     [Fact]
-    public void ValidateActivitySpec_ValidSpec_ReturnsActivitiesUsed() {
-        var result = new ValidateActivitySpecTool().ValidateActivitySpec(DesignDocSpecJson);
+    public async Task ValidateActivitySpec_ValidSpec_ReturnsActivitiesUsed() {
+        var result = await Tool().ValidateActivitySpec(DesignDocSpecJson);
 
         Assert.Equal("success", result.Status);
         var data = JsonSerializer.SerializeToElement(result.Data);
@@ -55,7 +59,7 @@ public class ValidateActivitySpecToolTests {
     }
 
     [Fact]
-    public void ValidateActivitySpec_MultipleViolations_AllReturned() {
+    public async Task ValidateActivitySpec_MultipleViolations_AllReturned() {
         // One unknown activity + one missing-required-property.
         var specJson = """
             {
@@ -67,7 +71,7 @@ public class ValidateActivitySpecToolTests {
             }
             """;
 
-        var result = new ValidateActivitySpecTool().ValidateActivitySpec(specJson);
+        var result = await Tool().ValidateActivitySpec(specJson);
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.SpecUnknownActivity);
@@ -75,7 +79,7 @@ public class ValidateActivitySpecToolTests {
     }
 
     [Fact]
-    public void ValidateActivitySpec_ExperimentalActivity_ReportsWarning() {
+    public async Task ValidateActivitySpec_ExperimentalActivity_ReportsWarning() {
         // Integration path: only runnable once the shipped catalog has an
         // experimental activity. xUnit v2 has no dynamic skip, so the no-entry
         // case is marked explicitly in the assertion message instead of silently
@@ -93,7 +97,7 @@ public class ValidateActivitySpecToolTests {
             .Select(p => $$""" "{{p.Name}}": "{{DummyValue(p)}}" """));
         var specJson = $$"""{ "name": "{{experimental.Name}}", "properties": { {{properties}} } }""";
 
-        var result = new ValidateActivitySpecTool().ValidateActivitySpec(specJson);
+        var result = await Tool().ValidateActivitySpec(specJson);
 
         Assert.Equal("success", result.Status);
         var data = JsonSerializer.SerializeToElement(result.Data);

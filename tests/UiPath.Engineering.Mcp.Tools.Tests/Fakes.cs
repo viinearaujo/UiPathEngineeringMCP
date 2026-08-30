@@ -1,4 +1,5 @@
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Authoring;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.CodeSearch;
 using UiPath.Engineering.Mcp.Core.Docs;
@@ -17,6 +18,7 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
     public string ProjectJsonContent { get; set; } = string.Empty;
     public HashSet<string> ExistingFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> CSharpFiles { get; } = [];
+    public List<string> XamlFiles { get; } = [];
     public Dictionary<string, string> FileContents { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, long> FileSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> Writes { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -27,7 +29,11 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
 
     public bool IsPathAllowed(string requestedPath) => Allowed;
     public string? FindProjectJson(string projectPath) => ProjectJson;
-    public IReadOnlyList<string> FindXamlFiles(string projectPath) => [];
+    public IReadOnlyList<string> FindXamlFiles(string projectPath) =>
+        XamlFiles.Count > 0
+            ? XamlFiles
+            : [.. FileContents.Keys.Where(k => k.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))];
+
     public IReadOnlyList<string> FindCSharpFiles(string projectPath) => CSharpFiles;
     public string ReadAllText(string filePath) =>
         FileContents.TryGetValue(filePath, out var content) ? content : ProjectJsonContent;
@@ -63,6 +69,25 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
         WriteTimesUtc.Remove(filePath);
     }
     public bool FileExists(string path) => ExistingFiles.Contains(path) || FileContents.ContainsKey(path) || Writes.ContainsKey(path);
+}
+
+internal sealed class FakeActivityDiscovery : IActivityDiscovery {
+    public IReadOnlyList<DiscoveredActivity> Hits { get; set; } = [];
+    public string? LastQuery { get; private set; }
+    public Exception? ToThrow { get; set; }
+
+    public Task<IReadOnlyList<DiscoveredActivity>> FindAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
+        LastQuery = query;
+        if (ToThrow is not null) {
+            throw ToThrow;
+        }
+        return Task.FromResult(Hits);
+    }
+}
+
+internal static class TestCatalogs {
+    public static ActivityCatalogResolver Resolver(IFilesystemProvider fs, IActivityDiscovery? discovery = null) =>
+        new(fs, discovery);
 }
 
 internal sealed class FakeProjectModelBuilder : IProjectModelBuilder {

@@ -114,6 +114,23 @@ public class XamlActivityLocatorTests {
     }
 
     [Fact]
+    public void Locate_ReadsWorkflowViewStateIdRef() {
+        const string xaml = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                      xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation">
+              <Sequence sap2010:WorkflowViewState.IdRef="Sequence_1">
+                <ui:LogMessage DisplayName="Log start" sap2010:WorkflowViewState.IdRef="LogMessage_1" />
+              </Sequence>
+            </Activity>
+            """;
+
+        var activities = Locate(xaml);
+        Assert.Equal("Sequence_1", activities.Single(a => a.Id == "sequence.1").IdRef);
+        Assert.Equal("LogMessage_1", activities.Single(a => a.Id == "sequence.1/logmessage.1").IdRef);
+    }
+
+    [Fact]
     public void Locate_AssignsPreOrderDocumentOrderIndex() {
         var activities = Locate(MixedXaml);
 

@@ -148,7 +148,7 @@ public sealed class XamlWorkflowParser {
             return invoke;
         }
 
-        foreach (var argument in container.Elements()) {
+        foreach (var argument in container.Descendants()) {
             var direction = argument.Name.LocalName switch {
                 "InArgument" => "In",
                 "OutArgument" => "Out",

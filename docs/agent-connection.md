@@ -6,8 +6,9 @@ The server is passive. The client drives the loop. UiPath facts come from tools;
 
 1. `dotnet run --project src/UiPath.Engineering.Mcp.Server` — listens on `http://localhost:5000`.
 2. MCP Streamable HTTP endpoint: `http://localhost:5000/sse` (path name is historical; this is not legacy SSE).
-3. Health: `GET http://localhost:5000/health`.
+3. Health: `GET http://localhost:5000/health` (never authenticated).
 4. Copilot registration endpoint is the Dev Tunnel URL plus `/sse`. See README §4–§5.
+5. Optional `/sse` auth: `McpServer:HttpAuth:Enabled` + `ApiKey`. Send `X-Api-Key` or `Authorization: Bearer`.
 
 ## stdio (local agents)
 
@@ -23,37 +24,40 @@ Tools resolve **only** `docs/implementation-plan.json` inside the target UiPath 
 
 ## Copilot Studio (RPA default tool set)
 
-This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions: [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt).
+This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions (source of truth for the loop): [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt).
 
-Enable these tools on the default Copilot connector:
+Enable these 12 tools on the default Copilot connector:
 
-- `analyze_project`, `search_codebase`, `read_workflow_file`
-- `list_skills`, `read_skill` (`uipath-rpa`, `guided-implementation-loop`)
-- `get_implementation_plan`, `update_plan_task`, `analyze_project_gaps`
-- `validate_project` (always pass `build: false`, `pack: false` in the loop)
+- `analyze_project`, `search_codebase`, `read_workflow_file`, `find_activity`
 - `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`
-- `manage_project_file`, `patch_project_json`, `manage_project_docs`, `sync_project_context`, `validate_project_docs`
+- `validate_project` (always pass `build: false`, `pack: false` in the loop)
+- `get_implementation_plan`, `update_plan_task`
+- `recommend_activities` (package-aware catalog lookup; enable when the server exposes it)
 
-Leave off the default connector unless the scenario needs them: GitLab (`search_repository`, `create_work_items`), `run_ui_path_cli`, `verify_work`, `compile_project`.
+HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only those names. Set `All` for Inspector. GitLab tools stay on the server.
+
+Leave off the default connector: C# Roslyn suite, `compile_project`, `verify_work`, `run_ui_path_cli`, `create_implementation_plan`, `generate_documentation`, `write_workflow_file`, GitLab (`search_repository`, `create_work_items`), `list_skills`, `read_skill`.
 
 Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
 
 ## Safe authoring loop
 
 ```text
-analyze_project (detail=summary) → analyze_project_gaps (treat many hits as noise)
-  → get_implementation_plan; create_implementation_plan only if none exists
-  → author one task
+analyze_project (detail=summary)
+  → get_implementation_plan (continue if none exists)
+  → recommend_activities → validate_activity_spec → build_workflow / insert_activities
   → search_codebase / read_workflow_file to confirm the write
-  → manage_project_docs (search/write) and sync_project_context when structure or decisions changed
   → validate_project(build:false, pack:false)
-  → validate_project_docs (or rely on the done-gate)
   → update_plan_task(done|blocked)
 ```
 
-Close tasks with `validate_project(build:false, pack:false)` then `update_plan_task`. `update_plan_task(done)` and `verify_work` auto-done refuse when `validate_project_docs` would report error findings. `verify_work` defaults `build: false` and does not auto-block on a build-only failure; it is still not the green gate.
+Close tasks with `validate_project(build:false, pack:false)` then `update_plan_task`. Marking `done` is not blocked on docs/ADR freshness. `verify_work` still refuses auto-done on docs errors and is not the green gate.
 
 File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` alone.
+
+## HTTP auth
+
+`GET /health` is always anonymous. For non-local Copilot, set `McpServer:HttpAuth:Enabled` true and `McpServer:HttpAuth:ApiKey` (env `McpServer__HttpAuth__ApiKey`). Send `X-Api-Key` or `Authorization: Bearer <key>` on `/sse`. Local/dev can leave auth disabled.
 
 ## Traps
 
@@ -63,7 +67,7 @@ File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` al
 | `project.json` change needed | `patch_project_json`. Do not emit a patch or overwrite the file. |
 | Host timeout / JSON-RPC `-32603` | Retry once. Do not send the identical payload three times; change flags (`detail`, `page`, `build:false`) or split the call. |
 | Read of a credential file is masked | Keep the mask. Never write the redacted body back. |
-| `update_plan_task(done)` refused with `DOCS_STALE` / `DOCS_INCONSISTENT` | `sync_project_context` and/or `manage_project_docs` (`write`/`delete`), then retry. |
+| `update_plan_task(done)` after validate | Plan scratchpad only. Docs/ADR freshness does not block `done`. |
 | `create_implementation_plan` on an existing 20+ task plan | `overwrite: true` wipes it. Use `update_plan_task`. |
 
 ## validate_project flags
@@ -72,7 +76,7 @@ The agent green gate is `validate=true`, `build=false`, `pack=false` (typically 
 
 ## Prompt
 
-Clients that support MCP Prompts can load `implement_uipath_goal` with `projectPath` and `goal`. It encodes the loop above.
+Clients that support MCP Prompts can load `implement_uipath_goal` with `projectPath` and `goal`. It is a thin recipe of the Copilot agent instructions.
 
 ## Resources
 

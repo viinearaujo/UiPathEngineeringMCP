@@ -1,0 +1,13 @@
+{
+  "name": "Sequence",
+  "children": [
+    {
+      "name": "InvokeWorkflowFile",
+      "properties": { "workflowFileName": "Workflows/Child.xaml" },
+      "arguments": [
+        { "name": "in_Path", "direction": "In", "type": "String", "value": "[filePath]" },
+        { "name": "out_Ok", "direction": "Out", "type": "Boolean", "value": "[ok]" }
+      ]
+    }
+  ]
+}

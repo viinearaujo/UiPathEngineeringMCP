@@ -11,6 +11,7 @@ public static class ToolErrorCodes {
     public const string SpecInvalidSpecJson = "SPEC_INVALID_SPEC_JSON";
     public const string XamlRenderFailed = "XAML_RENDER_FAILED";
     public const string XamlRoundtripFailed = "XAML_ROUNDTRIP_FAILED";
+    public const string XamlParseFailed = "XAML_PARSE_FAILED";
     public const string DataDeclarationConflict = "DATA_DECLARATION_CONFLICT";
     public const string DataDeclarationNotFound = "DATA_DECLARATION_NOT_FOUND";
     public const string PathNotAllowed = "PATH_NOT_ALLOWED";

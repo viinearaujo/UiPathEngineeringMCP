@@ -17,19 +17,14 @@ public sealed class ImplementUiPathGoalPrompt {
         Project path: {projectPath}
         Goal: {goal}
 
-        The server is passive. You own the loop. Trust UiPath facts from tools.
+        Follow the Copilot authoring loop. Source of truth: Copilot Studio agent instructions (docs/copilot-studio-agent-instructions.txt).
 
-        Loop:
-        1. analyze_project with detail=summary (add workflowFile or detail=full+page only when you need one workflow's activities).
-        2. analyze_project_gaps — treat many orphan/unresolved hits as noise until you confirm with read_workflow_file.
-        3. get_implementation_plan. Use create_implementation_plan only if none exists. Never overwrite a mature plan.
-        4. Source of truth is docs/implementation-plan.json. Do not move it.
-        5. Author one task. Prefer spec tools (validate_activity_spec → build_workflow / insert_activities / manage_workflow_data).
-        6. Confirm writes with search_codebase or read_workflow_file (file truth). Never "fix" a redacted credential body; never rewrite redacted text to disk.
-        7. After authoring: manage_project_docs (search/write) for conventions, pitfalls, and ADRs; sync_project_context when file counts or dependencies changed. Never emit a patch; use patch_project_json for project.json and manage_project_file for other .md/.json/.txt.
-        8. validate_project with build:false and pack:false. That is the CLI green gate. Then validate_project_docs (or rely on the done-gate).
-        9. update_plan_task to done or blocked. done requires current docs (generated context + knowledge/ADRs). Do not call verify_work as the done gate.
-        10. If a call times out or returns JSON-RPC -32603, retry once with different flags; do not send the same payload three times.
+        Recipe:
+        1. analyze_project with detail=summary.
+        2. get_implementation_plan. Scratchpad is docs/implementation-plan.json. Continue without a plan if none exists (create_implementation_plan is not on the default connector).
+        3. Author one task. Prefer recommend_activities, then validate_activity_spec → build_workflow / insert_activities / manage_workflow_data. Target inserts with activityId from find_activity. Never hand-write XAML.
+        4. Confirm writes with search_codebase or read_workflow_file. Never rewrite redacted credential text to disk.
+        5. validate_project with build:false and pack:false, then update_plan_task to done or blocked. Marking done is not blocked on docs/ADR freshness. Do not call verify_work as the done gate.
 
         Stop when the user interrupts, the project path is ambiguous, or a task stays blocked after a real validate_project failure.
         """;

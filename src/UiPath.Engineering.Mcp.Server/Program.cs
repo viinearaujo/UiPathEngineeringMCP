@@ -9,7 +9,7 @@ if (mode == McpHostMode.Kind.Stdio) {
         options.LogToStandardErrorThreshold = LogLevel.Trace;
     });
     stdioBuilder.Services.AddUiPathEngineeringServices(stdioBuilder.Configuration);
-    stdioBuilder.Services.AddUiPathMcpServer()
+    stdioBuilder.Services.AddUiPathMcpServer(restrictToCopilotDefault: false)
         .WithStdioServerTransport();
     await stdioBuilder.Build().RunAsync();
     return;
@@ -21,6 +21,7 @@ builder.Services.AddUiPathMcpServer()
     .WithHttpTransport();
 
 var app = builder.Build();
+app.UseMiddleware<McpHttpAuthMiddleware>();
 app.MapHealthChecks("/health");
 app.MapMcp("/sse");
 app.Run();

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -140,5 +141,69 @@ public class ValidateProjectToolTests {
         await tool.ValidateProject("/projects/testProcess");
 
         Assert.Equal((true, true, false), cli.LastValidateFlags);
+    }
+
+    [Fact]
+    public async Task ValidateProject_WhenCliSucceeds_DataHasEmptyDiagnostics() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var cli = new FakeUiPathCliProvider {
+            Result = new UiPathCliResult { Success = true, Summary = "Validation completed." }
+        };
+        var tool = new ValidateProjectTool(cli, fs);
+
+        var result = await tool.ValidateProject("/projects/testProcess");
+        var data = SerializeData(result.Data);
+
+        Assert.Equal(0, data.GetProperty("diagnostics").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task ValidateProject_MapsCliDiagnosticsOntoActivityIdAndSpecFix() {
+        const string xaml = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                      xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation">
+              <Sequence sap2010:WorkflowViewState.IdRef="Sequence_1">
+                <ui:LogMessage DisplayName="Log start" Message="[foo]" sap2010:WorkflowViewState.IdRef="LogMessage_1" />
+              </Sequence>
+            </Activity>
+            """;
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        fs.FileContents["/projects/testProcess/Main.xaml"] = xaml;
+        var cli = new FakeUiPathCliProvider {
+            Result = new UiPathCliResult {
+                Success = false,
+                Summary = "Validation failed.",
+                Errors = ["[validate] Main.xaml(8): BC30451: 'foo' is not declared."],
+                Validate = new CliStepResult { Executed = true, Success = false },
+                Diagnostics = [
+                    new CliDiagnostic {
+                        Message = "'foo' is not declared.",
+                        FilePath = "Main.xaml",
+                        Line = 8,
+                        IdRef = "LogMessage_1",
+                        Property = "Message",
+                        Code = "BC30451"
+                    }
+                ]
+            }
+        };
+        var tool = new ValidateProjectTool(cli, fs);
+
+        var result = await tool.ValidateProject("/projects/testProcess");
+        var data = SerializeData(result.Data);
+
+        Assert.Equal("error", result.Status);
+        var diagnostic = Assert.Single(data.GetProperty("diagnostics").EnumerateArray());
+        Assert.Equal("sequence.1/logmessage.1", diagnostic.GetProperty("activityId").GetString());
+        Assert.Equal("Message", diagnostic.GetProperty("property").GetString());
+        Assert.Equal("'foo' is not declared.", diagnostic.GetProperty("message").GetString());
+        var specFix = diagnostic.GetProperty("specFix");
+        Assert.Equal("Main.xaml", specFix.GetProperty("workflowFile").GetString());
+        Assert.Equal("[foo]", specFix.GetProperty("properties").GetProperty("Message").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(specFix.GetProperty("hint").GetString()));
+        Assert.Contains(
+            data.GetProperty("recommendations").EnumerateArray().Select(e => e.GetString()),
+            r => r is not null && r.Contains("diagnostics[].activityId", StringComparison.Ordinal));
     }
 }

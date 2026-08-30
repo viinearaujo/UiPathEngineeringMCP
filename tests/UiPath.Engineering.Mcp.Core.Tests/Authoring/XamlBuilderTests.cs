@@ -89,6 +89,73 @@ public class XamlBuilderTests
         Assert.Contains("<If Condition=\"[counter &gt; 0]\"", result.Xaml);
         Assert.Contains("<If.Then>", result.Xaml);
         Assert.Contains("<WriteLine", result.Xaml);
+        Assert.DoesNotContain("<If.Else>", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderFragment_If_RendersElseBranch()
+    {
+        var spec = new ActivitySpec
+        {
+            Name = "If",
+            Properties = new() { ["condition"] = "[counter > 0]" },
+            Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"positive\"" } }],
+            Else = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"non-positive\"" } }]
+        };
+        var result = XamlBuilder.RenderFragment(spec);
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<If.Then>", result.Xaml);
+        Assert.Contains("<If.Else>", result.Xaml);
+        Assert.Contains("positive", result.Xaml);
+        Assert.Contains("non-positive", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderFragment_Switch_RendersCasesAndDefault()
+    {
+        var spec = new ActivitySpec
+        {
+            Name = "Switch",
+            Properties = new() { ["expression"] = "[status]", ["typeArgument"] = "Int32" },
+            Cases =
+            [
+                new SwitchCaseSpec { Key = "1", Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"one\"" } }] },
+                new SwitchCaseSpec { Key = "2", Children = [new ActivitySpec { Name = "LogMessage", Properties = new() { ["message"] = "\"two\"" } }] }
+            ],
+            Default = [new ActivitySpec { Name = "Rethrow" }]
+        };
+        var result = XamlBuilder.RenderFragment(spec);
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<Switch x:TypeArguments=\"Int32\"", result.Xaml);
+        Assert.Contains("Expression=\"[status]\"", result.Xaml);
+        Assert.Contains("x:Key=\"1\"", result.Xaml);
+        Assert.Contains("x:Key=\"2\"", result.Xaml);
+        Assert.Contains("<Switch.Default>", result.Xaml);
+        Assert.Contains("<Rethrow", result.Xaml);
+        Assert.Contains("<ui:LogMessage", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderFragment_InvokeWorkflowFile_RendersArgumentMappings()
+    {
+        var spec = new ActivitySpec
+        {
+            Name = "InvokeWorkflowFile",
+            Properties = new() { ["workflowFileName"] = "Child.xaml" },
+            Arguments =
+            [
+                new ArgumentMappingSpec { Name = "in_Path", Direction = "In", Type = "String", Value = "[filePath]" },
+                new ArgumentMappingSpec { Name = "out_Ok", Direction = "Out", Type = "Boolean", Value = "[ok]" }
+            ]
+        };
+        var result = XamlBuilder.RenderFragment(spec);
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("WorkflowFileName=\"Child.xaml\"", result.Xaml);
+        Assert.Contains("InvokeWorkflowFile.Arguments", result.Xaml);
+        Assert.Contains("x:Key=\"in_Path\"", result.Xaml);
+        Assert.Contains("[filePath]", result.Xaml);
+        Assert.Contains("x:Key=\"out_Ok\"", result.Xaml);
+        Assert.Contains("xmlns:scg=", result.Xaml);
     }
 
     [Fact]

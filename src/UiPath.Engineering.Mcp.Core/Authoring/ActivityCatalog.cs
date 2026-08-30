@@ -7,8 +7,14 @@ public static class ActivityCatalog
     private static readonly (string Prefix, string Ns) Wf = ("", "http://schemas.microsoft.com/netfx/2009/xaml/activities");
     private static readonly (string Prefix, string Ns) Ui = ("ui", "http://schemas.uipath.com/workflow/activities");
 
+    private static readonly HashSet<string> ExcelActivities = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ForEachRow", "ReadRange", "WriteRange"
+    };
+
     private static ActivitySchema S(string name, (string Prefix, string Ns) ns, bool container, params PropertySchema[] props) =>
-        new(name, ns.Prefix, ns.Ns, container, props);
+        new(name, ns.Prefix, ns.Ns, container, props,
+            PackageId: ExcelActivities.Contains(name) ? "UiPath.Excel.Activities" : "UiPath.System.Activities");
 
     private static PropertySchema E(string name, bool required = true) => new(name, required, PropertyKind.Expression);
     private static PropertySchema L(string name, bool required = false) => new(name, required, PropertyKind.Literal);
@@ -19,6 +25,7 @@ public static class ActivityCatalog
         S("Sequence",   Wf, true,  L("DisplayName")),
         S("Assign",     Wf, false, L("DisplayName"), E("To"), E("Value")),
         S("If",         Wf, true,  L("DisplayName"), E("Condition")),
+        S("Switch",     Wf, true,  L("DisplayName"), E("Expression"), T("TypeArgument")),
         S("ForEach",    Wf, true,  L("DisplayName"), E("Values"), T("TypeArgument"), L("ItemName")),
         S("ForEachRow", Ui, true,  L("DisplayName"), E("DataTable")),
         S("While",      Wf, true,  L("DisplayName"), E("Condition")),
@@ -38,17 +45,21 @@ public static class ActivityCatalog
         S("InvokeCode", Ui, true,  L("DisplayName"), L("Code", required: true), L("Language")),
     ];
 
+    public static IActivityCatalog Fallback { get; } = new ListActivityCatalog(All, "fallback");
+
     private static readonly IReadOnlyDictionary<string, ActivitySchema> ByName =
         All.ToDictionary(s => s.Name, StringComparer.OrdinalIgnoreCase);
 
     public static bool TryGet(string name, [NotNullWhen(true)] out ActivitySchema? schema) =>
         ByName.TryGetValue(name, out schema);
 
-    public static string? Suggest(string name)
+    public static string? Suggest(string name) => Suggest(name, All);
+
+    public static string? Suggest(string name, IEnumerable<ActivitySchema> schemas)
     {
         string? best = null;
         var bestDistance = 4;
-        foreach (var schema in All)
+        foreach (var schema in schemas)
         {
             var distance = Levenshtein(name, schema.Name);
             if (distance < bestDistance)
@@ -60,6 +71,12 @@ public static class ActivityCatalog
 
         return best;
     }
+
+    internal static readonly HashSet<string> WorkflowFoundationNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Sequence", "Assign", "If", "Switch", "ForEach", "While", "DoWhile",
+        "TryCatch", "WriteLine", "Delay", "Throw", "Rethrow"
+    };
 
     private static int Levenshtein(string a, string b)
     {

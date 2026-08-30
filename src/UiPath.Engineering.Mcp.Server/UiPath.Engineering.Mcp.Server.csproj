@@ -11,6 +11,10 @@
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.0.0-preview.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Server.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
