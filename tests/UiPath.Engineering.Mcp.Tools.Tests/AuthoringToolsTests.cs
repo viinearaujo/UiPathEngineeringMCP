@@ -291,6 +291,111 @@ public class CreateCodedWorkflowToolTests {
         Assert.True(fileInfo.GetProperty("publishAsTestCase").GetBoolean());
         Assert.True(Guid.TryParse(fileInfo.GetProperty("testCaseId").GetString(), out _));
     }
+
+    [Fact]
+    public void AddCodedWorkflow_ProcessTest_DefaultsToTestsFolder() {
+        var fs = new FakeFilesystemProvider {
+            ProjectJsonContent = """{ "name": "My Test-Project", "entryPoints": [], "designOptions": { "outputType": "Process" } }"""
+        };
+        var tool = new CreateCodedWorkflowTool(fs);
+        var projectJsonPath = fs.ProjectJson!;
+
+        var result = tool.AddCodedWorkflow(ProjectPath, "InvoiceTests", "test");
+        var data = JsonSerializer.SerializeToElement(result.Data);
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal(@"Tests\InvoiceTests.cs", data.GetProperty("relativePath").GetString());
+
+        var csPath = Path.Combine(Path.GetFullPath(ProjectPath), "Tests", "InvoiceTests.cs");
+        Assert.Contains("class InvoiceTests : CodedWorkflow", fs.Writes[csPath]);
+        Assert.Contains(Path.GetDirectoryName(csPath)!, fs.CreatedDirectories);
+
+        using var updatedJson = JsonDocument.Parse(fs.Writes[projectJsonPath]);
+        var fileInfo = Assert.Single(
+            updatedJson.RootElement.GetProperty("designOptions").GetProperty("fileInfoCollection").EnumerateArray());
+        Assert.Equal(@"Tests\InvoiceTests.cs", fileInfo.GetProperty("fileName").GetString());
+    }
+
+    [Fact]
+    public void AddCodedWorkflow_TestsProjectTest_StaysAtRoot() {
+        var fs = new FakeFilesystemProvider {
+            ProjectJsonContent = """{ "name": "My Test-Project", "designOptions": { "outputType": "Tests" } }"""
+        };
+        var tool = new CreateCodedWorkflowTool(fs);
+        var projectJsonPath = fs.ProjectJson!;
+
+        var result = tool.AddCodedWorkflow(ProjectPath, "InvoiceTests", "test");
+        var data = JsonSerializer.SerializeToElement(result.Data);
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal("InvoiceTests.cs", data.GetProperty("relativePath").GetString());
+
+        var csPath = Path.Combine(Path.GetFullPath(ProjectPath), "InvoiceTests.cs");
+        Assert.True(fs.Writes.ContainsKey(csPath));
+
+        using var updatedJson = JsonDocument.Parse(fs.Writes[projectJsonPath]);
+        var fileInfo = Assert.Single(
+            updatedJson.RootElement.GetProperty("designOptions").GetProperty("fileInfoCollection").EnumerateArray());
+        Assert.Equal("InvoiceTests.cs", fileInfo.GetProperty("fileName").GetString());
+    }
+
+    [Fact]
+    public void AddCodedWorkflow_ProcessTest_EmptyFolderForcesRoot() {
+        var fs = new FakeFilesystemProvider {
+            ProjectJsonContent = """{ "name": "My Test-Project", "designOptions": { "outputType": "Process" } }"""
+        };
+        var tool = new CreateCodedWorkflowTool(fs);
+        var projectJsonPath = fs.ProjectJson!;
+
+        var result = tool.AddCodedWorkflow(ProjectPath, "InvoiceTests", "test", "");
+        var data = JsonSerializer.SerializeToElement(result.Data);
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal("InvoiceTests.cs", data.GetProperty("relativePath").GetString());
+
+        var csPath = Path.Combine(Path.GetFullPath(ProjectPath), "InvoiceTests.cs");
+        Assert.True(fs.Writes.ContainsKey(csPath));
+        Assert.False(fs.Writes.ContainsKey(Path.Combine(Path.GetFullPath(ProjectPath), "Tests", "InvoiceTests.cs")));
+
+        using var updatedJson = JsonDocument.Parse(fs.Writes[projectJsonPath]);
+        var fileInfo = Assert.Single(
+            updatedJson.RootElement.GetProperty("designOptions").GetProperty("fileInfoCollection").EnumerateArray());
+        Assert.Equal("InvoiceTests.cs", fileInfo.GetProperty("fileName").GetString());
+    }
+
+    [Fact]
+    public void AddCodedWorkflow_Workflow_SubfolderRegistersEntryPoint() {
+        var fs = CreateFs();
+        var tool = new CreateCodedWorkflowTool(fs);
+        var projectJsonPath = fs.ProjectJson!;
+
+        var result = tool.AddCodedWorkflow(ProjectPath, "InvoiceFlow", "workflow", "Workflows");
+        var data = JsonSerializer.SerializeToElement(result.Data);
+
+        Assert.Equal("success", result.Status);
+        Assert.True(data.GetProperty("entryPointRegistered").GetBoolean());
+        Assert.Equal(@"Workflows\InvoiceFlow.cs", data.GetProperty("relativePath").GetString());
+
+        var csPath = Path.Combine(Path.GetFullPath(ProjectPath), "Workflows", "InvoiceFlow.cs");
+        Assert.Contains("class InvoiceFlow : CodedWorkflow", fs.Writes[csPath]);
+        Assert.Contains(Path.GetDirectoryName(csPath)!, fs.CreatedDirectories);
+
+        using var updatedJson = JsonDocument.Parse(fs.Writes[projectJsonPath]);
+        var entry = Assert.Single(updatedJson.RootElement.GetProperty("entryPoints").EnumerateArray());
+        Assert.Equal(@"Workflows\InvoiceFlow.cs", entry.GetProperty("filePath").GetString());
+    }
+
+    [Fact]
+    public void AddCodedWorkflow_RelativeFolderEscape_ReturnsError() {
+        var fs = CreateFs();
+        var tool = new CreateCodedWorkflowTool(fs);
+
+        var result = tool.AddCodedWorkflow(ProjectPath, "InvoiceTests", "test", "..");
+
+        Assert.Equal("error", result.Status);
+        Assert.Empty(fs.Writes);
+        Assert.Empty(fs.CreatedDirectories);
+    }
 }
 
 public class CreateProjectToolTests {

@@ -24,7 +24,7 @@ public sealed class ImplementUiPathGoalPrompt {
         Recipe:
         1. analyze_project with detail=summary.
         2. get_implementation_plan. Scratchpad is docs/implementation-plan.json. Continue without a plan if none exists (create_implementation_plan is not on the default connector).
-        3. Author one task. New work is coded (add_coded_workflow kind=workflow|test|source, then edit_workflow_file / read_workflow_file; get_compile_errors for a fast .cs check) unless it is REFramework/orchestration XAML (find_activity then insert_activities). XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
+        3. Author one task. New work is coded (add_coded_workflow kind=workflow|test|source; Process kind=test defaults to Tests\, pass relativeFolder for other layouts; then edit_workflow_file / read_workflow_file; get_compile_errors for a fast .cs check) unless it is REFramework/orchestration XAML (find_activity then insert_activities). XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
         4. Confirm writes with search_codebase or read_workflow_file. Never rewrite redacted credential text to disk.
         5. validate_project with build:false and pack:false, then update_plan_task to done or blocked. Marking done is not blocked on docs/ADR freshness. Do not call verify_work as the done gate.
 

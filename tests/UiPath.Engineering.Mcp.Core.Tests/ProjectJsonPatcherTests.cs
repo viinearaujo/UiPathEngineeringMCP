@@ -61,6 +61,25 @@ public class ProjectJsonPatcherTests {
     }
 
     [Fact]
+    public void UpsertAndRemoveFileInfo_MixedSlashes_HitsSameEntry() {
+        var upserted = ProjectJsonPatcher.Apply(Sample, ProjectJsonPatcher.UpsertFileInfo, filePath: "Tests/Foo.cs");
+        Assert.True(upserted.Success);
+
+        var updated = ProjectJsonPatcher.Apply(upserted.UpdatedJson!, ProjectJsonPatcher.UpsertFileInfo, filePath: @"Tests\Foo.cs");
+        Assert.True(updated.Success);
+        Assert.Contains("Updated fileInfoCollection", updated.Summary);
+        using (var doc = System.Text.Json.JsonDocument.Parse(updated.UpdatedJson!)) {
+            var collection = doc.RootElement.GetProperty("designOptions").GetProperty("fileInfoCollection");
+            Assert.Equal(1, collection.GetArrayLength());
+            Assert.Equal(@"Tests\Foo.cs", collection[0].GetProperty("fileName").GetString());
+        }
+
+        var removed = ProjectJsonPatcher.Apply(updated.UpdatedJson!, ProjectJsonPatcher.RemoveFileInfo, filePath: "Tests/Foo.cs");
+        Assert.True(removed.Success);
+        Assert.DoesNotContain("Foo.cs", removed.UpdatedJson);
+    }
+
+    [Fact]
     public void SetExceptionHandler_SetsAndClears() {
         var set = ProjectJsonPatcher.Apply(Sample, ProjectJsonPatcher.SetExceptionHandler, filePath: "GlobalHandler.xaml");
         Assert.True(set.Success);

@@ -16,6 +16,7 @@ public class ImplementUiPathGoalPromptTests {
         Assert.Contains("analyze_project", text);
         Assert.Contains("detail=summary", text);
         Assert.Contains("add_coded_workflow", text);
+        Assert.Contains("relativeFolder", text);
         Assert.Contains("edit_workflow_file", text);
         Assert.Contains("get_compile_errors", text);
         Assert.DoesNotContain("recommend_activities", text);

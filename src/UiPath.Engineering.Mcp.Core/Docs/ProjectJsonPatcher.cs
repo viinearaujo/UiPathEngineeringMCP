@@ -199,9 +199,14 @@ public static class ProjectJsonPatcher {
     }
 
     private static JsonObject? FindObject(JsonArray array, string property, string expected) {
+        var expectedNormalized = ProjectFilePolicy.NormalizeRelativePath(expected);
         foreach (var item in array) {
             if (item is JsonObject obj
-                && string.Equals(obj[property]?.GetValue<string>(), expected, StringComparison.OrdinalIgnoreCase)) {
+                && obj[property]?.GetValue<string>() is { } actual
+                && string.Equals(
+                    ProjectFilePolicy.NormalizeRelativePath(actual),
+                    expectedNormalized,
+                    StringComparison.OrdinalIgnoreCase)) {
                 return obj;
             }
         }

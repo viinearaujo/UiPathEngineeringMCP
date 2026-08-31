@@ -14,7 +14,7 @@ For each `.cs` workflow file added to a Process project, append one entry to the
 
 ```json
 {
-  "filePath": "{{FILE_NAME}}.cs",
+  "filePath": "Workflows\\{{FILE_NAME}}.cs",
   "uniqueId": "{{UUID_V4}}",
   "input": [],
   "output": []
@@ -27,7 +27,7 @@ When the workflow's `Execute` method has parameters or a return value, populate 
 
 ```json
 {
-  "filePath": "{{FILE_NAME}}.cs",
+  "filePath": "Workflows\\{{FILE_NAME}}.cs",
   "uniqueId": "{{UUID_V4}}",
   "input": [
     {
@@ -58,7 +58,7 @@ For each `.cs` test case file (in any project type — Process, Tests, or Librar
   "editingStatus": "InProgress",
   "testCaseId": "{{UUID_V4}}",
   "testCaseType": "TestCase",
-  "fileName": "{{TestCase}}.cs",
+  "fileName": "Tests\\{{TestCase}}.cs",
   "publishAsTestCase": true
 }
 ```
@@ -74,7 +74,7 @@ When a test case uses parameter variations, add `dataVariationFilePath` to its `
   "editingStatus": "InProgress",
   "testCaseId": "{{UUID_V4}}",
   "testCaseType": "TestCase",
-  "fileName": "{{TestCase}}.cs",
+  "fileName": "Tests\\{{TestCase}}.cs",
   "publishAsTestCase": true,
   "dataVariationFilePath": ".variations\\{{variationName}}_Sheet1.json"
 }
