@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
+using UiPath.Engineering.Mcp.Core.Configuration;
 
 namespace UiPath.Engineering.Mcp.Tools;
 
@@ -18,6 +19,7 @@ public sealed class ImplementUiPathGoalPrompt {
         Goal: {goal}
 
         Follow the Copilot authoring loop. Source of truth: Copilot Studio agent instructions (docs/copilot-studio-agent-instructions.txt).
+        Default Copilot connector tools: {CopilotConnectorTools.JoinDefaultNames()}.
 
         Recipe:
         1. analyze_project with detail=summary.

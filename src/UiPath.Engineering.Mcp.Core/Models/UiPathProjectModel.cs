@@ -20,4 +20,9 @@ public sealed class UiPathProjectModel {
     public List<ExceptionHandlerModel> ExceptionHandlers { get; init; } = [];
     public List<string> Dependencies { get; init; } = [];
     public List<string> Risks { get; init; } = [];
+    /// <summary>
+    /// True when this model was served from cache because the project fingerprint
+    /// could not be computed (filesystem error). Callers should surface a warning.
+    /// </summary>
+    public bool Stale { get; set; }
 }

@@ -54,4 +54,14 @@ public class SecretRedactorTests {
         Assert.Equal(input.Split('\n').Length, text.Split('\n').Length);
         Assert.Contains("DbPassword=***REDACTED***", text);
     }
+
+    [Fact]
+    public void RedactLines_MasksEachLineIndependently() {
+        var lines = SecretRedactor.RedactLines(["token=abc123secret", "host=ok"]);
+
+        Assert.Equal(2, lines.Count);
+        Assert.DoesNotContain(lines, l => l.Contains("abc123secret"));
+        Assert.Contains("host=ok", lines);
+        Assert.Contains(lines, l => l.Contains("***REDACTED***"));
+    }
 }

@@ -20,7 +20,7 @@ public class CliExecutableResolverTests {
         Assert.NotNull(spec);
         Assert.Equal(path, spec.FileName);
         Assert.Equal(path, spec.ResolvedPath);
-        Assert.Equal(string.Empty, spec.ArgumentPrefix);
+        Assert.Empty(spec.PrefixArguments);
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public class CliExecutableResolverTests {
 
         Assert.NotNull(spec);
         Assert.Equal($@"{PathDir}\uip.exe", spec.FileName);
-        Assert.Equal(string.Empty, spec.ArgumentPrefix);
+        Assert.Empty(spec.PrefixArguments);
     }
 
     [Fact]
@@ -38,22 +38,22 @@ public class CliExecutableResolverTests {
 
         Assert.NotNull(spec);
         Assert.Equal("cmd.exe", spec.FileName);
-        Assert.Equal($"/c \"\"{PathDir}\\uip.cmd\" ", spec.ArgumentPrefix);
-        Assert.Equal("\"", spec.ArgumentSuffix);
+        Assert.Equal(["/c", $@"{PathDir}\uip.cmd"], spec.PrefixArguments);
         Assert.Equal($@"{PathDir}\uip.cmd", spec.ResolvedPath);
     }
 
     [Fact]
-    public void Resolve_CmdShim_ComposedCommandLine_HasDoubledOuterQuotes() {
-        // Verified live: cmd.exe /c ""<shim>" <args>"" works; single outer quotes fail.
+    public void Resolve_CmdShim_ArgumentList_KeepsShimPathAsOneToken() {
         var spec = Resolve("uip", $@"{PathDir}\uip.cmd");
 
         Assert.NotNull(spec);
-        var commandLine = spec.ArgumentPrefix + "rpa validate --project-dir \"C:\\projects\\testProcess\" --output json" + spec.ArgumentSuffix;
+        var args = spec.BuildArgumentList(
+            ["rpa", "validate", "--project-dir", @"C:\projects\testProcess", "--output", "json"]);
 
         Assert.Equal(
-            $"/c \"\"{PathDir}\\uip.cmd\" rpa validate --project-dir \"C:\\projects\\testProcess\" --output json\"",
-            commandLine);
+            ["/c", $@"{PathDir}\uip.cmd", "rpa", "validate", "--project-dir", @"C:\projects\testProcess", "--output", "json"],
+            args);
+        Assert.DoesNotContain(args, a => a.Contains("/c \"", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -62,8 +62,22 @@ public class CliExecutableResolverTests {
 
         Assert.NotNull(spec);
         Assert.Equal("powershell.exe", spec.FileName);
-        Assert.Equal($"-NoProfile -ExecutionPolicy Bypass -File \"{PathDir}\\uip.ps1\" ", spec.ArgumentPrefix);
-        Assert.Equal(string.Empty, spec.ArgumentSuffix);
+        Assert.Equal(
+            ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $@"{PathDir}\uip.ps1"],
+            spec.PrefixArguments);
+    }
+
+    [Fact]
+    public void Resolve_Ps1Shim_ArgumentList_KeepsScriptPathAsOneToken() {
+        var spec = Resolve("uip", $@"{PathDir}\uip.ps1");
+
+        Assert.NotNull(spec);
+        var args = spec.BuildArgumentList(["rpa", "validate"]);
+
+        Assert.Equal(
+            ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $@"{PathDir}\uip.ps1", "rpa", "validate"],
+            args);
+        Assert.DoesNotContain(args, a => a.Contains("-File \"", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -72,7 +86,7 @@ public class CliExecutableResolverTests {
 
         Assert.NotNull(spec);
         Assert.Equal($@"{PathDir}\uip", spec.FileName);
-        Assert.Equal(string.Empty, spec.ArgumentPrefix);
+        Assert.Empty(spec.PrefixArguments);
     }
 
     [Fact]
@@ -83,6 +97,7 @@ public class CliExecutableResolverTests {
         Assert.NotNull(spec);
         Assert.Equal("cmd.exe", spec.FileName);
         Assert.Equal($@"{PathDir}\uip.cmd", spec.ResolvedPath);
+        Assert.Equal(["/c", $@"{PathDir}\uip.cmd"], spec.PrefixArguments);
     }
 
     [Fact]

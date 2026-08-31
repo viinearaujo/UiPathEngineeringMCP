@@ -126,6 +126,34 @@ public class GitLabProviderTests {
     }
 
     [Fact]
+    public async Task SearchIssuesAsync_RequestException_ReturnsSanitizedErrorWithoutExceptionText() {
+        const string leak = "proxy http://corp-proxy.internal:8080/gitlab";
+        var sut = CreateSut(new ThrowingHttpMessageHandler(new HttpRequestException(leak)));
+
+        var result = await sut.SearchIssuesAsync("x", 10);
+
+        Assert.False(result.Success);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("GitLab request failed.", error);
+        Assert.DoesNotContain(leak, error);
+        Assert.DoesNotContain(Token, error);
+    }
+
+    [Fact]
+    public async Task CreateIssueAsync_Timeout_ReturnsSanitizedTimeoutWithoutExceptionText() {
+        const string leak = "The request was canceled because of HttpClient.Timeout";
+        var sut = CreateSut(new ThrowingHttpMessageHandler(new TaskCanceledException(leak)));
+
+        var result = await sut.CreateIssueAsync("t", "d", []);
+
+        Assert.False(result.Success);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("GitLab request failed (timeout).", error);
+        Assert.DoesNotContain(leak, error);
+        Assert.DoesNotContain(Token, error);
+    }
+
+    [Fact]
     public async Task SearchIssuesAsync_NotConfigured_FailsFastWithoutHttpCall() {
         var handler = new FakeHttpMessageHandler();
         var sut = CreateSut(handler, new GitLabOptions { BaseUrl = "", ProjectId = "" });
@@ -136,5 +164,14 @@ public class GitLabProviderTests {
         Assert.Contains(result.Errors, e => e.Contains("not configured", StringComparison.OrdinalIgnoreCase));
         Assert.Null(handler.LastRequest);
         Assert.All(result.Errors, e => Assert.DoesNotContain(Token, e));
+    }
+
+    private sealed class ThrowingHttpMessageHandler : HttpMessageHandler {
+        private readonly Exception _exception;
+
+        public ThrowingHttpMessageHandler(Exception exception) => _exception = exception;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromException<HttpResponseMessage>(_exception);
     }
 }

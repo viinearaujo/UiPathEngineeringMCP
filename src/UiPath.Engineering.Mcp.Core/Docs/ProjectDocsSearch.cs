@@ -19,7 +19,7 @@ public sealed class DocsSearchResult {
 }
 
 public sealed class ProjectDocsSearch {
-    internal const int MaxFileCharacters = 2_000_000;
+    internal const int MaxFileCharacters = FileReadLimits.MaxFileBytes;
     private const int MaxSnippetLength = 300;
     internal const int MaxResults = 200;
 

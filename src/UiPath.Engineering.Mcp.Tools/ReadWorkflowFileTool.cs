@@ -11,12 +11,13 @@ namespace UiPath.Engineering.Mcp.Tools;
 [McpServerToolType]
 public sealed class ReadWorkflowFileTool {
     private const int DefaultMaxLines = 1000;
-    private static readonly string[] BlockedExtensions = [".pem", ".key"];
 
     private readonly IFilesystemProvider _filesystem;
+    private readonly IPathPolicy _pathPolicy;
 
-    public ReadWorkflowFileTool(IFilesystemProvider filesystem) {
+    public ReadWorkflowFileTool(IFilesystemProvider filesystem, IPathPolicy pathPolicy) {
         _filesystem = filesystem;
+        _pathPolicy = pathPolicy;
     }
 
     [McpServerTool(UseStructuredContent = true), Description("Reads the contents of any text file inside a UiPath project (XAML, .cs, JSON, configs, docs), with line numbers and pagination. Use this whenever the user asks what a file contains, to show specific lines, or to inspect project configuration. Obvious secret values are redacted; .env, *.pem and *.key files are refused. Use startLine/lineCount to page through large files.")]
@@ -36,15 +37,11 @@ public sealed class ReadWorkflowFileTool {
             return ToolResults.Failure("relativePath is required.", sw);
         }
 
-        var fileName = Path.GetFileName(relativePath);
-        var extension = Path.GetExtension(relativePath);
-        if (fileName.StartsWith(".env", StringComparison.OrdinalIgnoreCase)
-            || fileName.Contains("credentials", StringComparison.OrdinalIgnoreCase)
-            || BlockedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)) {
-            return ToolResults.Failure($"'{relativePath}' looks like a secret or key file and cannot be read.", sw);
+        if (_pathPolicy.IsSecretName(relativePath)) {
+            return ToolResults.Failure(PathPolicy.SecretReadRefusal(relativePath), sw);
         }
 
-        if (!ToolResults.TryResolveWithinProject(projectPath, relativePath, out var targetPath)) {
+        if (!_pathPolicy.TryResolveWithinProject(projectPath, relativePath, out var targetPath)) {
             return ToolResults.Failure("relativePath must resolve to a location inside the project directory.", sw);
         }
 
@@ -54,6 +51,11 @@ public sealed class ReadWorkflowFileTool {
 
         string raw;
         try {
+            var size = _filesystem.GetFileSize(targetPath);
+            if (_pathPolicy.ExceedsMaxSize(size)) {
+                return ToolResults.Failure(FileReadLimits.OversizedMessage(relativePath, size), sw);
+            }
+
             raw = _filesystem.ReadAllText(targetPath);
         } catch (Exception) {
             return ToolResults.Failure($"'{relativePath}' could not be read as text (it may be binary).", sw);

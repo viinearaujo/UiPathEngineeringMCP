@@ -89,4 +89,35 @@ public class ImplementationPlanStoreTests : IDisposable {
         Assert.Equal(PlanTask.Pending, reloaded.Tasks[1].Status);
         Assert.True(reloaded.UpdatedUtc >= reloaded.CreatedUtc);
     }
+
+    [Fact]
+    public void Save_LeavesNoTempFiles() {
+        _store.Save(_projectPath, SamplePlan());
+
+        Assert.False(File.Exists(ImplementationPlanStore.GetJsonPath(_projectPath) + ".tmp"));
+        Assert.False(File.Exists(ImplementationPlanStore.GetMarkdownPath(_projectPath) + ".tmp"));
+    }
+
+    [Fact]
+    public async Task Save_ConcurrentCalls_LeaveValidJson() {
+        var tasks = Enumerable.Range(0, 16).Select(i => Task.Run(() => {
+            var plan = SamplePlan();
+            plan.Goal = "Concurrent goal " + i;
+            plan.Tasks[0].Notes = "notes-" + i;
+            _store.Save(_projectPath, plan);
+        }));
+
+        await Task.WhenAll(tasks);
+
+        var loaded = _store.Load(_projectPath);
+        Assert.NotNull(loaded);
+        Assert.StartsWith("Concurrent goal ", loaded.Goal);
+        Assert.Equal(2, loaded.Tasks.Count);
+        Assert.False(File.Exists(ImplementationPlanStore.GetJsonPath(_projectPath) + ".tmp"));
+        Assert.False(File.Exists(ImplementationPlanStore.GetMarkdownPath(_projectPath) + ".tmp"));
+
+        var markdown = File.ReadAllText(ImplementationPlanStore.GetMarkdownPath(_projectPath));
+        Assert.Contains("# Implementation Plan", markdown);
+        Assert.Contains(loaded.Goal, markdown);
+    }
 }

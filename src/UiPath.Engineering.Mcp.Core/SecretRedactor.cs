@@ -30,4 +30,13 @@ public static class SecretRedactor {
         });
         return (text, count);
     }
+
+    public static List<string> RedactLines(IEnumerable<string> lines) {
+        var result = new List<string>();
+        foreach (var line in lines) {
+            result.Add(Redact(line).Text);
+        }
+
+        return result;
+    }
 }

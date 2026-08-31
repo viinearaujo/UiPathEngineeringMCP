@@ -17,7 +17,7 @@ public sealed class FindActivityTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Finds activities inside UiPath .xaml workflows and returns their stable activity IDs, line numbers, and ancestor chain. Filter by workflowFile, DisplayName substring (query), exact activity type, or exact activity ID. Pass the returned id to edit_workflow_activity / insert_activities as activityId. IDs are per-parse-snapshot: after a structural edit, re-run find_activity before using IDs captured earlier.")]
+    [McpServerTool(UseStructuredContent = true), Description("Finds activities inside UiPath .xaml workflows and returns their stable activity IDs, line numbers, and ancestor chain. Filter by workflowFile, DisplayName substring (query), exact activity type, or exact activity ID. Pass the returned id to insert_activities (Copilot default surgical path). edit_workflow_activity is a leave-off fragment hatch. IDs are per-parse-snapshot: after a structural edit, re-run find_activity before using IDs captured earlier.")]
     public async Task<ToolResult> FindActivity(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Optional workflow file name (with or without .xaml) to limit the search to one workflow.")] string? workflowFile = null,

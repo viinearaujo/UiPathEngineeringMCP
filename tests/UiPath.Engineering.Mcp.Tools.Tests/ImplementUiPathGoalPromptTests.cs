@@ -1,3 +1,5 @@
+using UiPath.Engineering.Mcp.Core.Configuration;
+
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
 public class ImplementUiPathGoalPromptTests {
@@ -10,6 +12,7 @@ public class ImplementUiPathGoalPromptTests {
         Assert.Contains("C:/Users/arauj/Documents/uipath/perf", text);
         Assert.Contains("Finish dispatcher retries", text);
         Assert.Contains("copilot-studio-agent-instructions.txt", text);
+        Assert.Contains(CopilotConnectorTools.JoinDefaultNames(), text);
         Assert.Contains("analyze_project", text);
         Assert.Contains("detail=summary", text);
         Assert.Contains("add_coded_workflow", text);

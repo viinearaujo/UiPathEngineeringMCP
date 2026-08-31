@@ -4,11 +4,23 @@ namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 /// Resolves the configured CLI executable (UiPathCliOptions.ExecutablePath)
 /// to a launch spec Process.Start can use. The UiPath CLI is typically installed via npm,
 /// which puts uip / uip.cmd / uip.ps1 shims on PATH (no uip.exe), so a bare command name is
-/// probed against every PATH directory with several extensions, and script shims are launched
-/// through their host (cmd.exe / powershell.exe).
+/// probed against every PATH directory with several extensions. An .exe (or extensionless
+/// binary) is started directly; .cmd/.bat and .ps1 shims are launched through their host
+/// with ProcessStartInfo.ArgumentList (shim path as one token, never a concatenated command string).
 /// </summary>
 internal static class CliExecutableResolver {
-    public sealed record LaunchSpec(string FileName, string ArgumentPrefix, string ArgumentSuffix, string ResolvedPath);
+    public sealed record LaunchSpec(string FileName, IReadOnlyList<string> PrefixArguments, string ResolvedPath) {
+        public IReadOnlyList<string> BuildArgumentList(IReadOnlyList<string> commandArguments) {
+            if (PrefixArguments.Count == 0) {
+                return commandArguments;
+            }
+
+            var args = new List<string>(PrefixArguments.Count + commandArguments.Count);
+            args.AddRange(PrefixArguments);
+            args.AddRange(commandArguments);
+            return args;
+        }
+    }
 
     // Probe priority when the configured value is a bare command name.
     private static readonly string[] ProbeExtensions = [".exe", ".cmd", ".bat", ".ps1"];
@@ -73,13 +85,13 @@ internal static class CliExecutableResolver {
 
     private static LaunchSpec ToLaunchSpec(string resolvedPath) =>
         Path.GetExtension(resolvedPath).ToLowerInvariant() switch {
-            // cmd.exe swallows the first and last quote of the /c command line, so the
-            // whole line must be wrapped in an extra pair of quotes (verified live:
-            // /c ""<shim>" restore "<proj>"" works, /c "<shim>" restore "<proj>" fails).
-            // Argument prefixes end with a space so callers can append their arguments
-            // directly; the suffix (if any) closes the doubled outer quotes.
-            ".cmd" or ".bat" => new LaunchSpec("cmd.exe", $"/c \"\"{resolvedPath}\" ", "\"", resolvedPath),
-            ".ps1" => new LaunchSpec("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -File \"{resolvedPath}\" ", "", resolvedPath),
-            _ => new LaunchSpec(resolvedPath, string.Empty, string.Empty, resolvedPath)
+            // cmd.exe /c with the shim as one ArgumentList token, then the CLI tokens.
+            // Never concatenate a /c command string — ArgumentList quotes each token.
+            ".cmd" or ".bat" => new LaunchSpec("cmd.exe", ["/c", resolvedPath], resolvedPath),
+            ".ps1" => new LaunchSpec(
+                "powershell.exe",
+                ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", resolvedPath],
+                resolvedPath),
+            _ => new LaunchSpec(resolvedPath, [], resolvedPath)
         };
 }

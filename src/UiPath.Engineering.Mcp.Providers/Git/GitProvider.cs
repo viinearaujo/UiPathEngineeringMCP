@@ -1,10 +1,11 @@
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 
 namespace UiPath.Engineering.Mcp.Providers.Git;
 
 /// <summary>
-/// Wraps the `git` CLI (expected on PATH). All invocations use fixed argument
-/// templates with validated inputs only — no caller-controlled shell text.
+/// Wraps the `git` CLI (expected on PATH). All invocations use ProcessStartInfo.ArgumentList
+/// with `-C` and the repo path as separate tokens — no caller-controlled shell text.
 /// A path that is not a git repository yields IsRepository = false with an
 /// explanatory error; this provider never throws for that case.
 /// </summary>
@@ -25,7 +26,7 @@ public sealed class GitProvider : IGitProvider {
             };
         }
 
-        var run = await RunGitAsync(repoPath, "status --porcelain=v1 --branch", cancellationToken);
+        var run = await RunGitAsync(repoPath, ["status", "--porcelain=v1", "--branch"], cancellationToken);
 
         if (IsNotARepository(run)) {
             return new GitStatusResult {
@@ -55,10 +56,10 @@ public sealed class GitProvider : IGitProvider {
             };
         }
 
-        // Clamp count so it stays a plain validated integer in the fixed template.
+        // Clamp count so it stays a plain validated integer in the argument list.
         var clamped = Math.Clamp(count, 1, 100);
         var format = "--pretty=format:%H%x1f%an%x1f%aI%x1f%s";
-        var run = await RunGitAsync(repoPath, $"log -n {clamped} {format}", cancellationToken);
+        var run = await RunGitAsync(repoPath, ["log", "-n", clamped.ToString(), format], cancellationToken);
 
         if (IsNotARepository(run)) {
             return new GitLogResult {
@@ -106,8 +107,15 @@ public sealed class GitProvider : IGitProvider {
     private static bool IsNotARepository(GitRunResult run) =>
         run.ExitCode != 0 && run.StdErr.Contains("not a git repository", StringComparison.OrdinalIgnoreCase);
 
-    private static async Task<GitRunResult> RunGitAsync(string repoPath, string arguments, CancellationToken cancellationToken) {
-        var run = await ProcessRunner.RunAsync("git", $"-C \"{repoPath}\" {arguments}", null,
+    internal static List<string> BuildInvocation(string repoPath, params string[] gitArgs) {
+        var args = new List<string>(2 + gitArgs.Length) { "-C", repoPath };
+        args.AddRange(gitArgs);
+        return args;
+    }
+
+    private static async Task<GitRunResult> RunGitAsync(string repoPath, string[] gitArgs, CancellationToken cancellationToken) {
+        var invocation = BuildInvocation(repoPath, gitArgs);
+        var run = await ProcessRunner.RunAsync("git", invocation, null,
             TimeSpan.FromSeconds(DefaultTimeoutSeconds), cancellationToken);
 
         if (run.StartError is not null) {
@@ -121,19 +129,21 @@ public sealed class GitProvider : IGitProvider {
         if (run.TimedOut) {
             return new GitRunResult {
                 ExitCode = -1,
-                Errors = [$"'git {arguments}' exceeded the {DefaultTimeoutSeconds}s timeout."]
+                Errors = [$"'git {string.Join(" ", gitArgs)}' exceeded the {DefaultTimeoutSeconds}s timeout."]
             };
         }
 
+        var stderr = SecretRedactor.Redact(run.StdErr).Text;
         return new GitRunResult {
             ExitCode = run.ExitCode,
             StdOut = run.StdOut,
-            StdErr = run.StdErr,
-            Errors = run.ExitCode == 0
-                ? []
-                : [.. ProcessRunner.SplitLines(run.StdErr).Select(l => $"[git] {l}")]
+            StdErr = stderr,
+            Errors = run.ExitCode == 0 ? [] : FormatGitErrors(run.StdErr)
         };
     }
+
+    internal static List<string> FormatGitErrors(string stderr) =>
+        [.. SecretRedactor.RedactLines(ProcessRunner.SplitLines(stderr)).Select(l => $"[git] {l}")];
 
     private sealed class GitRunResult {
         public int ExitCode { get; init; }

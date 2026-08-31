@@ -25,6 +25,33 @@ public static class HttpAuthEvaluator {
             || path.StartsWith("/sse/", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Returns null when HTTP hosting may start for <paramref name="environmentName"/>.
+    /// Non-Development requires <see cref="HttpAuthOptions.Enabled"/> and a non-empty key.
+    /// Development is unrestricted at startup; request-time still fails closed when
+    /// Enabled is true and the key is empty.
+    /// </summary>
+    public static string? ValidateHttpStartup(HttpAuthOptions options, string? environmentName) {
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (IsDevelopmentEnvironment(environmentName)) {
+            return null;
+        }
+
+        if (!options.Enabled) {
+            return "HTTP hosting outside Development requires McpServer:HttpAuth:Enabled to be true.";
+        }
+
+        if (string.IsNullOrWhiteSpace(options.ApiKey)) {
+            return "HTTP hosting outside Development requires a non-empty McpServer:HttpAuth:ApiKey.";
+        }
+
+        return null;
+    }
+
+    public static bool IsDevelopmentEnvironment(string? environmentName) =>
+        string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase);
+
     public static bool IsAuthorized(HttpAuthOptions options, string? headerValue, string? authorization) {
         if (!options.Enabled) {
             return true;

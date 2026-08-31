@@ -22,6 +22,21 @@ public class McpHttpAuthMiddlewareTests {
     }
 
     [Fact]
+    public async Task HealthReady_StaysAnonymousWhenAuthEnabled() {
+        var context = CreateContext("/health/ready", "GET");
+        var nextCalled = false;
+        var middleware = CreateMiddleware(Enabled: true, apiKey: "secret", next: _ => {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+    }
+
+    [Fact]
     public async Task Sse_WhenAuthDisabled_PassesThrough() {
         var context = CreateContext("/sse", "POST");
         var nextCalled = false;

@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Configuration;
@@ -7,12 +10,14 @@ namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 public sealed class UiPathCliProvider : IUiPathCliProvider {
     private readonly UiPathCliOptions _options;
+    private readonly ILogger<UiPathCliProvider> _logger;
 
     // Resolved once (the provider is a singleton); Lazy<> is thread-safe by default.
     private readonly Lazy<CliExecutableResolver.LaunchSpec?> _launchSpec;
 
-    public UiPathCliProvider(IOptions<UiPathCliOptions> options) {
+    public UiPathCliProvider(IOptions<UiPathCliOptions> options, ILogger<UiPathCliProvider>? logger = null) {
         _options = options.Value;
+        _logger = logger ?? NullLogger<UiPathCliProvider>.Instance;
         _launchSpec = new Lazy<CliExecutableResolver.LaunchSpec?>(
             () => CliExecutableResolver.Resolve(_options.ExecutablePath));
     }
@@ -35,15 +40,12 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         var overallSuccess = true;
         var lastExitCode = 0;
 
-        // projectPath is interpolated into a cmd.exe /c command line; reject shell
-        // metacharacters before any step runs (same rule CliCommandPolicy enforces
-        // for run_ui_path_cli arguments).
         if (CliCommandPolicy.ContainsRejectedChars(projectPath)) {
             return new UiPathCliResult {
                 Success = false,
                 ExitCode = -1,
                 Summary = "Project path rejected.",
-                Errors = ["The project path contains shell metacharacters (& | < > % ^) and cannot be passed to the UiPath CLI safely."]
+                Errors = ["The project path contains control characters and cannot be passed as a process argument."]
             };
         }
 
@@ -67,7 +69,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
                 continue;
             }
 
-            var stepResult = await RunAsync(verb, BuildVerbArguments(verb, projectPath), null, cancellationToken);
+            var stepResult = await RunTokensAsync(verb, BuildVerbArguments(verb, projectPath), null, cancellationToken);
 
             stepResults[verb] = new CliStepResult {
                 Executed = true,
@@ -107,14 +109,13 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         };
     }
 
-    // Command lines per the uip 1.x rpa surface: validate takes --project-dir, build and
+    // Command tokens per the uip 1.x rpa surface: validate takes --project-dir, build and
     // pack take the directory positionally; --output json so the output parser can read
-    // the structured response envelope. Paths are quoted so directories with spaces
-    // (e.g. OneDrive folders) work.
-    internal static string BuildVerbArguments(string verb, string projectPath) => verb switch {
-        "validate" => $"rpa validate --project-dir \"{projectPath}\" --output json",
-        "build" => $"rpa build \"{projectPath}\" --output json",
-        _ => $"rpa pack \"{projectPath}\" --output json"
+    // the structured response envelope. The project path is one ArgumentList token.
+    internal static string[] BuildVerbArguments(string verb, string projectPath) => verb switch {
+        "validate" => ["rpa", "validate", "--project-dir", projectPath, "--output", "json"],
+        "build" => ["rpa", "build", projectPath, "--output", "json"],
+        _ => ["rpa", "pack", projectPath, "--output", "json"]
     };
 
     // Redacts secrets and caps each stream so tool responses stay bounded.
@@ -124,33 +125,48 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         return (Cap(redactedOut, maxChars), Cap(redactedErr, maxChars));
     }
 
+    internal static List<string> BuildRawOutputLines(string stdout, string stderr) {
+        var lines = new List<string>();
+        lines.AddRange(SecretRedactor.RedactLines(ProcessRunner.SplitLines(stdout)));
+        lines.AddRange(SecretRedactor.RedactLines(ProcessRunner.SplitLines(stderr)));
+        return lines;
+    }
+
     private static string Cap(string s, int maxChars) =>
         s.Length <= maxChars ? s : s[..maxChars] + "\n...[truncated]";
 
-    public async Task<UiPathCliResult> RunAsync(
+    public Task<UiPathCliResult> RunAsync(
         string verb,
         string arguments,
         string? workingDirectory = null,
         CancellationToken cancellationToken = default) {
-        // arguments are interpolated verbatim into a cmd.exe /c command line; reject
-        // shell metacharacters here too, so a future caller that bypasses
-        // CliCommandPolicy (run_ui_path_cli already classifies) cannot inject.
         if (CliCommandPolicy.ContainsRejectedChars(arguments)) {
-            return new UiPathCliResult {
+            return Task.FromResult(new UiPathCliResult {
                 Success = false,
                 Command = $"{_options.ExecutablePath} {arguments}",
                 ExitCode = -1,
                 Summary = "Arguments rejected.",
-                Errors = ["The arguments contain shell metacharacters (& | < > % ^) that could break out of the command shim."]
-            };
+                Errors = ["The arguments contain control characters that cannot be passed as process arguments."]
+            });
         }
 
+        return RunTokensAsync(verb, ProcessRunner.SplitQuotedArguments(arguments), workingDirectory, cancellationToken);
+    }
+
+    private async Task<UiPathCliResult> RunTokensAsync(
+        string verb,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory,
+        CancellationToken cancellationToken) {
         var spec = _launchSpec.Value;
         if (spec is null) {
             var baseName = Path.GetFileNameWithoutExtension(_options.ExecutablePath);
+            _logger.LogInformation(
+                "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
+                verb, 0, "error", "cli_not_found");
             return new UiPathCliResult {
                 Success = false,
-                Command = $"{_options.ExecutablePath} {arguments}",
+                Command = FormatExecutedCommand(_options.ExecutablePath, arguments),
                 ExitCode = -1,
                 Summary = $"UiPath CLI ('{_options.ExecutablePath}') not found.",
                 Errors =
@@ -161,14 +177,20 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             };
         }
 
-        var command = $"{spec.ResolvedPath} {arguments}";
+        var command = FormatExecutedCommand(spec.ResolvedPath, arguments);
+        var sw = Stopwatch.StartNew();
 
         var run = await ProcessRunner.RunAsync(
-            spec.FileName, spec.ArgumentPrefix + arguments + spec.ArgumentSuffix, workingDirectory,
+            spec.FileName, spec.BuildArgumentList(arguments), workingDirectory,
             TimeSpan.FromSeconds(_options.DefaultTimeoutSeconds), cancellationToken);
+
+        sw.Stop();
 
         if (run.StartError is not null) {
             // Most common cause: resolved shim or its host (cmd.exe/powershell.exe) failed to start.
+            _logger.LogInformation(
+                "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
+                verb, sw.ElapsedMilliseconds, "error", "start_error");
             return new UiPathCliResult {
                 Success = false,
                 Command = command,
@@ -182,7 +204,23 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             };
         }
 
+        if (run.Canceled) {
+            _logger.LogInformation(
+                "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
+                verb, sw.ElapsedMilliseconds, "canceled", "canceled");
+            return new UiPathCliResult {
+                Success = false,
+                Command = command,
+                ExitCode = -1,
+                Summary = $"CLI '{verb}' was canceled.",
+                Errors = [$"'{verb}' was canceled by the caller."]
+            };
+        }
+
         if (run.TimedOut) {
+            _logger.LogInformation(
+                "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
+                verb, sw.ElapsedMilliseconds, "error", "timeout");
             return new UiPathCliResult {
                 Success = false,
                 Command = command,
@@ -202,13 +240,18 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             errors.Add($"[{verb}] '{verb}' exited with code {run.ExitCode}.");
         }
 
-        var rawLines = new List<string>();
-        if (_options.IncludeRawOutput) {
-            rawLines.AddRange(ProcessRunner.SplitLines(run.StdOut));
-            rawLines.AddRange(ProcessRunner.SplitLines(run.StdErr));
-        }
+        var rawLines = _options.IncludeRawOutput
+            ? BuildRawOutputLines(run.StdOut, run.StdErr)
+            : [];
 
         var (stdout, stderr) = CaptureOutput(run.StdOut, run.StdErr, _options.MaxOutputChars);
+        _logger.LogInformation(
+            "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode} exitCode {ExitCode}",
+            verb,
+            sw.ElapsedMilliseconds,
+            run.ExitCode == 0 ? "success" : "error",
+            run.ExitCode == 0 ? null : "exit",
+            run.ExitCode);
 
         return new UiPathCliResult {
             Success = run.ExitCode == 0,
@@ -222,5 +265,19 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             StdOut = stdout,
             StdErr = stderr
         };
+    }
+
+    internal static string FormatExecutedCommand(string resolvedPath, IReadOnlyList<string> arguments) {
+        if (arguments.Count == 0) {
+            return resolvedPath;
+        }
+
+        var parts = new string[arguments.Count + 1];
+        parts[0] = resolvedPath;
+        for (var i = 0; i < arguments.Count; i++) {
+            var arg = arguments[i];
+            parts[i + 1] = arg.Length == 0 || arg.Any(char.IsWhiteSpace) ? $"\"{arg}\"" : arg;
+        }
+        return string.Join(" ", parts);
     }
 }

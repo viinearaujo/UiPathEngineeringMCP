@@ -42,6 +42,17 @@ public static class CopilotConnectorTools {
         "create_work_items",
         "list_skills",
         "read_skill",
+        "explain_workflow",
+        "create_project",
+        "add_xaml_workflow",
+        "get_workflow_dependencies",
+        "edit_workflow_activity",
+        "manage_project_file",
+        "patch_project_json",
+        "manage_project_docs",
+        "sync_project_context",
+        "validate_project_docs",
+        "analyze_project_gaps",
     ];
 
     private static readonly HashSet<string> DefaultSet = new(DefaultNames, StringComparer.Ordinal);
@@ -54,4 +65,11 @@ public static class CopilotConnectorTools {
 
     public static List<string> FilterNames(IEnumerable<string> names) =>
         names.Where(IsDefault).ToList();
+
+    /// <summary>Comma-separated DefaultNames. Use this instead of hand-copied catalogs.</summary>
+    public static string JoinDefaultNames() => string.Join(", ", DefaultNames);
+
+    /// <summary>README / markdown form of <see cref="JoinDefaultNames"/> (`name` per entry).</summary>
+    public static string JoinDefaultNamesMarkdown() =>
+        string.Join(", ", DefaultNames.Select(n => $"`{n}`"));
 }

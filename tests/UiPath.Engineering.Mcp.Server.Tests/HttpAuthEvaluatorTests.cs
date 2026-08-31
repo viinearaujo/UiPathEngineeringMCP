@@ -29,4 +29,20 @@ public class HttpAuthEvaluatorTests {
         Assert.True(HttpAuthEvaluator.IsAuthorized(options, null, "Bearer secret"));
         Assert.False(HttpAuthEvaluator.IsAuthorized(options, null, "Bearer wrong"));
     }
+
+    [Fact]
+    public void ValidateHttpStartup_Development_AllowsAuthDisabled() {
+        Assert.Null(HttpAuthEvaluator.ValidateHttpStartup(
+            new HttpAuthOptions { Enabled = false, ApiKey = "" }, "Development"));
+    }
+
+    [Fact]
+    public void ValidateHttpStartup_Production_RequiresEnabledAndNonEmptyKey() {
+        Assert.NotNull(HttpAuthEvaluator.ValidateHttpStartup(
+            new HttpAuthOptions { Enabled = false, ApiKey = "secret" }, "Production"));
+        Assert.NotNull(HttpAuthEvaluator.ValidateHttpStartup(
+            new HttpAuthOptions { Enabled = true, ApiKey = "" }, "Production"));
+        Assert.Null(HttpAuthEvaluator.ValidateHttpStartup(
+            new HttpAuthOptions { Enabled = true, ApiKey = "secret" }, "Production"));
+    }
 }

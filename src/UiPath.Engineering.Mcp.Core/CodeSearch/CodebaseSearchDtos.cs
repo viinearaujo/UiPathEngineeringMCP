@@ -8,6 +8,7 @@ namespace UiPath.Engineering.Mcp.Core.CodeSearch;
 /// </summary>
 public abstract class CodebaseSearchResult {
     public bool Truncated { get; set; }
+    public bool Stale { get; set; }
     public string? Note { get; set; }
     public List<string> Warnings { get; set; } = [];
 }

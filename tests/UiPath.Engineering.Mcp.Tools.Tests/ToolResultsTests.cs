@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -60,6 +61,9 @@ public class ToolResultsTests
 
         Assert.NotNull(result);
         Assert.Equal("Path not allowed.", result.Summary);
+        var error = Assert.Single(result.ErrorDetails);
+        Assert.Equal(ToolErrorCodes.PathNotAllowed, error.ErrorCode);
+        Assert.DoesNotContain("/x", string.Join(" ", result.Errors));
     }
 
     [Fact]
@@ -71,6 +75,8 @@ public class ToolResultsTests
 
         Assert.NotNull(result);
         Assert.Equal("project.json not found.", result.Summary);
+        var error = Assert.Single(result.ErrorDetails);
+        Assert.Equal(ToolErrorCodes.ProjectJsonNotFound, error.ErrorCode);
     }
 
     [Fact]
@@ -91,13 +97,20 @@ public class ToolResultsTests
     [Fact]
     public void FromException_MapsKnownFailureModes()
     {
-        var notFound = ToolResults.FromException(new FileNotFoundException("missing"), "Failed.", Sw);
-        var badJson = ToolResults.FromException(new JsonException("bad"), "Failed.", Sw);
+        var notFound = ToolResults.FromException(new FileNotFoundException("leaked-path-xyz"), "Failed.", Sw);
+        var badJson = ToolResults.FromException(new JsonException("Unexpected token at line 4"), "Failed.", Sw);
         var other = ToolResults.FromException(new InvalidOperationException("boom"), "Failed.", Sw);
 
         Assert.Equal("project.json not found.", notFound.Summary);
+        Assert.Equal(ToolErrorCodes.ProjectJsonNotFound, Assert.Single(notFound.ErrorDetails).ErrorCode);
+        Assert.DoesNotContain("leaked-path-xyz", string.Join(" ", notFound.Errors));
+
         Assert.Equal("project.json could not be parsed.", badJson.Summary);
+        Assert.Equal(ToolErrorCodes.ProjectJsonInvalid, Assert.Single(badJson.ErrorDetails).ErrorCode);
+        Assert.DoesNotContain("Unexpected token", string.Join(" ", badJson.Errors));
+
         Assert.Equal("Failed.", other.Summary);
-        Assert.Equal(["boom"], other.Errors);
+        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(other.ErrorDetails).ErrorCode);
+        Assert.DoesNotContain("boom", string.Join(" ", other.Errors));
     }
 }

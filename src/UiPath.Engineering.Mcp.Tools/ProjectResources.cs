@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -17,31 +19,35 @@ public sealed class ProjectResources {
         WriteIndented = false
     };
 
-    private static readonly string[] BlockedExtensions = [".pem", ".key"];
-
     private readonly IFilesystemProvider _filesystem;
+    private readonly IPathPolicy _pathPolicy;
     private readonly IProjectModelBuilder _modelBuilder;
     private readonly ImplementationPlanStore _planStore;
     private readonly ISkillsProvider _skills;
     private readonly ProjectKnowledgeStore _knowledge;
     private readonly ProjectAdrStore _adrs;
     private readonly ProjectDocsValidator _docsValidator;
+    private readonly ILogger<ProjectResources> _logger;
 
     public ProjectResources(
         IFilesystemProvider filesystem,
+        IPathPolicy pathPolicy,
         IProjectModelBuilder modelBuilder,
         ImplementationPlanStore planStore,
         ISkillsProvider skills,
         ProjectKnowledgeStore knowledge,
         ProjectAdrStore adrs,
-        ProjectDocsValidator docsValidator) {
+        ProjectDocsValidator docsValidator,
+        ILogger<ProjectResources>? logger = null) {
         _filesystem = filesystem;
+        _pathPolicy = pathPolicy;
         _modelBuilder = modelBuilder;
         _planStore = planStore;
         _skills = skills;
         _knowledge = knowledge;
         _adrs = adrs;
         _docsValidator = docsValidator;
+        _logger = logger ?? NullLogger<ProjectResources>.Instance;
     }
 
     [McpServerResource(UriTemplate = "uipath://skills/{name}", MimeType = "text/markdown", Name = "skill")]
@@ -57,8 +63,8 @@ public sealed class ProjectResources {
             return redacted;
         } catch (OperationCanceledException) {
             throw;
-        } catch (Exception) {
-            return "Skill read failed.";
+        } catch (Exception ex) {
+            return ResourceFailure("skill", "Skill read failed.", ex);
         }
     }
 
@@ -74,8 +80,8 @@ public sealed class ProjectResources {
             return JsonSerializer.Serialize(ProjectAnalysisView.ToSummary(model), JsonOptions);
         } catch (OperationCanceledException) {
             throw;
-        } catch (Exception) {
-            return "Project model failed.";
+        } catch (Exception ex) {
+            return ResourceFailure("project-model", "Project model failed.", ex);
         }
     }
 
@@ -87,16 +93,25 @@ public sealed class ProjectResources {
                 return "Invalid UiPath project directory.";
             }
 
-            var path = ImplementationPlanStore.GetJsonPath(projectPath);
-            if (!File.Exists(path)) {
+            var relative = $"{ImplementationPlanStore.PlanDirectoryName}/{ImplementationPlanStore.PlanJsonFileName}";
+            if (!_pathPolicy.TryResolveWithinProject(projectPath, relative, out var path)) {
+                return "Invalid UiPath project directory.";
+            }
+
+            if (!_filesystem.FileExists(path)) {
                 return "No implementation plan at docs/implementation-plan.json. Create one with create_implementation_plan only if none exists.";
             }
 
-            return File.ReadAllText(path);
+            var planSize = _filesystem.GetFileSize(path);
+            if (_pathPolicy.ExceedsMaxSize(planSize)) {
+                return FileReadLimits.OversizedMessage("docs/implementation-plan.json", planSize);
+            }
+
+            return _filesystem.ReadAllText(path);
         } catch (OperationCanceledException) {
             throw;
-        } catch (Exception) {
-            return "Project plan read failed.";
+        } catch (Exception ex) {
+            return ResourceFailure("project-plan", "Project plan read failed.", ex);
         }
     }
 
@@ -108,15 +123,11 @@ public sealed class ProjectResources {
                 return "Invalid UiPath project directory.";
             }
 
-            var fileName = Path.GetFileName(relativePath);
-            var extension = Path.GetExtension(relativePath);
-            if (fileName.StartsWith(".env", StringComparison.OrdinalIgnoreCase)
-                || fileName.Contains("credentials", StringComparison.OrdinalIgnoreCase)
-                || BlockedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)) {
-                return $"'{relativePath}' looks like a secret or key file and cannot be read.";
+            if (_pathPolicy.IsSecretName(relativePath)) {
+                return PathPolicy.SecretReadRefusal(relativePath);
             }
 
-            if (!ToolResults.TryResolveWithinProject(projectPath, relativePath, out var targetPath)) {
+            if (!_pathPolicy.TryResolveWithinProject(projectPath, relativePath, out var targetPath)) {
                 return "relativePath must resolve to a location inside the project directory.";
             }
 
@@ -124,13 +135,18 @@ public sealed class ProjectResources {
                 return $"File '{relativePath}' does not exist in the project.";
             }
 
+            var size = _filesystem.GetFileSize(targetPath);
+            if (_pathPolicy.ExceedsMaxSize(size)) {
+                return FileReadLimits.OversizedMessage(relativePath, size);
+            }
+
             var raw = _filesystem.ReadAllText(targetPath);
             var (redacted, _) = SecretRedactor.Redact(raw);
             return redacted;
         } catch (OperationCanceledException) {
             throw;
-        } catch (Exception) {
-            return "Workflow read failed.";
+        } catch (Exception ex) {
+            return ResourceFailure("project-workflow", "Workflow read failed.", ex);
         }
     }
 
@@ -166,8 +182,13 @@ public sealed class ProjectResources {
             return JsonSerializer.Serialize(payload, JsonOptions);
         } catch (OperationCanceledException) {
             throw;
-        } catch (Exception) {
-            return "Project knowledge read failed.";
+        } catch (Exception ex) {
+            return ResourceFailure("project-knowledge", "Project knowledge read failed.", ex);
         }
+    }
+
+    private string ResourceFailure(string resource, string clientMessage, Exception ex) {
+        _logger.LogWarning(ex, "Resource {Resource} failed with {ErrorCode}", resource, ToolErrorCodes.OperationFailed);
+        return clientMessage;
     }
 }

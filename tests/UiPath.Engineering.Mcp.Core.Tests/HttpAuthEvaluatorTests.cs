@@ -34,4 +34,25 @@ public class HttpAuthEvaluatorTests {
         Assert.True(HttpAuthEvaluator.IsAuthorized(options, null, "Bearer secret"));
         Assert.False(HttpAuthEvaluator.IsAuthorized(options, null, "Bearer wrong"));
     }
+
+    [Fact]
+    public void ValidateHttpStartup_Development_AllowsAuthDisabled() {
+        var options = new HttpAuthOptions { Enabled = false, ApiKey = "" };
+        Assert.Null(HttpAuthEvaluator.ValidateHttpStartup(options, "Development"));
+        Assert.Null(HttpAuthEvaluator.ValidateHttpStartup(options, "development"));
+    }
+
+    [Fact]
+    public void ValidateHttpStartup_NonDevelopment_RequiresEnabledAndKey() {
+        Assert.NotNull(HttpAuthEvaluator.ValidateHttpStartup(
+            new HttpAuthOptions { Enabled = false, ApiKey = "secret" }, "Production"));
+        Assert.NotNull(HttpAuthEvaluator.ValidateHttpStartup(
+            new HttpAuthOptions { Enabled = true, ApiKey = "" }, "Production"));
+        Assert.NotNull(HttpAuthEvaluator.ValidateHttpStartup(
+            new HttpAuthOptions { Enabled = true, ApiKey = "   " }, "Staging"));
+        Assert.NotNull(HttpAuthEvaluator.ValidateHttpStartup(
+            new HttpAuthOptions { Enabled = false, ApiKey = "" }, environmentName: null));
+        Assert.Null(HttpAuthEvaluator.ValidateHttpStartup(
+            new HttpAuthOptions { Enabled = true, ApiKey = "secret" }, "Production"));
+    }
 }

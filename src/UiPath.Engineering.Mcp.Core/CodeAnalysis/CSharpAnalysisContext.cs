@@ -15,4 +15,9 @@ public sealed class CSharpAnalysisContext {
     public IReadOnlyList<string> UnresolvedReferences { get; init; } = [];
     public IReadOnlyList<string> Warnings { get; init; } = [];
     public bool HasCSharpFiles { get; init; }
+    /// <summary>
+    /// True when this context was served from cache because the project fingerprint
+    /// could not be computed (filesystem error). Callers should surface a warning.
+    /// </summary>
+    public bool Stale { get; set; }
 }

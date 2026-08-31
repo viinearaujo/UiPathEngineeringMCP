@@ -10,23 +10,23 @@ The skills feed under `.agents/skills` is **RPA-only** (do not reinstall the ful
 | Tool | What it does |
 |------|--------------|
 | `analyze_project` | Parses project.json + workflows/coded files into a cached project model. Default response is a summary (counts, workflow index, coded-file kind: workflow/test/source, packages, risks, folder tree). Pass detail='full' to page complete workflow models (page/pageSize), or workflowFile to load one workflow fully. |
-| `validate_project` | Runs the UiPath CLI (`uip rpa validate` / `build` / `pack` with `--output json`) and returns structured per-step results (`executed`/`success`/`errors`/`warnings` each) plus recommendations. |
+| `validate_project` | Runs the UiPath CLI (`uip rpa validate` / `build` / `pack` with `--output json`) and returns structured per-step results (`executed`/`success`/`errors`/`warnings` each) plus recommendations. Agent green gate: `build:false`, `pack:false`. Authoritative CLI compile: `build:true` (`compile_project` is a leave-off alias of that). |
 | `explain_workflow` | Returns the structured breakdown of a single workflow: arguments, variables, activity outline, exception handlers, invoked workflows, log messages. Coded (`.cs`) files return `kind` (`workflow` / `test` / `source`), class name, namespace, entry methods, entry arguments, and public methods. |
 | `generate_documentation` | Returns deterministic structured documentation data for the whole project: metadata, per-workflow summaries, dependency graph (edges, cycles, orphans), risks. |
 | `search_repository` | Searches GitLab issues for the configured project (requires the `GitLab` config section; token is never returned). |
 | `create_work_items` | Creates GitLab issues/work items from a list of `{ title, description, labels? }`, returning created IDs/URLs and per-item failures. |
 | `create_project` | Scaffolds a new UiPath project via `uip rpa init` (requires the UiPath CLI RPA tool installed on the host). Detects the documented partial-success case by checking the created files. |
 | `add_xaml_workflow` | Adds a blank `.xaml` workflow to an existing project, with the correct `x:Class` naming (relative path, separators → underscores). |
-| `write_workflow_file` | Creates or fully overwrites a `.xaml` or `.cs` file inside a project. For `.xaml`, activity types must be in the project catalog unless `allowUnknownActivities` is true. |
+| `write_workflow_file` | Leave-off full-file overwrite (`ToolSurface=All` only). Prefer `edit_workflow_file` for small string edits and `insert_activities` for spec-based XAML inserts. For `.xaml`, activity types must be in the project catalog unless `allowUnknownActivities` is true. |
 | `read_workflow_file` | Reads any text file inside a project with line numbers and pagination (`startLine`/`lineCount`, default 1000 lines); obvious secret values are redacted and `.env`/`*.pem`/`*.key` files are refused. |
 | `edit_workflow_file` | Replaces an exact string in a `.xaml`/`.cs` file; fails on zero or ambiguous matches unless `replaceAll: true`. Preferred over `write_workflow_file` for small changes. |
-| `find_activity` | Finds activities in `.xaml` workflows and returns stable per-snapshot activity IDs, line numbers, and ancestor chains. Filter by `workflowFile`, DisplayName substring (`query`), exact `activityType`, or exact `activityId`. Pass the returned `id` to `edit_workflow_activity` / `insert_activities`. Unparsable workflows are skipped and reported as warnings. |
+| `find_activity` | Finds activities in `.xaml` workflows and returns stable per-snapshot activity IDs, line numbers, and ancestor chains. Filter by `workflowFile`, DisplayName substring (`query`), exact `activityType`, or exact `activityId`. Pass the returned `id` to `insert_activities` (Copilot default surgical path). `edit_workflow_activity` is a leave-off fragment hatch. Unparsable workflows are skipped and reported as warnings. |
 | `get_workflow_dependencies` | Shows the `InvokeWorkflowFile` graph: project-wide edges, cycles, orphans, and unresolved targets; or, with `workflowFile`, that workflow's callers/callees with argument mappings. |
-| `edit_workflow_activity` | Activity-level XAML editing: insert an activity fragment into a container, replace, or remove an activity located by `activityId` (from `find_activity`) or `DisplayName` (optional `activityType` disambiguation). Whitespace-preserving; fragments understand unprefixed WF activities plus the `ui:`/`x:` prefixes. |
+| `edit_workflow_activity` | Leave-off XAML fragment hatch (`ToolSurface=All` only). Prefer `insert_activities` on the Copilot default connector. Inserts a raw fragment into a container, or replaces/removes one activity, located by `activityId` (from `find_activity`) or `DisplayName`. |
 | `validate_activity_spec` | Dry-run validation of a JSON activity spec against the UiPath activity catalog — no files read or written. Returns every violation as a structured error (`errorCode`/`message`/`fixHint`), or the list of catalog activities the spec uses. |
 | `recommend_activities` | Returns up to 5 version-aware activity schemas for a natural-language query against the project's installed packages (`uip rpa activities find` when available; otherwise the built-in fallback catalog). Call before `validate_activity_spec` when the type is unknown. |
 | `build_workflow` | Creates a real `.xaml` workflow file in a project from a JSON activity spec (run `validate_activity_spec` first). Never overwrites an existing file unless `overwrite: true`. |
-| `insert_activities` | Inserts activities described by a JSON activity spec into an existing `.xaml` workflow, as children of the activity located by `activityId` (from `find_activity`) or `DisplayName` — the spec-based sibling of `edit_workflow_activity`. |
+| `insert_activities` | Recommended Copilot surgical XAML path: inserts activities from a JSON spec into an existing `.xaml` workflow, as children of the activity located by `activityId` (from `find_activity`) or `DisplayName`. Prefer this over `edit_workflow_activity`. |
 | `manage_workflow_data` | Manages the data surface of an existing `.xaml` workflow: add, remove, or rename arguments (`x:Property`) and variables (`Sequence.Variables`). |
 | `manage_project_file` | Creates, edits, or deletes a `.md` / `.json` / `.txt` file. Refuses `project.json`, plan files, `docs/knowledge`, `docs/adr`, secret names, and `***REDACTED***` bodies. |
 | `patch_project_json` | One structured `project.json` operation (entry points, dependencies, fileInfoCollection, exception handler, runtimeOptions). Never changes `expressionLanguage`, `targetFramework`, or `schemaVersion`. |
@@ -38,12 +38,12 @@ The skills feed under `.agents/skills` is **RPA-only** (do not reinstall the ful
 | `update_plan_task` | Updates a single plan task's status (`pending`/`in_progress`/`done`/`blocked`) and optional notes. The plan is a scratchpad; `done` is not blocked on docs/ADR freshness. |
 | `get_implementation_plan` | Returns the project's implementation plan with derived per-status task counts. |
 | `analyze_project_gaps` | Deterministic hygiene gap analysis over the project model (entry point, orphan workflows, exception handling, logging, descriptions, tests, unresolved invokes, coded/XAML primitive-only invoke boundary) plus plan cross-checks; each gap names the MCP tool that fixes it. |
-| `verify_work` | Rebuilds the model, runs CLI validation (`uip rpa validate`; optional `build`, default `build: false`), checks expected/planned files exist, and marks the given plan tasks `done` or `blocked` accordingly (statuses untouched when the CLI cannot run; BUILD failure does not auto-block). |
+| `verify_work` | Leave-off bundled check (not on the Copilot default connector). Prefer `validate_project(build:false, pack:false)` then `update_plan_task`. Rebuilds the model, runs CLI validate (optional `build`), checks expected files, and can mark plan tasks `done` or `blocked`. Not the agent done gate. |
 | `find_code_symbol` | Finds C# symbols (methods, classes, properties, fields, interfaces) by exact name using Roslyn semantic analysis; returns kind, file, line, containing type, signature. |
 | `find_code_references` | Finds all usage sites of a C# symbol across the project's `.cs` files (semantic matching with an identifier-matching fallback for external symbols). |
 | `get_code_context` | Returns the semantic context of one C# member (located by symbol name or file+line): signature, containing type, called methods, referenced types, and the member's source. |
 | `get_compile_errors` | Structured Roslyn compiler diagnostics (file/line/column/code/severity/message) without running a build; responses include `analysisMode` (`full`/`partial`/`syntaxOnly`). |
-| `compile_project` | Authoritative UiPath CLI build (`uip rpa build`) returning structured compiler errors/warnings. |
+| `compile_project` | Leave-off CLI build (not on the Copilot default connector). Prefer `validate_project(build:true)`, which already runs `uip rpa build`. Do not use as the agent-loop green gate. |
 | `search_codebase` | Substring search across a project's `.xaml` and `.cs` files in four modes: `text` (matching lines), `symbol` (C# symbols via Roslyn, optional `kind` filter), `activity` (XAML activities by display name/type), `workflow` (workflows by file name/description). Exact-case matches order first; capped at 200 matches with a `truncated` flag. |
 | `run_ui_path_cli` | Runs an allowlisted UiPath CLI (`uip`) command (default verbs: `rpa`, `solution`); mutating subcommands are blocked unless enabled in config, shell metacharacters are rejected, and stdout/stderr are redacted and capped. |
 | `list_skills` | Lists RPA playbooks only (`uipath-rpa`, `guided-implementation-loop`). Not a full UiPath product catalog. |
@@ -76,15 +76,15 @@ devtunnel --version
 
 ## 2. Configure allowed project roots
 
-Edit `src/UiPath.Engineering.Mcp.Server/appsettings.json` and set `Projects:AllowedRoots`
-to the folders that contain your UiPath projects. Only paths **inside** these roots can
-be analyzed or validated (security guard). Example:
+Committed `appsettings.json` ships `Projects:AllowedRoots` as `[]`. Set the folders that
+contain your UiPath projects locally (`appsettings.Development.json`, user secrets, or
+`Projects__AllowedRoots__0`). Only paths **inside** these roots can be analyzed or
+validated (security guard). Do not commit personal machine paths. Example:
 
 ```json
 "Projects": {
   "AllowedRoots": [
-    "C:/Users/arauj/OneDrive/Documentos/UiPath",
-    "C:/Users/arauj/Documents/uipath"
+    "C:/path/to/your/uipath-projects"
   ]
 }
 ```
@@ -142,10 +142,12 @@ Local agent stdio: see [docs/agent-connection.md](docs/agent-connection.md).
 
 ## 4. Expose via Microsoft Dev Tunnel
 
-Quickest path — use the helper script (idempotent create + host, prints the public URLs):
+Quickest path — enable HTTP auth (`McpServer:HttpAuth:Enabled` and a non-empty `ApiKey`),
+then run the helper (idempotent create + host, prints the public URLs). A Development
+host may start with auth off for localhost; do not tunnel that configuration.
 
 ```powershell
-./scripts/setup-devtunnel.ps1 -Anonymous     # anonymous is fine for local testing only
+./scripts/setup-devtunnel.ps1
 ```
 
 Or do it manually:
@@ -168,11 +170,12 @@ Invoke-WebRequest https://<id>-5000.devtunnels.ms/health
 
 Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
-> For local/dev, leave `McpServer:HttpAuth:Enabled` false (anonymous `/sse`). Before any
-> non-local Copilot (Dev Tunnel or shared host), set `Enabled` true and put the key in
-> `McpServer:HttpAuth:ApiKey` (or env `McpServer__HttpAuth__ApiKey`). Copilot must send
+> Non-Development HTTP refuses to start unless `McpServer:HttpAuth:Enabled` is true and
+> `McpServer:HttpAuth:ApiKey` is non-empty (env `McpServer__HttpAuth__ApiKey`). Development
+> may leave auth off for localhost. Stdio (`--stdio`) is unauthenticated. Copilot must send
 > `X-Api-Key: <key>` (header name overridable via `HttpAuth:HeaderName`) or
-> `Authorization: Bearer <key>`. `GET /health` is never authenticated.
+> `Authorization: Bearer <key>`. `GET /health` is never authenticated. When Enabled is true
+> and the key is empty, `/sse` is fail-closed (401).
 
 ---
 
@@ -182,8 +185,8 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
 - **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop; green gate is `validate_project(build:false, pack:false)` then `update_plan_task`). New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with primitives only; never custom types or source-file methods from XAML.
 - **Recommended tools (default connector, ≤12):** `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`
-- **Leave off the default connector:** full C# Roslyn suite except `get_compile_errors` (`find_code_symbol`, `find_code_references`, `get_code_context`), `compile_project`, `verify_work`, `run_ui_path_cli`, `create_implementation_plan`, `generate_documentation`, `write_workflow_file` (escape hatch), `recommend_activities`, `validate_activity_spec`, `build_workflow`, `manage_workflow_data`, GitLab (`search_repository`, `create_work_items`), `list_skills`, `read_skill` (this instruction file is the loop). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only the default names; set `All` for Inspector. GitLab tools stay on the server.
-- **Full tool surface** (Inspector / local agents): `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `read_workflow_file`, `edit_workflow_file`, `find_activity`, `get_workflow_dependencies`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `manage_project_file`, `patch_project_json`, `manage_project_docs`, `sync_project_context`, `validate_project_docs`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`, `find_code_symbol`, `find_code_references`, `get_code_context`, `get_compile_errors`, `compile_project`, `search_codebase`, `run_ui_path_cli`, `list_skills`, `read_skill`, `recommend_activities`
+- **Leave off the default connector:** `CopilotConnectorTools.LeaveOffNames`. Notable overlaps: `compile_project` (use `validate_project(build:true)`), `verify_work` (use `validate_project` then `update_plan_task`), `edit_workflow_activity` (prefer `insert_activities`; fragment hatch on `All`), `write_workflow_file` (full-file overwrite on `ToolSurface=All` only). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only `CopilotConnectorTools.DefaultNames`; set `All` for Inspector. GitLab tools stay registered on the server.
+- **Full tool surface** (Inspector / `ToolSurface=All`): every name in `CopilotConnectorTools.DefaultNames` plus `LeaveOffNames` (canonical C# arrays — do not hand-copy a third catalog here).
 
 This server is **RPA only** (`.xaml` / `.cs`). Do not install the full `uip skills` marketplace catalog into `.agents/skills`.
 
@@ -267,7 +270,7 @@ The `tests/` folder contains four xUnit projects:
 | `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder` (xaml + coded `.cs` files), `XamlWorkflowParser` (arguments/variables/try-catch/invokes/log messages, malformed xaml), `CodedSourceFileParser` (namespace/class/`[Workflow]`/public methods, malformed input), `DependencyGraphBuilder` (chains, cycles, orphans), XAML/C# file templates (x:Class naming, namespace sanitization), `ImplementationPlanStore` round-trip, `ProjectGapAnalyzer` rule coverage, project file policy, JSON patcher, knowledge/ADR stores, context renderer, docs validator and search. |
 | `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing (root/child allowed, sibling-prefix & unrelated rejected), filesystem write/delete guards (writes/deletes outside allowed roots throw), `.xaml`/`.cs` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree` (depth/ignore/missing dir), `CliExecutableResolver` (explicit path, exe/cmd/ps1 priority, extension fallback), `UiPathCliOutputParser` (analyzer/NuGet/fallback formats), `UiPathCliProvider` per-step results and CLI-not-found error, `GitStatusParser` (porcelain/ahead-behind/not-a-repo), `GitLabProvider` (search/create, token never surfaced). |
 | `UiPath.Engineering.Mcp.Tools.Tests` | Tools including the five project-docs tools (`manage_project_file`, `patch_project_json`, `manage_project_docs`, `sync_project_context`, `validate_project_docs`), path-not-allowed, project.json-not-found, happy path, per-step validate output shape, workflow-not-found, parse-error surfacing, GitLab search/create shapes, authoring guards (path-escape, extension allowlist, existing-file), coded-workflow entry-point registration, `uip rpa init` argument shape + partial-success handling, activity-level editing, spec-based authoring, `read_workflow_file`, `edit_workflow_file`, plan create/update/get (`update_plan_task(done)` is not docs-gated), gap-analysis shape (including docs errors), `verify_work` CLI success/failure/unavailable branches with task status transitions and docs-gate refusal, C# analysis tools, `search_codebase`, and structured error propagation (no raw exceptions). |
-| `UiPath.Engineering.Mcp.Server.Tests` | HTTP host mode, Copilot default connector list, optional `/sse` API-key auth (on/off, `/health` anonymous), and `update_plan_task(done)` not blocked on docs freshness. |
+| `UiPath.Engineering.Mcp.Server.Tests` | HTTP host mode, Copilot default connector list, `/sse` API-key auth (on/off, fail-closed empty key, `/health` anonymous), non-Development HTTP startup validation, empty committed `AllowedRoots`, and `update_plan_task(done)` not blocked on docs freshness. |
 
 Tests use hand-written fakes (no Moq) so there are no extra runtime dependencies.
 
@@ -317,9 +320,10 @@ src/
   launched via `cmd.exe`/`powershell.exe`). On non-Windows / missing CLI it returns a
   structured error instead of crashing.
 - The `/sse` path serves the **Streamable HTTP** transport (not legacy SSE); the name is
-  kept only to match the Copilot registration docs. Optional API-key auth is
-  `McpServer:HttpAuth` (off by default). HTTP Copilot advertises the default connector
-  unless `McpServer:ToolSurface` is `All`.
+  kept only to match the Copilot registration docs. HTTP auth (`McpServer:HttpAuth`) is
+  required at startup outside Development; Development may leave it off. Stdio is
+  unauthenticated. HTTP Copilot advertises the default connector unless
+  `McpServer:ToolSurface` is `All`.
 - The C# analysis tools (`find_code_symbol`, `find_code_references`, `get_code_context`,
   `get_compile_errors`) build a cached in-memory Roslyn compilation per project. When
   NuGet package assemblies cannot be resolved the response reports

@@ -1,8 +1,9 @@
 namespace UiPath.Engineering.Mcp.Core.Configuration;
 
 /// <summary>
-/// Optional API-key gate in front of HTTP <c>/sse</c>. Disabled by default
-/// for local/dev. When enabled, <c>/health</c> stays anonymous.
+/// API-key gate in front of HTTP <c>/sse</c>. Disabled is allowed only in
+/// Development. Non-Development HTTP requires Enabled and a non-empty key at
+/// startup. <c>/health</c> stays anonymous. Stdio is unauthenticated.
 /// </summary>
 public sealed class HttpAuthOptions {
     public bool Enabled { get; set; }

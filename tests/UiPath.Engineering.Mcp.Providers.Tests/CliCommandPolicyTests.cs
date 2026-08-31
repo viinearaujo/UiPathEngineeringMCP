@@ -60,7 +60,17 @@ public class CliCommandPolicyTests {
     [InlineData("validate < in.txt")]
     [InlineData("validate --output %PATH%")]
     [InlineData("validate ^")]
-    public void Classify_ShellMetacharacters_AreRejected(string arguments) {
+    public void Classify_ShellMetacharacters_AreClassifiedBySubcommand(string arguments) {
+        var sut = CreateSut();
+
+        Assert.Equal(CliCommandClass.AllowedReadOnly, sut.Classify("rpa", arguments));
+    }
+
+    [Theory]
+    [InlineData("validate --output json\nwhoami")]
+    [InlineData("validate --output json\r\nwhoami")]
+    [InlineData("validate --output json\0whoami")]
+    public void Classify_NewlinesAndNul_AreRejected(string arguments) {
         var sut = CreateSut();
 
         Assert.Equal(CliCommandClass.ArgumentsRejected, sut.Classify("rpa", arguments));

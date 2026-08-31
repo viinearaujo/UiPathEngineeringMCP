@@ -128,6 +128,7 @@ public class SearchCodebaseToolTests {
         var result = await tool.SearchCodebase("/projects/testProcess", "queue", "text");
 
         Assert.Equal("error", result.Status);
-        Assert.Contains("boom", result.Errors);
+        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
+        Assert.DoesNotContain("boom", string.Join(" ", result.Errors));
     }
 }

@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using UiPath.Engineering.Mcp.Core.Caching;
 
 namespace UiPath.Engineering.Mcp.Core.CodeAnalysis;
 
@@ -212,6 +213,8 @@ public sealed class CSharpAnalysisService : ICSharpAnalysisService {
         result.UnresolvedReferences = [.. context.UnresolvedReferences];
         result.Warnings = [.. context.Warnings];
         result.HasCSharpFiles = context.HasCSharpFiles;
+        result.Stale = context.Stale;
+        ProjectFingerprint.AddStaleWarning(result.Warnings, context.Stale);
         if (!context.HasCSharpFiles) {
             result.Note = "The project contains no C# files.";
         }

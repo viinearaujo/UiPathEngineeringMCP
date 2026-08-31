@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
@@ -10,7 +11,7 @@ public class ReadWorkflowFileToolTests {
 
     private static (FakeFilesystemProvider Fs, ReadWorkflowFileTool Tool) Create() {
         var fs = new FakeFilesystemProvider();
-        return (fs, new ReadWorkflowFileTool(fs));
+        return (fs, new ReadWorkflowFileTool(fs, new PathPolicy([])));
     }
 
     [Fact]
@@ -92,5 +93,19 @@ public class ReadWorkflowFileToolTests {
         var result = tool.ReadWorkflowFile(ProjectPath, "Nope.cs");
 
         Assert.Equal("error", result.Status);
+    }
+
+    [Fact]
+    public void ReadWorkflowFile_OversizedFile_RejectedBeforeRead() {
+        var (fs, tool) = Create();
+        var path = Target("huge.cs");
+        fs.FileContents[path] = "tiny";
+        fs.FileSizes[path] = FileReadLimits.MaxFileBytes + 1L;
+
+        var result = tool.ReadWorkflowFile(ProjectPath, "huge.cs");
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains("too large", result.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(FileReadLimits.MaxFileBytes.ToString(), result.Summary);
     }
 }

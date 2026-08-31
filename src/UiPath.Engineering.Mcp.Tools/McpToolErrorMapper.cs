@@ -1,4 +1,6 @@
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
+using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools;
 
@@ -29,4 +31,25 @@ internal static class McpToolErrorMapper {
             JsonDocument document => StructuredContentIndicatesError(document.RootElement),
             _ => false
         };
+
+    // Maps unexpected exceptions to stable ToolError codes. Never copies ex.Message
+    // into the client-facing payload.
+    public static ToolError ToToolError(Exception ex, string failureSummary) => ex switch {
+        FileNotFoundException => new ToolError(
+            ToolErrorCodes.ProjectJsonNotFound,
+            "The directory is not a UiPath project (project.json is missing).",
+            "Pass a UiPath project directory that contains project.json."),
+        JsonException => new ToolError(
+            ToolErrorCodes.ProjectJsonInvalid,
+            "project.json could not be parsed.",
+            "Fix the JSON in project.json and retry."),
+        UnauthorizedAccessException => new ToolError(
+            ToolErrorCodes.PathNotAllowed,
+            "The requested path is not accessible.",
+            "Pass a path inside Projects:AllowedRoots that this process can read."),
+        _ => new ToolError(
+            ToolErrorCodes.OperationFailed,
+            failureSummary,
+            "Check the server logs for details, then retry.")
+    };
 }

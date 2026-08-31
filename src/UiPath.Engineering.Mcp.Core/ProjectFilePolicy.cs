@@ -21,8 +21,6 @@ public static class ProjectFilePolicy {
         "docs/adr/"
     ];
 
-    private static readonly string[] SecretExtensions = [".pem", ".key"];
-
     public static string NormalizeRelativePath(string relativePath) {
         var normalized = relativePath.Replace('\\', '/').Trim();
         while (normalized.StartsWith("./", StringComparison.Ordinal)) {
@@ -37,14 +35,7 @@ public static class ProjectFilePolicy {
         return AllowedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
     }
 
-    public static bool IsSecretName(string relativePath) {
-        var normalized = NormalizeRelativePath(relativePath);
-        var fileName = Path.GetFileName(normalized);
-        var extension = Path.GetExtension(normalized);
-        return fileName.StartsWith(".env", StringComparison.OrdinalIgnoreCase)
-            || fileName.Contains("credentials", StringComparison.OrdinalIgnoreCase)
-            || SecretExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
-    }
+    public static bool IsSecretName(string relativePath) => PathPolicy.LooksLikeSecret(relativePath);
 
     public static bool IsReservedPath(string relativePath) {
         var normalized = NormalizeRelativePath(relativePath);
@@ -106,23 +97,8 @@ public static class ProjectFilePolicy {
         return null;
     }
 
-    public static bool IsWithinProject(string projectPath, string candidate) {
-        var root = Path.GetFullPath(projectPath)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        string full;
-        try {
-            full = Path.GetFullPath(candidate)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        } catch {
-            return false;
-        }
-
-        if (string.Equals(root, full, StringComparison.OrdinalIgnoreCase)) {
-            return true;
-        }
-
-        return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool IsWithinProject(string projectPath, string candidate) =>
+        PathPolicy.IsWithin(projectPath, candidate, allowEqual: true);
 
     public static string CombineProject(string projectPath, string relativePath) =>
         Path.Combine(Path.GetFullPath(projectPath), NormalizeRelativePath(relativePath).Replace('/', Path.DirectorySeparatorChar));

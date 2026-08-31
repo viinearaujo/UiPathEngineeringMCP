@@ -1,3 +1,4 @@
+using UiPath.Engineering.Mcp.Core.Caching;
 using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Core.Parsing;
@@ -23,6 +24,7 @@ public static class ProjectAnalysisView {
         var size = Math.Clamp(pageSize <= 0 ? DefaultPageSize : pageSize, 1, MaxPageSize);
         var pageNumber = Math.Max(1, page);
         var warnings = new List<string>();
+        ProjectFingerprint.AddStaleWarning(warnings, model.Stale);
 
         List<WorkflowModel>? workflows = null;
         var truncated = false;
@@ -63,6 +65,7 @@ public static class ProjectAnalysisView {
             PageSize = size,
             TotalWorkflows = model.Workflows.Count,
             Truncated = truncated,
+            Stale = model.Stale,
             Warnings = warnings
         };
     }
@@ -103,6 +106,7 @@ public static class ProjectAnalysisView {
         }).ToList(),
         Packages = model.Packages,
         Dependencies = model.Dependencies,
-        Risks = model.Risks
+        Risks = model.Risks,
+        Stale = model.Stale
     };
 }

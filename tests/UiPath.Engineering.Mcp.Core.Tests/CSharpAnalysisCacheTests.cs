@@ -161,4 +161,87 @@ public class CSharpAnalysisCacheTests {
         Assert.Equal(2, inner.CallCount);
         Assert.NotSame(first, second);
     }
+
+    [Fact]
+    public async Task BuildAsync_RenamedCSharpSameCountAndTimestamp_TriggersRebuild() {
+        var fs = CreateFilesystem();
+        var inner = new CountingContextBuilder();
+        var sut = new CSharpAnalysisCache(inner, fs, new FixedPackagesFolderResolver(null));
+
+        await sut.BuildAsync(Root);
+
+        fs.CSharpFiles.Remove(FlowCs);
+        const string renamed = "/projects/testProcess/InvoiceFlowRenamed.cs";
+        fs.CSharpFiles.Add(renamed);
+        fs.WriteTimesUtc[renamed] = fs.WriteTimesUtc[FlowCs];
+        fs.WriteTimesUtc.Remove(FlowCs);
+
+        await sut.BuildAsync(Root);
+
+        Assert.Equal(2, inner.CallCount);
+    }
+
+    [Fact]
+    public async Task BuildAsync_FingerprintFailure_ServesCachedContextAsStale() {
+        var fs = CreateFilesystem();
+        var inner = new CountingContextBuilder();
+        var sut = new CSharpAnalysisCache(inner, fs, new FixedPackagesFolderResolver(null));
+
+        var first = await sut.BuildAsync(Root);
+        Assert.False(first.Stale);
+
+        fs.GetLastWriteTimeException = new IOException("denied");
+        var second = await sut.BuildAsync(Root);
+
+        Assert.Equal(1, inner.CallCount);
+        Assert.Same(first, second);
+        Assert.True(second.Stale);
+    }
+
+    [Fact]
+    public async Task BuildAsync_FingerprintRecovered_ClearsStaleFlag() {
+        var fs = CreateFilesystem();
+        var inner = new CountingContextBuilder();
+        var sut = new CSharpAnalysisCache(inner, fs, new FixedPackagesFolderResolver(null));
+
+        await sut.BuildAsync(Root);
+        fs.GetLastWriteTimeException = new IOException("denied");
+        Assert.True((await sut.BuildAsync(Root)).Stale);
+
+        fs.GetLastWriteTimeException = null;
+        var recovered = await sut.BuildAsync(Root);
+
+        Assert.Equal(1, inner.CallCount);
+        Assert.False(recovered.Stale);
+    }
+
+    [Fact]
+    public async Task BuildAsync_ExceedsMaxEntries_EvictsLeastRecentlyUsed() {
+        var fs = CreateFilesystem();
+        var inner = new CountingContextBuilder();
+        var sut = new CSharpAnalysisCache(inner, fs, new FixedPackagesFolderResolver(null), maxEntries: 2);
+
+        await sut.BuildAsync("/projects/one");
+        await sut.BuildAsync("/projects/two");
+        await sut.BuildAsync("/projects/three");
+        await sut.BuildAsync("/projects/one");
+
+        Assert.Equal(4, inner.CallCount);
+        Assert.Equal(2, sut.CacheEntryCount);
+    }
+
+    [Fact]
+    public async Task BuildAsync_IdlePastTtl_Rebuilds() {
+        var fs = CreateFilesystem();
+        var inner = new CountingContextBuilder();
+        var time = new ManualTimeProvider();
+        var sut = new CSharpAnalysisCache(
+            inner, fs, new FixedPackagesFolderResolver(null), maxEntries: 8, ttl: TimeSpan.FromMinutes(10), timeProvider: time);
+
+        await sut.BuildAsync(Root);
+        time.Advance(TimeSpan.FromMinutes(11));
+        await sut.BuildAsync(Root);
+
+        Assert.Equal(2, inner.CallCount);
+    }
 }

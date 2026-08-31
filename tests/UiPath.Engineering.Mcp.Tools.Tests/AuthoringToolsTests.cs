@@ -302,6 +302,7 @@ public class CreateProjectToolTests {
         var result = await tool.CreateProject("NewProject", "/not/allowed");
 
         Assert.Equal("error", result.Status);
+        Assert.Equal(ToolErrorCodes.PathNotAllowed, Assert.Single(result.ErrorDetails).ErrorCode);
     }
 
     [Fact]

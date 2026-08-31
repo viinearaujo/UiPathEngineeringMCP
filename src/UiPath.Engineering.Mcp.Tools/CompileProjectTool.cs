@@ -17,7 +17,7 @@ public sealed class CompileProjectTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Authoritative UiPath CLI build (uip rpa build). Slower than get_compile_errors (in-memory Roslyn). Do not use as the agent-loop green gate — that is validate_project(build:false, pack:false). Requires the UiPath CLI on the host.")]
+    [McpServerTool(UseStructuredContent = true), Description("Leave-off CLI build (not on the Copilot default connector). Prefer validate_project(build:true), which already runs uip rpa build. Slower than get_compile_errors (in-memory Roslyn). Do not use as the agent-loop green gate — that is validate_project(build:false, pack:false).")]
     public async Task<ToolResult> CompileProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {

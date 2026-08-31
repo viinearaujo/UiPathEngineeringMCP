@@ -8,6 +8,7 @@ public sealed class ProjectAnalysisResult {
     public int PageSize { get; init; }
     public int TotalWorkflows { get; init; }
     public bool Truncated { get; init; }
+    public bool Stale { get; init; }
     public List<string> Warnings { get; init; } = [];
 }
 
@@ -26,6 +27,7 @@ public sealed class ProjectAnalysisSummary {
     public List<PackageModel> Packages { get; init; } = [];
     public List<string> Dependencies { get; init; } = [];
     public List<string> Risks { get; init; } = [];
+    public bool Stale { get; init; }
 }
 
 public sealed class ProjectAnalysisCounts {

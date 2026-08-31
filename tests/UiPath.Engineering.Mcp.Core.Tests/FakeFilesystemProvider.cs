@@ -38,7 +38,13 @@ internal sealed class FakeFilesystemProvider : IFilesystemProvider {
             : throw new FileNotFoundException(filePath);
     }
 
+    public Exception? GetLastWriteTimeException { get; set; }
+
     public DateTime GetLastWriteTimeUtc(string filePath) {
+        if (GetLastWriteTimeException is not null) {
+            throw GetLastWriteTimeException;
+        }
+
         if (WriteTimesUtc.TryGetValue(filePath, out var timestamp)) {
             return timestamp;
         }

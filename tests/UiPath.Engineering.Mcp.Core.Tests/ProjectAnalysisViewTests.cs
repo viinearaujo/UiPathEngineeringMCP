@@ -1,3 +1,4 @@
+using UiPath.Engineering.Mcp.Core.Caching;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -98,6 +99,18 @@ public class ProjectAnalysisViewTests {
         Assert.NotNull(result.Workflows);
         Assert.Empty(result.Workflows);
         Assert.Contains(result.Warnings, w => w.Contains("Missing.xaml"));
+    }
+
+    [Fact]
+    public void ToResult_StaleModel_SetsStaleAndWarning() {
+        var model = Sample();
+        model.Stale = true;
+
+        var result = ProjectAnalysisView.ToResult(model, ProjectAnalysisView.DetailSummary, page: 1, pageSize: 20, workflowFile: null);
+
+        Assert.True(result.Stale);
+        Assert.True(result.Summary.Stale);
+        Assert.Contains(ProjectFingerprint.StaleCacheWarning, result.Warnings);
     }
 
     [Fact]

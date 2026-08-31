@@ -39,8 +39,8 @@ public sealed class CreateProjectTool {
             return ToolResults.Failure("targetFramework must be 'Windows' or 'Portable'.", sw);
         }
 
-        if (!_filesystem.IsPathAllowed(parentDirectory)) {
-            return ToolResults.Failure("Path not allowed: parent directory is outside the allowed roots.", sw);
+        if (ToolResults.GuardAllowedPath(_filesystem, parentDirectory, sw) is { } guardFailure) {
+            return guardFailure;
         }
 
         // Deliberate exception to the provider seam: this checks a directory that does

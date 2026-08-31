@@ -6,12 +6,11 @@ public enum CliCommandClass { AllowedReadOnly, AllowedMutating, VerbNotAllowed, 
 
 // Decides whether a `uip <verb> <args>` invocation may run, based on
 // UiPathCliOptions. Fails closed: unknown subcommands are treated as mutating.
-// Arguments containing shell metacharacters are rejected outright: .cmd/.bat
-// shims are launched through cmd.exe /c, so & | < > % ^ (and newlines) could
-// break out of the quoted command and execute arbitrary shell. Double quotes
-// are allowed because quoted paths with spaces are legitimate.
+// Injection control is ProcessStartInfo.ArgumentList (each token is one
+// argument). Newlines and NUL cannot be represented as a single token through
+// the string API and are rejected so they never reach the tokenizer.
 public sealed class CliCommandPolicy {
-    private static readonly char[] RejectedArgumentChars = ['&', '|', '<', '>', '%', '^', '\r', '\n'];
+    private static readonly char[] RejectedControlChars = ['\r', '\n', '\0'];
 
     private readonly UiPathCliOptions _options;
 
@@ -38,12 +37,11 @@ public sealed class CliCommandPolicy {
         return CliCommandClass.AllowedMutating;
     }
 
-    // True when the string contains a shell metacharacter that could break out of
-    // the quoted cmd.exe /c command line. Exposed so the provider can reject
-    // interpolated paths even when the caller bypassed Classify (e.g. ValidateAsync
-    // builds its own arguments from a projectPath).
+    // True when the string contains a control character that cannot be passed as
+    // one ArgumentList token. Shell metacharacters (& | < > % ^) are ordinary
+    // tokens under ArgumentList and are not rejected here.
     public static bool ContainsRejectedChars(string arguments) =>
-        arguments.IndexOfAny(RejectedArgumentChars) >= 0;
+        arguments.IndexOfAny(RejectedControlChars) >= 0;
 
     // A read-only entry matches when the arguments start with it followed by a
     // space or end-of-string (case-insensitive), e.g. "project list" matches

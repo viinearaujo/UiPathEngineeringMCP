@@ -6,24 +6,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!--
-      The Tools project defines [McpServerToolType]/[McpServerTool] classes.
-      Pinned to the SAME version as the Server (2.0.0-preview.3) to avoid a mixed-version
-      assembly mismatch — previously this was 1.4.1 while the Server used 2.0.0-preview.3,
-      which risks binary-incompatible attribute types across the 1.x -> 2.x reorg.
-    -->
-    <PackageReference Include="ModelContextProtocol" Version="2.0.0-preview.3" />
+    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Tools.Tests" />
     <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Server" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
 
 </Project>

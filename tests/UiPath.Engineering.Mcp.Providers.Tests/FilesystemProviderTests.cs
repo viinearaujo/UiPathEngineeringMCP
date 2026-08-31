@@ -1,16 +1,11 @@
-using Microsoft.Extensions.Options;
-using UiPath.Engineering.Mcp.Core.Configuration;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
 
 namespace UiPath.Engineering.Mcp.Providers.Tests;
 
 public class FilesystemProviderTests {
-    private static FilesystemProvider CreateSut(params string[] roots) {
-        var options = Options.Create(new ProjectRootOptions {
-            AllowedRoots = roots.ToList()
-        });
-        return new FilesystemProvider(options);
-    }
+    private static FilesystemProvider CreateSut(params string[] roots) =>
+        new(new PathPolicy(roots));
 
     [Fact]
     public void IsPathAllowed_RootItself_IsAllowed() {
@@ -281,6 +276,33 @@ public class FilesystemProviderTests {
         var sut = CreateSut(temp.Path);
 
         Assert.Equal(new FileInfo(target).Length, sut.GetFileSize(target));
+    }
+
+    [Fact]
+    public void ReadAllText_InsideAllowedRoot_ReadsFile() {
+        using var temp = new TempDir();
+        var target = Path.Combine(temp.Path, "Main.xaml");
+        File.WriteAllText(target, "<x/>");
+        var sut = CreateSut(temp.Path);
+
+        Assert.Equal("<x/>", sut.ReadAllText(target));
+    }
+
+    [Fact]
+    public void ReadAllText_OutsideAllowedRoot_Throws() {
+        using var temp = new TempDir();
+        var sut = CreateSut(temp.Path);
+        var outside = Path.Combine(Path.GetTempPath(), "outside-" + Guid.NewGuid().ToString("N"), "Main.xaml");
+        Directory.CreateDirectory(Path.GetDirectoryName(outside)!);
+        File.WriteAllText(outside, "<x/>");
+
+        try {
+            Assert.Throws<UnauthorizedAccessException>(() => sut.ReadAllText(outside));
+            Assert.Throws<UnauthorizedAccessException>(() => sut.GetFileSize(outside));
+            Assert.Throws<UnauthorizedAccessException>(() => sut.FileExists(outside));
+        } finally {
+            try { File.Delete(outside); Directory.Delete(Path.GetDirectoryName(outside)!); } catch { /* best effort */ }
+        }
     }
 
     private sealed class TempDir : IDisposable {

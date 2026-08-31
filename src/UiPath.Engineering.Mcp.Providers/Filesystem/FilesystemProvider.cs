@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Options;
-using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
 
@@ -18,45 +16,14 @@ public sealed class FilesystemProvider : IFilesystemProvider {
         ".vs"
     ];
 
-    private readonly ProjectRootOptions _options;
+    private readonly IPathPolicy _pathPolicy;
 
-    public FilesystemProvider(IOptions<ProjectRootOptions> options) => _options = options.Value;
+    public FilesystemProvider(IPathPolicy pathPolicy) => _pathPolicy = pathPolicy;
 
-    public bool IsPathAllowed(string requestedPath) {
-        if (string.IsNullOrWhiteSpace(requestedPath)) {
-            return false;
-        }
-
-        string fullPath;
-        try {
-            fullPath = Path.GetFullPath(requestedPath);
-        } catch {
-            return false;
-        }
-
-        return _options.AllowedRoots
-            .Where(r => !string.IsNullOrWhiteSpace(r))
-            .Select(Path.GetFullPath)
-            .Any(root => IsWithin(root, fullPath));
-    }
-
-    // Ensures the requested path is the root itself or a child of it, guarding against
-    // prefix false-positives like root "C:\foo" incorrectly allowing "C:\foobar".
-    private static bool IsWithin(string root, string candidate) {
-        var normalizedRoot = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var normalizedCandidate = candidate.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-        if (string.Equals(normalizedRoot, normalizedCandidate, StringComparison.OrdinalIgnoreCase)) {
-            return true;
-        }
-
-        return normalizedCandidate.StartsWith(
-            normalizedRoot + Path.DirectorySeparatorChar,
-            StringComparison.OrdinalIgnoreCase);
-    }
+    public bool IsPathAllowed(string requestedPath) => _pathPolicy.IsAllowed(requestedPath);
 
     public string? FindProjectJson(string projectPath) {
-        var path = Path.GetFullPath(projectPath);
+        var path = _pathPolicy.EnsureAllowed(projectPath);
         if (File.Exists(path) && Path.GetFileName(path).Equals("project.json", StringComparison.OrdinalIgnoreCase)) {
             return path;
         }
@@ -69,8 +36,8 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
     public IReadOnlyList<string> FindCSharpFiles(string projectPath) => FindFilesByExtension(projectPath, "*.cs");
 
-    private static IReadOnlyList<string> FindFilesByExtension(string projectPath, string pattern) {
-        var path = Path.GetFullPath(projectPath);
+    private IReadOnlyList<string> FindFilesByExtension(string projectPath, string pattern) {
+        var path = _pathPolicy.EnsureAllowed(projectPath);
         if (!Directory.Exists(path)) {
             return [];
         }
@@ -112,7 +79,7 @@ public sealed class FilesystemProvider : IFilesystemProvider {
     }
 
     public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) {
-        var path = Path.GetFullPath(root);
+        var path = _pathPolicy.EnsureAllowed(root);
         return BuildTree(path, maxDepth, depth: 0);
     }
 
@@ -158,35 +125,40 @@ public sealed class FilesystemProvider : IFilesystemProvider {
         return node;
     }
 
-    public string ReadAllText(string filePath) => File.ReadAllText(filePath);
+    public string ReadAllText(string filePath) {
+        var path = _pathPolicy.EnsureAllowed(filePath);
+        return File.ReadAllText(path);
+    }
 
-    public long GetFileSize(string filePath) => new FileInfo(Path.GetFullPath(filePath)).Length;
+    public long GetFileSize(string filePath) {
+        var path = _pathPolicy.EnsureAllowed(filePath);
+        return new FileInfo(path).Length;
+    }
 
-    public DateTime GetLastWriteTimeUtc(string filePath) => File.GetLastWriteTimeUtc(filePath);
+    public DateTime GetLastWriteTimeUtc(string filePath) {
+        var path = _pathPolicy.EnsureAllowed(filePath);
+        return File.GetLastWriteTimeUtc(path);
+    }
 
     public void CreateDirectory(string path) {
-        EnsureAllowed(path);
-        Directory.CreateDirectory(Path.GetFullPath(path));
+        var canonical = _pathPolicy.EnsureAllowed(path);
+        Directory.CreateDirectory(canonical);
     }
 
     public void WriteAllText(string filePath, string content) {
-        EnsureAllowed(filePath);
-        File.WriteAllText(Path.GetFullPath(filePath), content);
+        var path = _pathPolicy.EnsureAllowed(filePath);
+        File.WriteAllText(path, content);
     }
 
     public void DeleteFile(string filePath) {
-        EnsureAllowed(filePath);
-        var fullPath = Path.GetFullPath(filePath);
+        var fullPath = _pathPolicy.EnsureAllowed(filePath);
         if (File.Exists(fullPath)) {
             File.Delete(fullPath);
         }
     }
 
-    public bool FileExists(string path) => File.Exists(Path.GetFullPath(path));
-
-    private void EnsureAllowed(string path) {
-        if (!IsPathAllowed(path)) {
-            throw new UnauthorizedAccessException($"Path is outside the configured allowed roots: {path}");
-        }
+    public bool FileExists(string path) {
+        var canonical = _pathPolicy.EnsureAllowed(path);
+        return File.Exists(canonical);
     }
 }

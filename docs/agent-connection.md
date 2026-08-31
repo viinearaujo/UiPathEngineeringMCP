@@ -8,7 +8,7 @@ The server is passive. The client drives the loop. UiPath facts come from tools;
 2. MCP Streamable HTTP endpoint: `http://localhost:5000/sse` (path name is historical; this is not legacy SSE).
 3. Health: `GET http://localhost:5000/health` (never authenticated).
 4. Copilot registration endpoint is the Dev Tunnel URL plus `/sse`. See README §4–§5.
-5. Optional `/sse` auth: `McpServer:HttpAuth:Enabled` + `ApiKey`. Send `X-Api-Key` or `Authorization: Bearer`.
+5. `/sse` auth: non-Development HTTP requires `McpServer:HttpAuth:Enabled` and a non-empty `ApiKey` at startup. Send `X-Api-Key` or `Authorization: Bearer`. Stdio is unauthenticated.
 
 ## stdio (local agents)
 
@@ -26,17 +26,11 @@ Tools resolve **only** `docs/implementation-plan.json` inside the target UiPath 
 
 This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions (source of truth for the loop): [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt).
 
-Enable these tools on the default Copilot connector (≤12):
+Enable only `CopilotConnectorTools.DefaultNames` on the default Copilot connector (≤12). Canonical list: README recommended-tools line and the DEFAULT CONNECTOR line in [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt) — both must match the C# array. Always pass `validate_project` `build: false`, `pack: false` in the loop. XAML shell: `find_activity` + `insert_activities` (REFramework / InvokeWorkflowFile only); `edit_workflow_activity` is a leave-off fragment hatch.
 
-- `analyze_project`, `search_codebase`, `read_workflow_file`
-- `validate_project` (always pass `build: false`, `pack: false` in the loop)
-- `get_implementation_plan`, `update_plan_task`
-- `add_coded_workflow`, `edit_workflow_file`, `get_compile_errors`
-- Thin XAML pair: `find_activity`, `insert_activities` (REFramework / InvokeWorkflowFile only)
+HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only those names. Set `All` for Inspector. GitLab tools stay registered on the server.
 
-HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only those names. Set `All` for Inspector. GitLab tools stay on the server.
-
-Leave off the default connector: full C# Roslyn suite except `get_compile_errors`, `compile_project`, `verify_work`, `run_ui_path_cli`, `create_implementation_plan`, `generate_documentation`, `write_workflow_file`, `recommend_activities`, `validate_activity_spec`, `build_workflow`, `manage_workflow_data`, GitLab (`search_repository`, `create_work_items`), `list_skills`, `read_skill`.
+Leave-off names live in `CopilotConnectorTools.LeaveOffNames`. Notable: `compile_project` → `validate_project(build:true)`; `verify_work` → `validate_project` then `update_plan_task`; `write_workflow_file` is a full-file overwrite hatch on `ToolSurface=All` only.
 
 Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
 
@@ -57,7 +51,7 @@ File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` al
 
 ## HTTP auth
 
-`GET /health` is always anonymous. For non-local Copilot, set `McpServer:HttpAuth:Enabled` true and `McpServer:HttpAuth:ApiKey` (env `McpServer__HttpAuth__ApiKey`). Send `X-Api-Key` or `Authorization: Bearer <key>` on `/sse`. Local/dev can leave auth disabled.
+`GET /health` is always anonymous. Non-Development HTTP requires `McpServer:HttpAuth:Enabled` true and a non-empty `McpServer:HttpAuth:ApiKey` (env `McpServer__HttpAuth__ApiKey`) at startup. Send `X-Api-Key` or `Authorization: Bearer <key>` on `/sse`. Development may leave auth off for localhost; do not expose that configuration through a Dev Tunnel. Stdio is unauthenticated. When Enabled is true and the key is empty, `/sse` is fail-closed.
 
 ## Traps
 

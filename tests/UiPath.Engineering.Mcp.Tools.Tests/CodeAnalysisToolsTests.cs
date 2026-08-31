@@ -1,3 +1,4 @@
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -45,7 +46,8 @@ public class CodeAnalysisToolsTests {
         var result = await tool.FindCodeSymbol("/projects/testProcess", "Execute");
 
         Assert.Equal("error", result.Status);
-        Assert.Contains("boom", result.Errors);
+        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
+        Assert.DoesNotContain("boom", string.Join(" ", result.Errors));
     }
 
     // --- get_code_context ---

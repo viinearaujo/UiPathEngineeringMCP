@@ -20,7 +20,10 @@ public class CopilotConnectorToolsTests {
             "get_compile_errors",
         }, CopilotConnectorTools.DefaultNames);
         Assert.DoesNotContain("recommend_activities", CopilotConnectorTools.DefaultNames);
+        Assert.DoesNotContain("write_workflow_file", CopilotConnectorTools.DefaultNames);
+        Assert.DoesNotContain("edit_workflow_activity", CopilotConnectorTools.DefaultNames);
         Assert.Equal(CopilotConnectorTools.DefaultNames.Length, CopilotConnectorTools.DefaultNames.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(string.Join(", ", CopilotConnectorTools.DefaultNames), CopilotConnectorTools.JoinDefaultNames());
     }
 
     [Fact]

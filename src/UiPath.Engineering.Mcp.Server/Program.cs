@@ -16,12 +16,15 @@ if (mode == McpHostMode.Kind.Stdio) {
 }
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddUiPathEngineeringServices(builder.Configuration);
+builder.Services.AddUiPathEngineeringServices(builder.Configuration, validateHttpAuthOnStart: true);
 builder.Services.AddUiPathMcpServer()
     .WithHttpTransport();
 
 var app = builder.Build();
 app.UseMiddleware<McpHttpAuthMiddleware>();
-app.MapHealthChecks("/health");
+McpHealthEndpoints.Map(app);
 app.MapMcp("/sse");
 app.Run();
+
+public partial class Program {
+}

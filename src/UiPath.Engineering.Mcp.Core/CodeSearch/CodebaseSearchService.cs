@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Caching;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -12,9 +13,7 @@ namespace UiPath.Engineering.Mcp.Core.CodeSearch;
 /// the injected caches; every method takes the project path.
 /// </summary>
 public sealed class CodebaseSearchService : ICodebaseSearchService {
-    // ~2 MB of text: files larger than this are skipped rather than scanned. The pre-read
-    // check compares bytes (GetFileSize) so oversized files are never loaded into memory.
-    internal const int MaxFileCharacters = 2_000_000;
+    internal const int MaxFileCharacters = FileReadLimits.MaxFileBytes;
     private const int MaxSnippetLength = 300;
 
     private readonly ICSharpContextBuilder _contextBuilder;
@@ -93,8 +92,10 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
             },
             UnresolvedReferences = [.. context.UnresolvedReferences],
             Warnings = [.. context.Warnings],
-            HasCSharpFiles = context.HasCSharpFiles
+            HasCSharpFiles = context.HasCSharpFiles,
+            Stale = context.Stale
         };
+        ProjectFingerprint.AddStaleWarning(result.Warnings, context.Stale);
         if (!context.HasCSharpFiles) {
             result.Note = "The project contains no C# files.";
             return result;
@@ -124,7 +125,8 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
 
     public async Task<ActivitySearchResult> SearchActivitiesAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
         var model = await _projectModelBuilder.BuildAsync(projectPath, cancellationToken);
-        var result = new ActivitySearchResult();
+        var result = new ActivitySearchResult { Stale = model.Stale };
+        ProjectFingerprint.AddStaleWarning(result.Warnings, model.Stale);
         var parseErrors = model.Workflows.Count(w => w.HasParseError);
         var matches = new List<(ActivityMatch Match, bool Exact)>();
 
@@ -176,7 +178,8 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
 
     public async Task<WorkflowSearchResult> SearchWorkflowsAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
         var model = await _projectModelBuilder.BuildAsync(projectPath, cancellationToken);
-        var result = new WorkflowSearchResult();
+        var result = new WorkflowSearchResult { Stale = model.Stale };
+        ProjectFingerprint.AddStaleWarning(result.Warnings, model.Stale);
 
         var matches = model.Workflows
             .Select(w => {

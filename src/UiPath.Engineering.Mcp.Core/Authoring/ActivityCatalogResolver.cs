@@ -1,22 +1,29 @@
-using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Caching;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
-public sealed class ActivityCatalogResolver : IActivityCatalogResolver
+public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposable
 {
     public const int MaxRecommendations = 5;
     private const int MaxPackageQueries = 8;
 
     private readonly IFilesystemProvider? _filesystem;
     private readonly IActivityDiscovery? _discovery;
-    private readonly ConcurrentDictionary<string, CachedCatalog> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ILogger<ActivityCatalogResolver> _logger;
+    private readonly BoundedCache<CachedCatalog> _cache = new();
 
-    public ActivityCatalogResolver(IFilesystemProvider? filesystem = null, IActivityDiscovery? discovery = null)
+    public ActivityCatalogResolver(
+        IFilesystemProvider? filesystem = null,
+        IActivityDiscovery? discovery = null,
+        ILogger<ActivityCatalogResolver>? logger = null)
     {
         _filesystem = filesystem;
         _discovery = discovery;
+        _logger = logger ?? NullLogger<ActivityCatalogResolver>.Instance;
     }
 
     public async Task<IActivityCatalog> ResolveAsync(string? projectPath, CancellationToken cancellationToken = default)
@@ -43,17 +50,24 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver
         }
 
         var cacheKey = Path.GetFullPath(projectPath);
-        if (_cache.TryGetValue(cacheKey, out var cached) && cached.ProjectJsonWriteTimeUtc == writeTime)
+        return await _cache.RunExclusiveAsync(cacheKey, async ct =>
         {
-            return cached.Catalog;
-        }
+            if (_cache.TryGet(cacheKey, out var cached) && cached.ProjectJsonWriteTimeUtc == writeTime)
+            {
+                _logger.LogDebug("Activity catalog cache hit for {CacheKey}", cacheKey);
+                return cached.Catalog;
+            }
 
-        var packages = ReadPackages(projectJson);
-        var discovered = await DiscoverForProjectAsync(projectPath, packages, cancellationToken);
-        var catalog = Merge(ActivityCatalog.All, packages, discovered, discovered.Count > 0 ? "cli" : "project-packages");
-        _cache[cacheKey] = new CachedCatalog(catalog, writeTime);
-        return catalog;
+            _logger.LogDebug("Activity catalog cache miss for {CacheKey}", cacheKey);
+            var packages = ReadPackages(projectJson);
+            var discovered = await DiscoverForProjectAsync(projectPath, packages, ct);
+            var catalog = Merge(ActivityCatalog.All, packages, discovered, discovered.Count > 0 ? "cli" : "project-packages");
+            _cache.Set(cacheKey, new CachedCatalog(catalog, writeTime));
+            return catalog;
+        }, cancellationToken);
     }
+
+    public void Dispose() => _cache.Dispose();
 
     public async Task<IReadOnlyList<ActivityRecommendation>> RecommendAsync(
         string query, string? projectPath, int limit = MaxRecommendations, CancellationToken cancellationToken = default)

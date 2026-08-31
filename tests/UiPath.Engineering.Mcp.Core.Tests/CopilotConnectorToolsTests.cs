@@ -21,7 +21,18 @@ public class CopilotConnectorToolsTests {
         }, CopilotConnectorTools.DefaultNames);
         Assert.DoesNotContain("recommend_activities", CopilotConnectorTools.DefaultNames);
         Assert.DoesNotContain("write_workflow_file", CopilotConnectorTools.DefaultNames);
+        Assert.DoesNotContain("edit_workflow_activity", CopilotConnectorTools.DefaultNames);
+        Assert.DoesNotContain("compile_project", CopilotConnectorTools.DefaultNames);
+        Assert.DoesNotContain("verify_work", CopilotConnectorTools.DefaultNames);
         Assert.Equal(CopilotConnectorTools.DefaultNames.Length, CopilotConnectorTools.DefaultNames.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void JoinDefaultNames_MatchesArrayOrder() {
+        Assert.Equal(string.Join(", ", CopilotConnectorTools.DefaultNames), CopilotConnectorTools.JoinDefaultNames());
+        Assert.Equal(
+            string.Join(", ", CopilotConnectorTools.DefaultNames.Select(n => $"`{n}`")),
+            CopilotConnectorTools.JoinDefaultNamesMarkdown());
     }
 
     [Fact]

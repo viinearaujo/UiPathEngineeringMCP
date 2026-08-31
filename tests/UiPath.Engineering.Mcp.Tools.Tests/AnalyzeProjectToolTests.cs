@@ -1,3 +1,4 @@
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -13,6 +14,7 @@ public class AnalyzeProjectToolTests {
 
         Assert.Equal("error", result.Status);
         Assert.Equal("Path not allowed.", result.Summary);
+        Assert.Equal(ToolErrorCodes.PathNotAllowed, Assert.Single(result.ErrorDetails).ErrorCode);
         Assert.Null(result.Data);
     }
 
@@ -79,6 +81,7 @@ public class AnalyzeProjectToolTests {
 
         Assert.Equal("error", result.Status);
         Assert.Equal("project.json not found.", result.Summary);
+        Assert.Equal(ToolErrorCodes.ProjectJsonNotFound, Assert.Single(result.ErrorDetails).ErrorCode);
         Assert.NotEmpty(result.Errors);
     }
 
@@ -94,6 +97,7 @@ public class AnalyzeProjectToolTests {
 
         Assert.Equal("error", result.Status);
         Assert.Equal("Project analysis failed.", result.Summary);
-        Assert.Contains("boom", result.Errors);
+        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
+        Assert.DoesNotContain("boom", string.Join(" ", result.Errors));
     }
 }

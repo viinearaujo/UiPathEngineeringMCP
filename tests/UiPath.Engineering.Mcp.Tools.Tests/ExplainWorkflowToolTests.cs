@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -184,7 +185,8 @@ public class ExplainWorkflowToolTests {
 
         Assert.Equal("error", result.Status);
         Assert.Equal("Workflow explanation failed.", result.Summary);
-        Assert.Contains("boom", result.Errors);
+        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
+        Assert.DoesNotContain("boom", string.Join(" ", result.Errors));
     }
 
     [Fact]

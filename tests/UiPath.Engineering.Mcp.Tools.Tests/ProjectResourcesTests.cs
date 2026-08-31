@@ -1,5 +1,6 @@
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Planning;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Providers.Skills;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -25,7 +26,7 @@ public class ProjectResourcesTests : IDisposable {
     }
 
     private ProjectResources Create() =>
-        new(_fs, _models, _plans, _skills, DocsSupport.Knowledge(_fs), DocsSupport.Adrs(_fs), DocsSupport.Validator(_fs));
+        new(_fs, new PathPolicy([_projectPath]), _models, _plans, _skills, DocsSupport.Knowledge(_fs), DocsSupport.Adrs(_fs), DocsSupport.Validator(_fs));
 
     [Fact]
     public async Task Skill_ReturnsRedactedPlaybook() {
@@ -59,6 +60,10 @@ public class ProjectResourcesTests : IDisposable {
     [Fact]
     public void Plan_ReadsFixedJsonPathOnly() {
         _plans.Save(_projectPath, new ImplementationPlan { Goal = "g", Tasks = [] });
+        var diskPath = ImplementationPlanStore.GetJsonPath(_projectPath);
+        Assert.True(PathPolicy.TryResolveProjectRelative(_projectPath, "docs/implementation-plan.json", out var path));
+        _fs.FileContents[path] = File.ReadAllText(diskPath);
+
         var json = Create().GetProjectPlan(_projectPath);
         Assert.Contains("\"Goal\": \"g\"", json);
         Assert.True(File.Exists(Path.Combine(_projectPath, "docs", "implementation-plan.json")));
@@ -80,6 +85,29 @@ public class ProjectResourcesTests : IDisposable {
     public void Workflow_RefusesUppercasePemExtension() {
         var text = Create().GetWorkflow(_projectPath, "certs/server.PEM");
         Assert.Contains("cannot be read", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Workflow_OversizedFile_RejectedBeforeRead() {
+        const string relative = "Main.xaml";
+        Assert.True(PathPolicy.TryResolveProjectRelative(_projectPath, relative, out var target));
+        _fs.FileContents[target] = "tiny";
+        _fs.FileSizes[target] = FileReadLimits.MaxFileBytes + 1L;
+
+        var text = Create().GetWorkflow(_projectPath, relative);
+
+        Assert.Contains("too large", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Plan_OversizedFile_RejectedBeforeRead() {
+        Assert.True(PathPolicy.TryResolveProjectRelative(_projectPath, "docs/implementation-plan.json", out var path));
+        _fs.FileContents[path] = "tiny";
+        _fs.FileSizes[path] = FileReadLimits.MaxFileBytes + 1L;
+
+        var text = Create().GetProjectPlan(_projectPath);
+
+        Assert.Contains("too large", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

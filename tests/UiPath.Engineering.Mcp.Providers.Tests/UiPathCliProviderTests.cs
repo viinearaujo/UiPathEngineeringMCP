@@ -76,7 +76,7 @@ public class UiPathCliProviderTests {
 
         var result = await sut.ValidateAsync("/some/project", validate: true, build: true, pack: true);
 
-        Assert.Contains("rpa validate --project-dir \"/some/project\" --output json", result.Command);
+        Assert.Contains("rpa validate --project-dir /some/project --output json", result.Command);
     }
 
     [Theory]
@@ -84,13 +84,27 @@ public class UiPathCliProviderTests {
     [InlineData("/some/project|whoami")]
     [InlineData("/some/project%PATH%")]
     [InlineData("/some/project^calc")]
-    public async Task ValidateAsync_ProjectPathWithShellMetachars_RejectedWithoutExecuting(string projectPath) {
-        var sut = CreateSut("uip.exe");
+    public async Task ValidateAsync_ProjectPathWithShellMetachars_IsNotRejectedAsInjection(string projectPath) {
+        var sut = CreateSut("definitely-not-a-real-uip-xyz");
 
         var result = await sut.ValidateAsync(projectPath, validate: true, build: true, pack: true);
 
+        Assert.DoesNotContain(result.Errors, e => e.Contains("metacharacters", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Errors, e => e.Contains("control characters", StringComparison.OrdinalIgnoreCase));
+        Assert.True(result.Validate.Executed);
+        Assert.Contains(projectPath, result.Command);
+        Assert.False(result.Build.Executed);
+        Assert.False(result.Pack.Executed);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ProjectPathWithNewline_RejectedWithoutExecuting() {
+        var sut = CreateSut("definitely-not-a-real-uip-xyz");
+
+        var result = await sut.ValidateAsync("/some/project\nwhoami", validate: true, build: true, pack: true);
+
         Assert.False(result.Success);
-        Assert.Contains(result.Errors, e => e.Contains("metacharacters", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, e => e.Contains("control characters", StringComparison.OrdinalIgnoreCase));
         Assert.False(result.Validate.Executed);
         Assert.False(result.Build.Executed);
         Assert.False(result.Pack.Executed);
@@ -98,22 +112,50 @@ public class UiPathCliProviderTests {
     }
 
     [Fact]
-    public async Task RunAsync_ArgumentsWithShellMetachars_RejectedWithoutExecuting() {
-        var sut = CreateSut("uip.exe");
+    public async Task RunAsync_ArgumentsWithShellMetachars_AreTokenizedNotRejected() {
+        var sut = CreateSut("definitely-not-a-real-uip-xyz");
 
         var result = await sut.RunAsync("rpa", "rpa validate --project-dir \"/some/project\" & calc");
 
-        Assert.False(result.Success);
-        Assert.Equal(-1, result.ExitCode);
-        Assert.Contains(result.Errors, e => e.Contains("metacharacters", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Errors, e => e.Contains("metacharacters", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Errors, e => e.Contains("control characters", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("&", result.Command);
+        Assert.Contains("calc", result.Command);
     }
 
-    [Theory]
-    [InlineData("validate", "rpa validate --project-dir \"C:\\projects\\testProcess\" --output json")]
-    [InlineData("build", "rpa build \"C:\\projects\\testProcess\" --output json")]
-    [InlineData("pack", "rpa pack \"C:\\projects\\testProcess\" --output json")]
-    public void BuildVerbArguments_MapsStepsToRpaCommandLines(string verb, string expected) {
-        Assert.Equal(expected, UiPathCliProvider.BuildVerbArguments(verb, @"C:\projects\testProcess"));
+    [Fact]
+    public async Task RunAsync_ArgumentsWithNewline_RejectedWithoutExecuting() {
+        var sut = CreateSut("definitely-not-a-real-uip-xyz");
+
+        var result = await sut.RunAsync("rpa", "rpa validate --project-dir \"/some/project\"\nwhoami");
+
+        Assert.False(result.Success);
+        Assert.Equal(-1, result.ExitCode);
+        Assert.Contains(result.Errors, e => e.Contains("control characters", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void BuildVerbArguments_MapsStepsToRpaTokens() {
+        var path = @"C:\projects\testProcess";
+
+        Assert.Equal(
+            ["rpa", "validate", "--project-dir", path, "--output", "json"],
+            UiPathCliProvider.BuildVerbArguments("validate", path));
+        Assert.Equal(
+            ["rpa", "build", path, "--output", "json"],
+            UiPathCliProvider.BuildVerbArguments("build", path));
+        Assert.Equal(
+            ["rpa", "pack", path, "--output", "json"],
+            UiPathCliProvider.BuildVerbArguments("pack", path));
+    }
+
+    [Fact]
+    public void BuildVerbArguments_ProjectPathWithMetacharacters_IsSingleToken() {
+        var path = @"C:\proj & calc";
+
+        Assert.Equal(
+            ["rpa", "validate", "--project-dir", path, "--output", "json"],
+            UiPathCliProvider.BuildVerbArguments("validate", path));
     }
 
     [Fact]
@@ -126,5 +168,16 @@ public class UiPathCliProviderTests {
         var (capped, _) = UiPathCliProvider.CaptureOutput(new string('y', 500), "", maxChars: 100);
         Assert.True(capped.Length < 500);
         Assert.Contains("[truncated]", capped);
+    }
+
+    [Fact]
+    public void BuildRawOutputLines_RedactsStdoutAndStderr() {
+        var lines = UiPathCliProvider.BuildRawOutputLines(
+            "token=abc123secret",
+            "password=hunter2");
+
+        Assert.DoesNotContain(lines, l => l.Contains("abc123secret"));
+        Assert.DoesNotContain(lines, l => l.Contains("hunter2"));
+        Assert.All(lines, l => Assert.Contains("***REDACTED***", l));
     }
 }

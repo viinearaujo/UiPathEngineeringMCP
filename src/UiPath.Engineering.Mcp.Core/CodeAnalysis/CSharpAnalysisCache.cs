@@ -1,68 +1,91 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Caching;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.CodeAnalysis;
 
 /// <summary>
-/// Decorates an <see cref="ICSharpContextBuilder"/> with a cross-request cache keyed by
-/// the normalized project path. Each call recomputes a cheap fingerprint (count of
-/// *.cs files plus project.json, and their newest write time, plus the write times of
-/// the NuGet package folders backing the project's dependencies) and only rebuilds the
-/// Roslyn compilation when the fingerprint changed. The NuGet folders live outside the
-/// project tree, but a `dotnet restore` changes only them — without them in the
-/// fingerprint a stale partial/syntax-only compilation would be served forever.
-/// Mirrors CachingProjectModelBuilder.
+/// Decorates an <see cref="ICSharpContextBuilder"/> with a bounded cross-request cache
+/// keyed by the normalized project path. Each call recomputes the project-model SHA
+/// fingerprint over *.cs + project.json, plus the write times of the NuGet package
+/// folders backing the project's dependencies, and only rebuilds the Roslyn compilation
+/// when the fingerprint changed. The NuGet folders live outside the project tree, but a
+/// `dotnet restore` changes only them — without them in the fingerprint a stale
+/// partial/syntax-only compilation would be served forever.
+/// Fingerprint failure serves a cached context with <see cref="CSharpAnalysisContext.Stale"/> set.
 /// </summary>
-public sealed class CSharpAnalysisCache : ICSharpContextBuilder {
-    private sealed record CacheEntry(CSharpAnalysisContext Context, long FileCount, long MaxWriteTicks);
+public sealed class CSharpAnalysisCache : ICSharpContextBuilder, IDisposable {
+    private sealed record CacheEntry(CSharpAnalysisContext Context, string Fingerprint);
 
     private readonly ICSharpContextBuilder _inner;
     private readonly IFilesystemProvider _filesystem;
     private readonly NuGetReferenceResolver _resolver;
-    private readonly ConcurrentDictionary<string, CacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly BoundedCache<CacheEntry> _cache;
+    private readonly ILogger<CSharpAnalysisCache> _logger;
 
-    public CSharpAnalysisCache(ICSharpContextBuilder inner, IFilesystemProvider filesystem, NuGetReferenceResolver resolver) {
+    public CSharpAnalysisCache(
+        ICSharpContextBuilder inner,
+        IFilesystemProvider filesystem,
+        NuGetReferenceResolver resolver,
+        ILogger<CSharpAnalysisCache>? logger = null)
+        : this(inner, filesystem, resolver, BoundedCache<CacheEntry>.DefaultMaxEntries, null, null, logger) {
+    }
+
+    public CSharpAnalysisCache(
+        ICSharpContextBuilder inner,
+        IFilesystemProvider filesystem,
+        NuGetReferenceResolver resolver,
+        int maxEntries,
+        TimeSpan? ttl = null,
+        TimeProvider? timeProvider = null,
+        ILogger<CSharpAnalysisCache>? logger = null) {
         _inner = inner;
         _filesystem = filesystem;
         _resolver = resolver;
+        _cache = new BoundedCache<CacheEntry>(maxEntries, ttl, timeProvider);
+        _logger = logger ?? NullLogger<CSharpAnalysisCache>.Instance;
     }
+
+    internal int CacheEntryCount => _cache.EntryCount;
+
+    internal int CacheLockCount => _cache.LockCount;
 
     public async Task<CSharpAnalysisContext> BuildAsync(string projectPath, CancellationToken cancellationToken = default) {
         var key = Path.GetFullPath(projectPath);
-        var gate = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-
-        await gate.WaitAsync(cancellationToken);
-        try {
-            if (TryComputeFingerprint(projectPath, out var fileCount, out var maxWriteTicks)) {
-                if (_cache.TryGetValue(key, out var entry) &&
-                    entry.FileCount == fileCount && entry.MaxWriteTicks == maxWriteTicks) {
+        return await _cache.RunExclusiveAsync(key, async ct => {
+            if (TryComputeFingerprint(projectPath, out var fingerprint)) {
+                if (_cache.TryGet(key, out var entry) && entry.Fingerprint == fingerprint) {
+                    _logger.LogDebug("C# analysis cache hit for {CacheKey}", key);
+                    entry.Context.Stale = false;
                     return entry.Context;
                 }
 
-                var built = await _inner.BuildAsync(projectPath, cancellationToken);
-                _cache[key] = new CacheEntry(built, fileCount, maxWriteTicks);
+                _logger.LogDebug("C# analysis cache miss for {CacheKey}", key);
+                var built = await _inner.BuildAsync(projectPath, ct);
+                built.Stale = false;
+                _cache.Set(key, new CacheEntry(built, fingerprint));
                 return built;
             }
 
-            // Filesystem inaccessible during fingerprinting: serve stale cache if present,
-            // otherwise build directly without caching (we cannot trust a fingerprint).
-            if (_cache.TryGetValue(key, out var stale)) {
+            if (_cache.TryGet(key, out var stale, includeExpired: true)) {
+                _logger.LogInformation("C# analysis cache stale for {CacheKey}", key);
+                stale.Context.Stale = true;
                 return stale.Context;
             }
 
-            return await _inner.BuildAsync(projectPath, cancellationToken);
-        } finally {
-            gate.Release();
-        }
+            _logger.LogDebug("C# analysis cache miss for {CacheKey}", key);
+            return await _inner.BuildAsync(projectPath, ct);
+        }, cancellationToken);
     }
 
-    private bool TryComputeFingerprint(string projectPath, out long fileCount, out long maxWriteTicks) {
-        fileCount = 0;
-        maxWriteTicks = 0;
+    public void Dispose() => _cache.Dispose();
+
+    private bool TryComputeFingerprint(string projectPath, out string fingerprint) {
+        fingerprint = string.Empty;
         try {
             var files = _filesystem.FindCSharpFiles(projectPath).ToList();
             var projectJson = _filesystem.FindProjectJson(projectPath);
@@ -70,23 +93,10 @@ public sealed class CSharpAnalysisCache : ICSharpContextBuilder {
                 files.Add(projectJson);
             }
 
-            foreach (var file in files) {
-                var ticks = _filesystem.GetLastWriteTimeUtc(file).Ticks;
-                if (ticks > maxWriteTicks) {
-                    maxWriteTicks = ticks;
-                }
-            }
-
-            foreach (var folder in GetPackageFolders(projectJson)) {
-                var ticks = SafeGetWriteTicks(folder);
-                if (ticks > maxWriteTicks) {
-                    maxWriteTicks = ticks;
-                }
-            }
-
-            fileCount = files.Count;
-            return true;
-        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException) {
+            var extra = GetPackageFolders(projectJson)
+                .Select(folder => (Path: folder, Ticks: SafeGetWriteTicks(folder)));
+            return ProjectFingerprint.TryCompute(_filesystem, files, out fingerprint, extra);
+        } catch (Exception ex) when (ProjectFingerprint.IsIoFailure(ex)) {
             return false;
         }
     }

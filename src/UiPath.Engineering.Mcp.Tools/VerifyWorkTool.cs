@@ -31,7 +31,7 @@ public sealed class VerifyWorkTool {
         _docsValidator = docsValidator;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Bundled check: rebuilds the project model, runs CLI validate (optional build), checks expected files, and marks plan tasks done or blocked. Not the agent done gate — close tasks with validate_project(build:false, pack:false) then update_plan_task.")]
+    [McpServerTool(UseStructuredContent = true), Description("Leave-off bundled check (not on the Copilot default connector). Prefer validate_project(build:false, pack:false) then update_plan_task. Rebuilds the project model, runs CLI validate (optional build), checks expected files, and can mark plan tasks done or blocked. Not the agent done gate.")]
     public async Task<ToolResult> VerifyWork(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Implementation-plan task IDs to verify and update (e.g. ['task-1']).")] List<string>? taskIds = null,

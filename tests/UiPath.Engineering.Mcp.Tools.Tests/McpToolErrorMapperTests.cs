@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
@@ -40,5 +41,21 @@ public class McpToolErrorMapperTests {
     [Fact]
     public void StructuredContent_NullObject_IsNotError() {
         Assert.False(McpToolErrorMapper.StructuredContentIndicatesError((object?)null));
+    }
+
+    [Fact]
+    public void ToToolError_DoesNotCopyExceptionText() {
+        var notFound = McpToolErrorMapper.ToToolError(new FileNotFoundException("missing C:\\secret\\project.json"), "Failed.");
+        Assert.Equal(ToolErrorCodes.ProjectJsonNotFound, notFound.ErrorCode);
+        Assert.DoesNotContain("secret", notFound.Message);
+
+        var badJson = McpToolErrorMapper.ToToolError(new JsonException("Unexpected token at line 4"), "Failed.");
+        Assert.Equal(ToolErrorCodes.ProjectJsonInvalid, badJson.ErrorCode);
+        Assert.DoesNotContain("Unexpected token", badJson.Message);
+
+        var other = McpToolErrorMapper.ToToolError(new InvalidOperationException("proxy http://internal:8080"), "Search failed.");
+        Assert.Equal(ToolErrorCodes.OperationFailed, other.ErrorCode);
+        Assert.Equal("Search failed.", other.Message);
+        Assert.DoesNotContain("internal", other.Message);
     }
 }

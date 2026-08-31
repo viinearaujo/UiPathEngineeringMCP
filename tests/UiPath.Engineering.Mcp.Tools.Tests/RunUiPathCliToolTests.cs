@@ -70,11 +70,25 @@ public class RunUiPathCliToolTests {
     }
 
     [Fact]
-    public async Task ShellMetacharactersInArguments_ReturnsStructuredError_AndNeverRuns() {
-        var cli = new FakeUiPathCliProvider();
+    public async Task ShellMetacharactersInArguments_AreNotRejectedAsInjection() {
+        var cli = new FakeUiPathCliProvider {
+            RunResult = new UiPathCliResult { Success = true, Summary = "'rpa' completed." }
+        };
         var sut = CreateSut(cli, new FakeFilesystemProvider());
 
         var result = await sut.RunUiPathCli("rpa", "validate --output json & whoami");
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal("rpa", cli.LastVerb);
+        Assert.Equal("rpa validate --output json & whoami", cli.LastArguments);
+    }
+
+    [Fact]
+    public async Task NewlinesInArguments_ReturnsStructuredError_AndNeverRuns() {
+        var cli = new FakeUiPathCliProvider();
+        var sut = CreateSut(cli, new FakeFilesystemProvider());
+
+        var result = await sut.RunUiPathCli("rpa", "validate --output json\nwhoami");
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == "CLI_ARGUMENTS_REJECTED");

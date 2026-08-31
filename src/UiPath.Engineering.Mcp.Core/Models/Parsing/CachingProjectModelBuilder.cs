@@ -1,78 +1,77 @@
-using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Caching;
 using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Core.Parsing;
 
 /// <summary>
-/// Decorates an <see cref="IProjectModelBuilder"/> with a cross-request cache keyed by the
-/// normalized project path. Each call recomputes a cheap fingerprint of the project files
-/// (SHA-256 of sorted path+write-time pairs for project.json + *.xaml + *.cs) and only
-/// delegates to the inner builder when the fingerprint changed.
+/// Decorates an <see cref="IProjectModelBuilder"/> with a bounded cross-request cache
+/// keyed by the normalized project path. Each call recomputes a SHA-256 fingerprint of
+/// the project files (sorted path+write-time pairs for project.json + *.xaml + *.cs)
+/// and only delegates to the inner builder when the fingerprint changed. Fingerprint
+/// failure serves a cached model with <see cref="UiPathProjectModel.Stale"/> set.
 /// </summary>
-public sealed class CachingProjectModelBuilder : IProjectModelBuilder {
+public sealed class CachingProjectModelBuilder : IProjectModelBuilder, IDisposable {
     private sealed record CacheEntry(UiPathProjectModel Model, string Fingerprint);
 
     private readonly IProjectModelBuilder _inner;
     private readonly IFilesystemProvider _filesystem;
-    private readonly ConcurrentDictionary<string, CacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly BoundedCache<CacheEntry> _cache;
+    private readonly ILogger<CachingProjectModelBuilder> _logger;
 
-    public CachingProjectModelBuilder(IProjectModelBuilder inner, IFilesystemProvider filesystem) {
+    public CachingProjectModelBuilder(
+        IProjectModelBuilder inner,
+        IFilesystemProvider filesystem,
+        ILogger<CachingProjectModelBuilder>? logger = null)
+        : this(inner, filesystem, BoundedCache<CacheEntry>.DefaultMaxEntries, null, null, logger) {
+    }
+
+    public CachingProjectModelBuilder(
+        IProjectModelBuilder inner,
+        IFilesystemProvider filesystem,
+        int maxEntries,
+        TimeSpan? ttl = null,
+        TimeProvider? timeProvider = null,
+        ILogger<CachingProjectModelBuilder>? logger = null) {
         _inner = inner;
         _filesystem = filesystem;
+        _cache = new BoundedCache<CacheEntry>(maxEntries, ttl, timeProvider);
+        _logger = logger ?? NullLogger<CachingProjectModelBuilder>.Instance;
     }
+
+    internal int CacheEntryCount => _cache.EntryCount;
+
+    internal int CacheLockCount => _cache.LockCount;
 
     public async Task<UiPathProjectModel> BuildAsync(string projectPath, CancellationToken cancellationToken = default) {
         var key = Path.GetFullPath(projectPath);
-        var gate = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-
-        await gate.WaitAsync(cancellationToken);
-        try {
-            if (TryComputeFingerprint(projectPath, out var fingerprint)) {
-                if (_cache.TryGetValue(key, out var entry) && entry.Fingerprint == fingerprint) {
+        return await _cache.RunExclusiveAsync(key, async ct => {
+            if (ProjectFingerprint.TryComputeProjectFiles(_filesystem, projectPath, out var fingerprint)) {
+                if (_cache.TryGet(key, out var entry) && entry.Fingerprint == fingerprint) {
+                    _logger.LogDebug("Project model cache hit for {CacheKey}", key);
+                    entry.Model.Stale = false;
                     return entry.Model;
                 }
 
-                var built = await _inner.BuildAsync(projectPath, cancellationToken);
-                _cache[key] = new CacheEntry(built, fingerprint);
+                _logger.LogDebug("Project model cache miss for {CacheKey}", key);
+                var built = await _inner.BuildAsync(projectPath, ct);
+                built.Stale = false;
+                _cache.Set(key, new CacheEntry(built, fingerprint));
                 return built;
             }
 
-            // Filesystem inaccessible during fingerprinting: serve the stale cache if we have
-            // one, otherwise build directly without caching (we cannot trust a fingerprint).
-            if (_cache.TryGetValue(key, out var stale)) {
+            if (_cache.TryGet(key, out var stale, includeExpired: true)) {
+                _logger.LogInformation("Project model cache stale for {CacheKey}", key);
+                stale.Model.Stale = true;
                 return stale.Model;
             }
 
-            return await _inner.BuildAsync(projectPath, cancellationToken);
-        } finally {
-            gate.Release();
-        }
+            _logger.LogDebug("Project model cache miss for {CacheKey}", key);
+            return await _inner.BuildAsync(projectPath, ct);
+        }, cancellationToken);
     }
 
-    private bool TryComputeFingerprint(string projectPath, out string fingerprint) {
-        fingerprint = string.Empty;
-        try {
-            var files = _filesystem.FindXamlFiles(projectPath)
-                .Concat(_filesystem.FindCSharpFiles(projectPath))
-                .ToList();
-            var projectJson = _filesystem.FindProjectJson(projectPath);
-            if (projectJson is not null) {
-                files.Add(projectJson);
-            }
-
-            var sb = new System.Text.StringBuilder();
-            foreach (var file in files.OrderBy(f => f, StringComparer.OrdinalIgnoreCase)) {
-                var ticks = _filesystem.GetLastWriteTimeUtc(file).Ticks;
-                sb.Append(file).Append('\0').Append(ticks).Append('\n');
-            }
-
-            fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
-            return true;
-        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException) {
-            return false;
-        }
-    }
+    public void Dispose() => _cache.Dispose();
 }

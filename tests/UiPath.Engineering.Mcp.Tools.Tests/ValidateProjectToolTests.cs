@@ -76,7 +76,8 @@ public class ValidateProjectToolTests {
 
         Assert.Equal("error", result.Status);
         Assert.Equal("Project validation failed.", result.Summary);
-        Assert.Contains("boom", result.Errors[0]);
+        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
+        Assert.DoesNotContain("boom", result.Errors[0]);
     }
 
     private static JsonElement SerializeData(object? data) =>

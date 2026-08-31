@@ -9,6 +9,7 @@ public abstract class CSharpAnalysisResult {
     public List<string> UnresolvedReferences { get; set; } = [];
     public List<string> Warnings { get; set; } = [];
     public bool HasCSharpFiles { get; set; } = true;
+    public bool Stale { get; set; }
     public string? Note { get; set; }
 }
 

@@ -10,7 +10,9 @@
     optionally enables anonymous access, displays tunnel details, and hosts the
     tunnel in the foreground.
 
-    Run this script after the local MCP server is running.
+    Run this script after the local MCP server is running with HTTP auth enabled
+    (McpServer:HttpAuth:Enabled and a non-empty ApiKey). GET /health stays anonymous.
+    Do not tunnel a Development host that still has auth disabled.
 
 .PARAMETER TunnelName
     Dev Tunnel ID/name. Default: 'uipath-mcp'.
@@ -19,19 +21,16 @@
     Local port on which the MCP server listens. Default: 5000.
 
 .PARAMETER Anonymous
-    Enables anonymous access to the tunnel.
-
-    Suitable for initial local testing only. Do not enable anonymous access for
-    production or when exposing sensitive services.
+    Enables anonymous access at the Dev Tunnel layer. This does not disable MCP
+    HTTP auth. Do not use -Anonymous against a server with HttpAuth off.
 
 .EXAMPLE
-    .\scripts\setup-devtunnel.ps1 -Anonymous
+    .\scripts\setup-devtunnel.ps1
 
 .EXAMPLE
     .\scripts\setup-devtunnel.ps1 `
         -TunnelName "uipath-mcp" `
-        -Port 5000 `
-        -Anonymous
+        -Port 5000
 #>
 
 [CmdletBinding()]
@@ -292,14 +291,26 @@ Write-Host "Once hosting starts, devtunnel will display the public URL." `
 Write-Host "Append the following paths to that URL:" `
     -ForegroundColor Green
 
-Write-Host "  Health : /health" -ForegroundColor Green
-Write-Host "  MCP    : /sse" -ForegroundColor Green
+Write-Host "  Health : /health  (always anonymous)" -ForegroundColor Green
+Write-Host "  MCP    : /sse     (requires McpServer:HttpAuth API key outside Development)" -ForegroundColor Green
 Write-Host ""
+
+Write-Host @"
+HTTP auth: set McpServer:HttpAuth:Enabled true and a non-empty ApiKey before
+exposing this tunnel. Development may start with auth off for localhost only.
+"@ -ForegroundColor Yellow
+
+if ($Anonymous) {
+    Write-Host @"
+WARNING: Tunnel anonymous access is enabled. That only opens the Dev Tunnel
+layer; it does not disable MCP auth. If HttpAuth is off, /sse is public.
+"@ -ForegroundColor Yellow
+}
 
 if (-not $Anonymous) {
     Write-Host @"
-NOTE: Anonymous access was not requested. Clients must authenticate.
-For open local testing, rerun this script with -Anonymous.
+NOTE: Tunnel-level anonymous access was not requested. Clients must authenticate
+to the Dev Tunnel as well as send the MCP API key on /sse.
 "@ -ForegroundColor Yellow
 }
 

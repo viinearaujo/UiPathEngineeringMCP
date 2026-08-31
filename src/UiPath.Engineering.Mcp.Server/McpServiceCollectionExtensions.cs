@@ -1,5 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.CodeSearch;
@@ -18,13 +21,23 @@ using UiPath.Engineering.Mcp.Tools;
 namespace UiPath.Engineering.Mcp.Server;
 
 public static class McpServiceCollectionExtensions {
-    public static IServiceCollection AddUiPathEngineeringServices(this IServiceCollection services, IConfiguration configuration) {
+    public static IServiceCollection AddUiPathEngineeringServices(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        bool validateHttpAuthOnStart = false) {
         services.Configure<McpServerOptions>(configuration.GetSection("McpServer"));
+        if (validateHttpAuthOnStart) {
+            services.AddSingleton<IValidateOptions<McpServerOptions>, McpHttpAuthOptionsValidator>();
+            services.AddOptions<McpServerOptions>().ValidateOnStart();
+        }
+
         services.Configure<ProjectRootOptions>(configuration.GetSection("Projects"));
         services.Configure<UiPathCliOptions>(configuration.GetSection("UiPathCli"));
         services.Configure<SkillsOptions>(configuration.GetSection("Skills"));
         services.Configure<GitLabOptions>(configuration.GetSection("GitLab"));
 
+        services.AddSingleton<IPathPolicy>(sp =>
+            new PathPolicy(sp.GetRequiredService<IOptions<ProjectRootOptions>>().Value));
         services.AddSingleton<IFilesystemProvider, FilesystemProvider>();
         services.AddSingleton<IUiPathCliProvider, UiPathCliProvider>();
         services.AddSingleton<IActivityDiscovery, CliActivityDiscovery>();
@@ -39,7 +52,8 @@ public static class McpServiceCollectionExtensions {
         services.AddSingleton<IProjectModelBuilder>(sp =>
             new CachingProjectModelBuilder(
                 sp.GetRequiredService<ProjectModelBuilder>(),
-                sp.GetRequiredService<IFilesystemProvider>()));
+                sp.GetRequiredService<IFilesystemProvider>(),
+                sp.GetService<ILogger<CachingProjectModelBuilder>>()));
 
         services.AddSingleton<ImplementationPlanStore>();
         services.AddSingleton<ProjectKnowledgeStore>();
@@ -54,11 +68,16 @@ public static class McpServiceCollectionExtensions {
             new CSharpAnalysisCache(
                 sp.GetRequiredService<CSharpContextBuilder>(),
                 sp.GetRequiredService<IFilesystemProvider>(),
-                sp.GetRequiredService<NuGetReferenceResolver>()));
+                sp.GetRequiredService<NuGetReferenceResolver>(),
+                sp.GetService<ILogger<CSharpAnalysisCache>>()));
         services.AddSingleton<ICSharpAnalysisService, CSharpAnalysisService>();
         services.AddSingleton<ICodebaseSearchService, CodebaseSearchService>();
 
-        services.AddHealthChecks();
+        services.AddHealthChecks()
+            .AddCheck<McpReadinessHealthCheck>(
+                "ready",
+                failureStatus: HealthStatus.Unhealthy,
+                tags: [McpHealthEndpoints.ReadyTag]);
         return services;
     }
 
@@ -68,6 +87,7 @@ public static class McpServiceCollectionExtensions {
             .WithResourcesFromAssembly(typeof(AnalyzeProjectTool).Assembly)
             .WithPromptsFromAssembly(typeof(AnalyzeProjectTool).Assembly)
             .WithRequestFilters(filters => {
+                filters.AddCallToolFilter(McpToolCallLogging.Filter);
                 if (restrictToCopilotDefault) {
                     filters.AddListToolsFilter(next => async (context, cancellationToken) => {
                         var result = await next(context, cancellationToken);

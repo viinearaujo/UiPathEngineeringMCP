@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -15,6 +16,7 @@ public sealed class ImplementationPlanStore {
     public const string PlanMarkdownFileName = "implementation-plan.md";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _saveLocks = new(StringComparer.OrdinalIgnoreCase);
 
     public static string GetJsonPath(string projectPath) =>
         Path.Combine(projectPath, PlanDirectoryName, PlanJsonFileName);
@@ -36,9 +38,22 @@ public sealed class ImplementationPlanStore {
     public void Save(string projectPath, ImplementationPlan plan) {
         plan.UpdatedUtc = DateTimeOffset.UtcNow;
 
-        Directory.CreateDirectory(Path.Combine(projectPath, PlanDirectoryName));
-        File.WriteAllText(GetJsonPath(projectPath), JsonSerializer.Serialize(plan, JsonOptions));
-        File.WriteAllText(GetMarkdownPath(projectPath), RenderMarkdown(plan));
+        var key = Path.GetFullPath(projectPath);
+        var gate = _saveLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        gate.Wait();
+        try {
+            Directory.CreateDirectory(Path.Combine(projectPath, PlanDirectoryName));
+            AtomicWrite(GetJsonPath(projectPath), JsonSerializer.Serialize(plan, JsonOptions));
+            AtomicWrite(GetMarkdownPath(projectPath), RenderMarkdown(plan));
+        } finally {
+            gate.Release();
+        }
+    }
+
+    private static void AtomicWrite(string path, string contents) {
+        var tempPath = path + ".tmp";
+        File.WriteAllText(tempPath, contents);
+        File.Move(tempPath, path, overwrite: true);
     }
 
     private static string RenderMarkdown(ImplementationPlan plan) {
