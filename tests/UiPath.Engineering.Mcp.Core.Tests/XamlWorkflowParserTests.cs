@@ -225,6 +225,7 @@ public class XamlWorkflowParserTests {
         var mapping = Assert.Single(invoke.ArgumentMappings);
         Assert.Equal("In", mapping.Direction);
         Assert.Equal("in_Path", mapping.TargetArgument);
+        Assert.Equal("x:String", mapping.Type);
         Assert.Equal("[filePath]", mapping.Expression);
     }
 }

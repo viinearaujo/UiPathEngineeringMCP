@@ -12,19 +12,21 @@ public class CopilotToolSurfaceTests {
                 new Tool { Name = "analyze_project" },
                 new Tool { Name = "verify_work" },
                 new Tool { Name = "search_repository" },
-                new Tool { Name = "recommend_activities" }
+                new Tool { Name = "add_coded_workflow" }
             ]
         };
 
         CopilotToolSurface.FilterListedTools(result);
 
-        Assert.Equal(["analyze_project", "recommend_activities"], result.Tools.Select(t => t.Name));
+        Assert.Equal(["analyze_project", "add_coded_workflow"], result.Tools.Select(t => t.Name));
     }
 
     [Fact]
     public void RejectIfHidden_AllowsDefaultAndRejectsLeaveOff() {
         Assert.Null(CopilotToolSurface.RejectIfHidden("validate_project"));
-        var rejected = CopilotToolSurface.RejectIfHidden("compile_project");
+        Assert.Null(CopilotToolSurface.RejectIfHidden("add_coded_workflow"));
+        Assert.Null(CopilotToolSurface.RejectIfHidden("get_compile_errors"));
+        var rejected = CopilotToolSurface.RejectIfHidden("recommend_activities");
         Assert.NotNull(rejected);
         Assert.True(rejected.IsError);
     }

@@ -9,9 +9,9 @@ The skills feed under `.agents/skills` is **RPA-only** (do not reinstall the ful
 
 | Tool | What it does |
 |------|--------------|
-| `analyze_project` | Parses project.json + workflows/coded files into a cached project model. Default response is a summary (counts, workflow index, packages, risks, folder tree). Pass detail='full' to page complete workflow models (page/pageSize), or workflowFile to load one workflow fully. |
+| `analyze_project` | Parses project.json + workflows/coded files into a cached project model. Default response is a summary (counts, workflow index, coded-file kind: workflow/test/source, packages, risks, folder tree). Pass detail='full' to page complete workflow models (page/pageSize), or workflowFile to load one workflow fully. |
 | `validate_project` | Runs the UiPath CLI (`uip rpa validate` / `build` / `pack` with `--output json`) and returns structured per-step results (`executed`/`success`/`errors`/`warnings` each) plus recommendations. |
-| `explain_workflow` | Returns the structured breakdown of a single workflow: arguments, variables, activity outline, exception handlers, invoked workflows, log messages. Coded (`.cs`) workflows return class name, namespace, entry methods, and public methods. |
+| `explain_workflow` | Returns the structured breakdown of a single workflow: arguments, variables, activity outline, exception handlers, invoked workflows, log messages. Coded (`.cs`) files return `kind` (`workflow` / `test` / `source`), class name, namespace, entry methods, entry arguments, and public methods. |
 | `generate_documentation` | Returns deterministic structured documentation data for the whole project: metadata, per-workflow summaries, dependency graph (edges, cycles, orphans), risks. |
 | `search_repository` | Searches GitLab issues for the configured project (requires the `GitLab` config section; token is never returned). |
 | `create_work_items` | Creates GitLab issues/work items from a list of `{ title, description, labels? }`, returning created IDs/URLs and per-item failures. |
@@ -33,11 +33,11 @@ The skills feed under `.agents/skills` is **RPA-only** (do not reinstall the ful
 | `manage_project_docs` | Lists, writes, deletes, or keyword-searches knowledge articles and ADRs (`kind`: memory / adr / context / all). |
 | `sync_project_context` | Regenerates `AGENTS.md` (marker block) and `.claude/rules/project-context.md` from the project model. |
 | `validate_project_docs` | Inspects docs without changing plan state. Wiki hygiene only — does not block `update_plan_task(done)`. `verify_work` still refuses auto-done on docs errors. |
-| `add_coded_workflow` | Adds a Coded Workflow `.cs` (inherits `CodedWorkflow`, `[Workflow]` entry method, registered in `project.json` `entryPoints`) or a plain coded source file. |
+| `add_coded_workflow` | Adds a coded workflow (`.cs`, inherits `CodedWorkflow`, `[Workflow]`, registered in `project.json` `entryPoints`), a coded test case (`kind=test`, `[TestCase]`, registered in `designOptions.fileInfoCollection` — never `entryPoints`), or a plain coded source file (`kind=source`). |
 | `create_implementation_plan` | Creates an implementation plan for a project from a goal + ordered task list; writes `docs/implementation-plan.json` (source of truth) plus a Markdown mirror. Refuses to overwrite unless `overwrite: true`. |
 | `update_plan_task` | Updates a single plan task's status (`pending`/`in_progress`/`done`/`blocked`) and optional notes. The plan is a scratchpad; `done` is not blocked on docs/ADR freshness. |
 | `get_implementation_plan` | Returns the project's implementation plan with derived per-status task counts. |
-| `analyze_project_gaps` | Deterministic hygiene gap analysis over the project model (entry point, orphan workflows, exception handling, logging, descriptions, tests, unresolved invokes) plus plan cross-checks; each gap names the MCP tool that fixes it. |
+| `analyze_project_gaps` | Deterministic hygiene gap analysis over the project model (entry point, orphan workflows, exception handling, logging, descriptions, tests, unresolved invokes, coded/XAML primitive-only invoke boundary) plus plan cross-checks; each gap names the MCP tool that fixes it. |
 | `verify_work` | Rebuilds the model, runs CLI validation (`uip rpa validate`; optional `build`, default `build: false`), checks expected/planned files exist, and marks the given plan tasks `done` or `blocked` accordingly (statuses untouched when the CLI cannot run; BUILD failure does not auto-block). |
 | `find_code_symbol` | Finds C# symbols (methods, classes, properties, fields, interfaces) by exact name using Roslyn semantic analysis; returns kind, file, line, containing type, signature. |
 | `find_code_references` | Finds all usage sites of a C# symbol across the project's `.cs` files (semantic matching with an identifier-matching fallback for external symbols). |
@@ -180,46 +180,45 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop; green gate is `validate_project(build:false, pack:false)` then `update_plan_task`).
-- **Recommended tools (default connector, ≤12):** `analyze_project`, `search_codebase`, `read_workflow_file`, `find_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `recommend_activities`
-- **Leave off the default connector:** C# Roslyn suite (`find_code_symbol`, `find_code_references`, `get_code_context`, `get_compile_errors`), `compile_project`, `verify_work`, `run_ui_path_cli`, `create_implementation_plan`, `generate_documentation`, `write_workflow_file` (escape hatch), GitLab (`search_repository`, `create_work_items`), `list_skills`, `read_skill` (this instruction file is the loop). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only the default names; set `All` for Inspector. GitLab tools stay on the server.
+- **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop; green gate is `validate_project(build:false, pack:false)` then `update_plan_task`). New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with primitives only; never custom types or source-file methods from XAML.
+- **Recommended tools (default connector, ≤12):** `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`
+- **Leave off the default connector:** full C# Roslyn suite except `get_compile_errors` (`find_code_symbol`, `find_code_references`, `get_code_context`), `compile_project`, `verify_work`, `run_ui_path_cli`, `create_implementation_plan`, `generate_documentation`, `write_workflow_file` (escape hatch), `recommend_activities`, `validate_activity_spec`, `build_workflow`, `manage_workflow_data`, GitLab (`search_repository`, `create_work_items`), `list_skills`, `read_skill` (this instruction file is the loop). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only the default names; set `All` for Inspector. GitLab tools stay on the server.
 - **Full tool surface** (Inspector / local agents): `analyze_project`, `validate_project`, `explain_workflow`, `generate_documentation`, `search_repository`, `create_work_items`, `create_project`, `add_xaml_workflow`, `write_workflow_file`, `add_coded_workflow`, `read_workflow_file`, `edit_workflow_file`, `find_activity`, `get_workflow_dependencies`, `edit_workflow_activity`, `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`, `manage_project_file`, `patch_project_json`, `manage_project_docs`, `sync_project_context`, `validate_project_docs`, `create_implementation_plan`, `update_plan_task`, `get_implementation_plan`, `analyze_project_gaps`, `verify_work`, `find_code_symbol`, `find_code_references`, `get_code_context`, `get_compile_errors`, `compile_project`, `search_codebase`, `run_ui_path_cli`, `list_skills`, `read_skill`, `recommend_activities`
 
 This server is **RPA only** (`.xaml` / `.cs`). Do not install the full `uip skills` marketplace catalog into `.agents/skills`.
 
 ---
 
-## 5a. Spec-based workflow authoring (default)
+## 5a. Coded-first authoring (default)
 
-The **default** way to author workflows is now spec-based: describe the workflow
-as a JSON activity spec and let the server render schema-correct XAML — no
-hand-written fragments. `validate_activity_spec` dry-runs a spec against the
-activity catalog and returns every violation in one round trip; `build_workflow`
-creates a new workflow from a spec; `insert_activities` adds spec-described
-activities into an existing workflow; `manage_workflow_data` adds/removes/renames
-arguments and variables. `edit_workflow_activity`'s fragment mode remains as an
-escape hatch for surgical edits the spec model does not cover.
+New work is a **coded workflow**, **coded test case**, or **coded source file** unless
+the task is REFramework or orchestration XAML. Create files with `add_coded_workflow`
+(`kind`: `workflow` / `test` / `source`); edit `.cs` with `edit_workflow_file` after
+`read_workflow_file`; use `get_compile_errors` for a fast in-memory `.cs` check.
 
-Spec shape: `{ name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }`.
+`kind=test` uses a `[TestCase]` template and registers `designOptions.fileInfoCollection`
+— never `entryPoints`. `kind=workflow` registers `entryPoints`. `kind=source` is a plain
+helper class and is not registered.
 
-Example spec:
+XAML is a thin shell: `find_activity` + `insert_activities` for REFramework and
+`InvokeWorkflowFile` wiring only. XAML may invoke coded workflows with primitives only;
+never custom types or source-file methods from XAML.
+
+Spec-based XAML authoring (`validate_activity_spec`, `build_workflow`, `manage_workflow_data`)
+remains available on the full tool surface for that shell. Spec shape:
+`{ name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }`.
+
+Example spec (Invoke of a coded workflow with primitive args):
 
 ```json
 {
   "name": "Sequence",
-  "variables": [{ "name": "rowCount", "type": "Int32", "default": "0" }],
   "children": [
     {
-      "name": "ForEach",
-      "properties": { "values": "[in_TransactionData]", "typeArgument": "DataRow" },
-      "children": [
-        {
-          "name": "TryCatch",
-          "children": [
-            { "name": "LogMessage", "properties": { "message": "\"Processing row\"", "level": "Info" } }
-          ],
-          "catches": [{ "exception": "System.Exception", "children": [ { "name": "Rethrow" } ] }]
-        }
+      "name": "InvokeWorkflowFile",
+      "properties": { "workflowFileName": "InvoiceFlow.cs" },
+      "arguments": [
+        { "name": "in_CustomerId", "direction": "In", "type": "String", "value": "[in_CustomerId]" }
       ]
     }
   ]
@@ -236,7 +235,8 @@ The server answers one deterministic tool call at a time. The client drives the 
 
 ```
 analyze_project (summary) → get_implementation_plan
-   → recommend_activities → validate_activity_spec → build_workflow / insert_activities
+   → add_coded_workflow / edit_workflow_file  (or find_activity + insert_activities for REFramework/Invoke)
+   → get_compile_errors (optional .cs check)
    → validate_project(build:false, pack:false) → update_plan_task
 ```
 
@@ -290,19 +290,22 @@ src/
   `.xaml`/`.cs` content.
   `create_project` delegates scaffolding to `uip rpa init` (files are never hand-written);
   `uip rpa init`'s documented partial-success case is detected by checking the created files.
-- Spec-based authoring (`validate_activity_spec`, `build_workflow`, `insert_activities`,
-  `manage_workflow_data`) is the **default** way to author workflows: specs are validated
-  against the activity catalog before anything is written. `edit_workflow_activity`'s
-  fragment mode remains as an escape hatch for edits the spec model does not cover.
-  In the spec model an `If` activity's `children` are the **Then** branch only — there
-  is no Else branch yet. `manage_workflow_data` rename updates the declaration only;
+- Coded-first authoring (`add_coded_workflow`, `edit_workflow_file`, `get_compile_errors`)
+  is the **default** for new work. Spec-based XAML (`validate_activity_spec`, `build_workflow`,
+  `insert_activities`, `manage_workflow_data`) is the thin REFramework/orchestration shell.
+  `edit_workflow_activity`'s fragment mode remains as an escape hatch for edits the spec
+  model does not cover. In the spec model an `If` activity's `children` are the **Then**
+  branch only. `manage_workflow_data` rename updates the declaration only;
   expressions referencing the old name are not rewritten.
+  XAML `InvokeWorkflowFile` of a `.cs` workflow may pass only primitives, `DataTable`, or
+  `string[]`; coded source methods must never be called from XAML.
 - `edit_workflow_activity` matches the target activity by `DisplayName` (exact, case-sensitive);
   when several activities share a name the edit is rejected and `activityType` must be passed
   to disambiguate. Inserted fragments are re-indented to match the container; the rest of the
   file is preserved byte-for-byte.
 - `add_coded_workflow` registers coded workflows in `project.json` `entryPoints` with a
-  generated GUID; plain source files are deliberately not registered.
+  generated GUID; coded test cases (`kind=test`) go in `designOptions.fileInfoCollection`
+  and never in `entryPoints`; plain source files are not registered.
 - Publish/deploy to Orchestrator (`uip solution publish/deploy`) is a separate future phase.
 
 - `analyze_project` caches a full project model (fingerprint: SHA-256 of sorted path + last-write ticks for project.json, *.xaml, and *.cs (renames invalidate the cache even when timestamps are preserved)) but the default MCP response is a **summary** (counts,

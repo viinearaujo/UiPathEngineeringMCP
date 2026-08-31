@@ -1,4 +1,6 @@
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
+using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
@@ -155,6 +157,81 @@ public class ValidateProjectToolTests {
         var data = SerializeData(result.Data);
 
         Assert.Equal(0, data.GetProperty("diagnostics").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task ValidateProject_WhenBoundaryViolation_ReturnsStructuredErrorEvenIfCliSucceeds() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var cli = new FakeUiPathCliProvider {
+            Result = new UiPathCliResult { Success = true, Summary = "Validation completed." }
+        };
+        var builder = new FakeProjectModelBuilder {
+            Model = new UiPathProjectModel {
+                ProjectName = "p",
+                MainWorkflow = "Main.xaml",
+                Workflows = [
+                    new WorkflowModel {
+                        FileName = "Main.xaml",
+                        InvokeWorkflows = [
+                            new InvokeWorkflowModel {
+                                SourceWorkflow = "Main.xaml",
+                                TargetWorkflow = "InvoiceFlow.cs",
+                                ArgumentMappings = [
+                                    new ArgumentMappingModel {
+                                        Direction = "In",
+                                        TargetArgument = "in_Customer",
+                                        Type = "CustomerRecord"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                CodedWorkflows = [
+                    new CodedWorkflowModel {
+                        FileName = "InvoiceFlow.cs",
+                        ClassName = "InvoiceFlow",
+                        Kind = CodedFileKind.Workflow,
+                        IsCodedWorkflow = true
+                    },
+                    new CodedWorkflowModel {
+                        FileName = "CustomerRecord.cs",
+                        ClassName = "CustomerRecord",
+                        Kind = CodedFileKind.Source
+                    }
+                ]
+            }
+        };
+        var tool = new ValidateProjectTool(cli, fs, builder);
+
+        var result = await tool.ValidateProject("/projects/testProcess", validate: true, build: false, pack: false);
+        var data = SerializeData(result.Data);
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.XamlCodedBoundary);
+        Assert.False(data.GetProperty("success").GetBoolean());
+        Assert.True(data.GetProperty("boundary").GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public async Task ValidateProject_WhenCliSucceedsAndModelHasNoBoundaryIssues_StaysSuccess() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var cli = new FakeUiPathCliProvider {
+            Result = new UiPathCliResult { Success = true, Summary = "Validation completed." }
+        };
+        var builder = new FakeProjectModelBuilder {
+            Model = new UiPathProjectModel {
+                ProjectName = "p",
+                MainWorkflow = "Main.xaml",
+                Workflows = [new WorkflowModel { FileName = "Main.xaml" }]
+            }
+        };
+        var tool = new ValidateProjectTool(cli, fs, builder);
+
+        var result = await tool.ValidateProject("/projects/testProcess", validate: true, build: false, pack: false);
+
+        Assert.Equal("success", result.Status);
+        Assert.Empty(result.ErrorDetails);
     }
 
     [Fact]

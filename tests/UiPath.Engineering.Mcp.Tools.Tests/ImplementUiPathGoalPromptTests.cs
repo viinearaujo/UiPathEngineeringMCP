@@ -12,8 +12,10 @@ public class ImplementUiPathGoalPromptTests {
         Assert.Contains("copilot-studio-agent-instructions.txt", text);
         Assert.Contains("analyze_project", text);
         Assert.Contains("detail=summary", text);
-        Assert.Contains("recommend_activities", text);
-        Assert.Contains("validate_activity_spec", text);
+        Assert.Contains("add_coded_workflow", text);
+        Assert.Contains("edit_workflow_file", text);
+        Assert.Contains("get_compile_errors", text);
+        Assert.DoesNotContain("recommend_activities", text);
         Assert.Contains("validate_project", text);
         Assert.Contains("build:false", text);
         Assert.Contains("pack:false", text);

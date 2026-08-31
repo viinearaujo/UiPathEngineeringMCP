@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using ModelContextProtocol.Server;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.GapAnalysis;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 using System.ComponentModel;
@@ -12,10 +14,15 @@ namespace UiPath.Engineering.Mcp.Tools;
 public sealed class ValidateProjectTool {
     private readonly IUiPathCliProvider _cliProvider;
     private readonly IFilesystemProvider _filesystem;
+    private readonly IProjectModelBuilder? _modelBuilder;
 
-    public ValidateProjectTool(IUiPathCliProvider cliProvider, IFilesystemProvider filesystem) {
+    public ValidateProjectTool(
+        IUiPathCliProvider cliProvider,
+        IFilesystemProvider filesystem,
+        IProjectModelBuilder? modelBuilder = null) {
         _cliProvider = cliProvider;
         _filesystem = filesystem;
+        _modelBuilder = modelBuilder;
     }
 
     [McpServerTool(UseStructuredContent = true), Description("Runs UiPath CLI validate / build / pack and returns structured per-step results plus diagnostics mapped to snapshot activity IDs. Each diagnostic is { activityId, property, message, specFix }. Agent green gate is validate:true, build:false, pack:false, then update_plan_task. Do not use verify_work as the done gate. For an authoritative compile only, use compile_project.")]
@@ -35,21 +42,31 @@ public sealed class ValidateProjectTool {
         try {
             var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, cancellationToken);
             var diagnostics = ProjectDiagnostics(projectPath, cliResult);
+            var boundaryErrors = await BoundaryErrors(projectPath, cancellationToken);
+            var errors = cliResult.Errors.Concat(boundaryErrors.Select(e => $"{e.ErrorCode}: {e.Message} Fix: {e.FixHint}")).ToList();
+            var success = cliResult.Success && boundaryErrors.Count == 0;
+            var summary = !cliResult.Success
+                ? cliResult.Summary
+                : boundaryErrors.Count > 0
+                    ? $"{boundaryErrors.Count} coded/XAML boundary violation(s) found."
+                    : cliResult.Summary;
 
             return new ToolResult {
-                Status = cliResult.Success ? "success" : "error",
-                Summary = cliResult.Summary,
+                Status = success ? "success" : "error",
+                Summary = summary,
                 Data = new {
-                    success = cliResult.Success,
+                    success,
                     validate = StepData(cliResult.Validate),
                     build = StepData(cliResult.Build),
                     pack = StepData(cliResult.Pack),
-                    errors = cliResult.Errors,
+                    errors,
                     warnings = cliResult.Warnings,
                     diagnostics,
-                    recommendations = BuildRecommendations(cliResult, diagnostics)
+                    boundary = boundaryErrors,
+                    recommendations = BuildRecommendations(cliResult, diagnostics, boundaryErrors)
                 },
-                Errors = cliResult.Errors,
+                Errors = errors,
+                ErrorDetails = boundaryErrors,
                 Warnings = cliResult.Warnings,
                 DurationMs = sw.ElapsedMilliseconds
             };
@@ -81,7 +98,26 @@ public sealed class ValidateProjectTool {
         warnings = step.Warnings
     };
 
-    private static List<string> BuildRecommendations(UiPathCliResult result, List<object> diagnostics) {
+    private async Task<List<ToolError>> BoundaryErrors(string projectPath, CancellationToken cancellationToken) {
+        if (_modelBuilder is null) {
+            return [];
+        }
+
+        try {
+            var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
+            return XamlCodedInvokeBoundary.Lint(model)
+                .Select(g => new ToolError(
+                    ToolErrorCodes.XamlCodedBoundary,
+                    g.Message,
+                    g.SuggestedAction ?? string.Empty,
+                    g.SuggestedTool))
+                .ToList();
+        } catch {
+            return [];
+        }
+    }
+
+    private static List<string> BuildRecommendations(UiPathCliResult result, List<object> diagnostics, List<ToolError> boundaryErrors) {
         var recommendations = new List<string>();
         AddRecommendation(recommendations, "validate", result.Validate);
         AddRecommendation(recommendations, "build", result.Build);
@@ -89,6 +125,11 @@ public sealed class ValidateProjectTool {
         if (diagnostics.Count > 0) {
             recommendations.Add(
                 "Apply diagnostics[].specFix to the activity at diagnostics[].activityId (edit_workflow_activity / insert_activities), then re-run validate_project.");
+        }
+
+        if (boundaryErrors.Count > 0) {
+            recommendations.Add(
+                "Fix coded/XAML boundary violations: InvokeWorkflowFile of a .cs workflow may pass BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays) but not types defined in this automation; never call coded-source methods from XAML.");
         }
 
         return recommendations;

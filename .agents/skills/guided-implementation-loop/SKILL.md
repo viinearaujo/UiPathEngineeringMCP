@@ -39,14 +39,11 @@ Orchestrator runtime, and publishing.
 For each task, in order:
 
 1. Call `update_plan_task` → `in_progress`.
-2. Author with the **spec-based tools** — never hand-write XAML:
-   - Always dry-run first: `validate_activity_spec`. Fix every reported violation using
-     its `fixHint` and re-dry-run until clean. Do not write files from an invalid spec.
-   - New workflow: `build_workflow` (or `add_xaml_workflow` then `insert_activities`).
-   - Extend an existing workflow: `insert_activities` under the target `DisplayName`.
-   - Variables/arguments: `manage_workflow_data`.
-   - Coded workflows: `add_coded_workflow`; edit `.cs` content with `edit_workflow_file`
-     after reading it with `read_workflow_file`.
+2. New work is **coded** unless the task is REFramework or orchestration XAML.
+   XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
+   - Coded: `add_coded_workflow` (`kind` `workflow` / `test` / `source`); edit `.cs` with `edit_workflow_file` after `read_workflow_file`. `kind=test` registers `fileInfoCollection`, never `entryPoints`.
+   - XAML shell: `find_activity` then `insert_activities` for REFramework and `InvokeWorkflowFile` only.
+   - Spec-based XAML (full surface): dry-run `validate_activity_spec` before `build_workflow` / `insert_activities`. Do not write files from an invalid spec. Variables/arguments: `manage_workflow_data`.
 3. Reminders for specs: shape is `{ name, properties, children, variables (root only),
    catches (TryCatch only) }`; strings in `[expr]` brackets are expressions, everything
    else is a literal; an `If` has no Else branch — `children` is the Then branch.

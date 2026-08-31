@@ -29,4 +29,5 @@ public static class ToolErrorCodes {
     public const string DocsStale = "DOCS_STALE";
     public const string DocsInconsistent = "DOCS_INCONSISTENT";
     public const string DocsAdrIncomplete = "DOCS_ADR_INCOMPLETE";
+    public const string XamlCodedBoundary = "XAML_CODED_BOUNDARY";
 }

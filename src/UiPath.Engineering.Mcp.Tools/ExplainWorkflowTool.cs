@@ -17,7 +17,7 @@ public sealed class ExplainWorkflowTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Explains a single workflow in a UiPath project: arguments, variables, activity outline, exception handlers, invoked workflows, and log messages. Coded (.cs) workflows return class, namespace, entry methods, and public methods.")]
+    [McpServerTool(UseStructuredContent = true), Description("Explains a single workflow in a UiPath project: arguments, variables, activity outline, exception handlers, invoked workflows, and log messages. Coded (.cs) files return kind (workflow, test, or source), class, namespace, entry methods, entry arguments, and public methods.")]
     public async Task<ToolResult> ExplainWorkflow(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Workflow file to explain (file name, with or without .xaml/.cs, or a path).")] string workflowFile,
@@ -116,8 +116,10 @@ public sealed class ExplainWorkflowTool {
             filePath = coded.FilePath,
             className = coded.ClassName,
             @namespace = coded.Namespace,
+            kind = coded.Kind,
             isCodedWorkflow = coded.IsCodedWorkflow,
             entryMethods = coded.EntryMethods,
+            entryArguments = coded.EntryArguments.Select(a => new { a.Name, a.Direction, a.Type }).ToList(),
             publicMethods = coded.PublicMethods,
             hasParseError = coded.HasParseError,
             parseError = coded.ParseError
@@ -128,7 +130,7 @@ public sealed class ExplainWorkflowTool {
             : [];
 
         return ToolResults.Ok(
-            $"Coded file '{coded.FileName}': class {coded.ClassName}, " +
+            $"Coded {coded.Kind} '{coded.FileName}': class {coded.ClassName}, " +
             $"{coded.EntryMethods.Count} entry method(s), {coded.PublicMethods.Count} other public method(s).",
             data, sw, warnings);
     }

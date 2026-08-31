@@ -109,6 +109,7 @@ public class ExplainWorkflowToolTests {
             FilePath = "/projects/testProcess/InvoiceFlow.cs",
             ClassName = "InvoiceFlow",
             Namespace = "testProcess",
+            Kind = CodedFileKind.Workflow,
             IsCodedWorkflow = true,
             EntryMethods = ["Execute"],
             PublicMethods = ["CalculateTotal"]
@@ -121,6 +122,7 @@ public class ExplainWorkflowToolTests {
         Assert.Equal("success", result.Status);
         var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
         Assert.Contains("\"className\":\"InvoiceFlow\"", json);
+        Assert.Contains("\"kind\":\"workflow\"", json);
         Assert.Contains("\"isCodedWorkflow\":true", json);
         Assert.Contains("Execute", json);
         Assert.Contains("CalculateTotal", json);

@@ -1,3 +1,4 @@
+using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
@@ -117,6 +118,7 @@ public class ProjectModelBuilderTests {
         var coded = Assert.Single(model.CodedWorkflows);
         Assert.Equal("InvoiceFlow.cs", coded.FileName);
         Assert.True(coded.IsCodedWorkflow);
+        Assert.Equal(CodedFileKind.Workflow, coded.Kind);
         Assert.Equal(["Execute"], coded.EntryMethods);
         Assert.DoesNotContain(model.Risks, r => r.Contains("InvoiceFlow.cs"));
     }

@@ -63,7 +63,8 @@ public class ImplementUiPathGoalPromptRecipeTests {
             "Finish dispatcher retries");
 
         Assert.Contains("copilot-studio-agent-instructions.txt", text);
-        Assert.Contains("recommend_activities", text);
+        Assert.Contains("add_coded_workflow", text);
+        Assert.DoesNotContain("recommend_activities", text);
         Assert.Contains("validate_project", text);
         Assert.Contains("build:false", text);
         Assert.Contains("update_plan_task", text);

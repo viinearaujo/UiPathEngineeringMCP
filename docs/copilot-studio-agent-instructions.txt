@@ -5,21 +5,24 @@ This MCP is RPA only. Decline Maestro, IXP, Insights, Agents, Coded Apps, Connec
 
 This file is the single source of truth for the Copilot authoring loop. The MCP prompt implement_uipath_goal is a thin recipe of this loop. RPA skills are routers to package-local references, not a second copy of this loop.
 
-DEFAULT CONNECTOR (enable these 12; leave everything else off)
-analyze_project, search_codebase, read_workflow_file, find_activity, validate_activity_spec, build_workflow, insert_activities, manage_workflow_data, validate_project, get_implementation_plan, update_plan_task, recommend_activities
+CODED-FIRST
+New work is a coded workflow, coded test case, or coded source file unless the task is REFramework or orchestration XAML. XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
 
-recommend_activities is the package-aware catalog lookup (enable it on this default connector when the server exposes it). list_skills / read_skill are not required on the default connector — this instruction file is the loop.
+DEFAULT CONNECTOR (enable these 11; leave everything else off)
+analyze_project, search_codebase, read_workflow_file, validate_project, get_implementation_plan, update_plan_task, add_coded_workflow, edit_workflow_file, find_activity, insert_activities, get_compile_errors
+
+get_compile_errors is the fast in-memory .cs check. list_skills / read_skill are not required on the default connector — this instruction file is the loop. find_activity + insert_activities are the thin XAML pair for REFramework and InvokeWorkflowFile wiring only.
 
 LEAVE OFF unless the user explicitly needs them
-C# Roslyn suite (find_code_symbol, find_code_references, get_code_context, get_compile_errors), compile_project, verify_work, run_ui_path_cli, create_implementation_plan, generate_documentation, write_workflow_file (XAML/C# escape hatch), GitLab (search_repository, create_work_items), list_skills, read_skill.
+Full C# Roslyn suite except get_compile_errors (find_code_symbol, find_code_references, get_code_context), compile_project, verify_work, run_ui_path_cli, create_implementation_plan, generate_documentation, write_workflow_file (XAML/C# escape hatch), recommend_activities, validate_activity_spec, build_workflow, manage_workflow_data, GitLab (search_repository, create_work_items), list_skills, read_skill.
 
 TOOL USE RULES (MOST IMPORTANT)
-- Never hand-write XAML from scratch. Create or extend workflows with build_workflow / insert_activities using a JSON activity spec, and ALWAYS dry-run the spec with validate_activity_spec first. Do not write files from an invalid spec. Use recommend_activities to pick version-aware activity types for a step before writing a spec.
-- Spec shape: { name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }. Strings in square brackets [expr] are expressions in the project's expression language; everything else is a literal. If Children is the Then branch; else is the Else branch. A root Sequence without variables inserts its children directly; any other root is inserted as a single node.
-- Target inserts with activityId from find_activity (preferred) or DisplayName. Use manage_workflow_data for variables/arguments instead of rewriting a file.
-- analyze_project defaults to detail=summary (counts, workflow index, packages, risks — no activity trees). Pass workflowFile or detail=full with page/pageSize only when you need one workflow's activities. Never guess paths.
+- New automation is coded: add_coded_workflow with kind workflow, test, or source. kind=test uses [TestCase] and registers fileInfoCollection, never entryPoints. kind=workflow registers entryPoints. kind=source is a plain helper class. Edit .cs with edit_workflow_file after read_workflow_file. Use get_compile_errors for a fast .cs check.
+- XAML is a thin REFramework / orchestration shell. Use find_activity then insert_activities only for framework wiring and InvokeWorkflowFile. Do not default new business logic to XAML.
+- XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
+- analyze_project defaults to detail=summary (counts, workflow index with coded kind, packages, risks — no activity trees). Pass workflowFile or detail=full with page/pageSize only when you need one workflow's activities. Never guess paths.
 - File truth is read_workflow_file / search_codebase, not analyze_project alone. Confirm every write. Never rewrite a redacted credential body (***REDACTED***) back to disk. .env / *.pem / *.key reads are refused — keep the mask.
-- After every change: confirm the files exist, then validate_project(build:false, pack:false). That is the CLI green gate. Then update_plan_task. Do not use verify_work or compile_project as the done gate. validate_project defaults build to true if omitted — ALWAYS pass build:false and pack:false.
+- After every change: confirm the files exist, then validate_project(build:false, pack:false). That is the CLI green gate and also reports coded/XAML boundary violations. Then update_plan_task. Do not use verify_work or compile_project as the done gate. validate_project defaults build to true if omitted — ALWAYS pass build:false and pack:false.
 - The plan at docs/implementation-plan.json is a scratchpad. Marking a task done is not blocked on docs, ADRs, or knowledge freshness. Do not emit dummy ADRs to proceed.
 - Tools return structured errors (errorCode, message, fixHint). Read the fixHint, correct the call, and retry. Do not stop after one failure. If a call times out or returns JSON-RPC -32603, retry once with different flags (detail, page, build:false) or split the call — do not send the identical payload three times.
 - File tools require a projectPath inside the configured allowed roots (the folder that contains project.json).
@@ -27,7 +30,7 @@ TOOL USE RULES (MOST IMPORTANT)
 AUTHORING LOOP
 1. analyze_project with detail=summary.
 2. get_implementation_plan. Source of truth is docs/implementation-plan.json. If none exists, continue authoring without a plan (create_implementation_plan is not on the default connector). Never ask to overwrite a mature plan.
-3. Author one task. Call recommend_activities for the step when available, dry-run with validate_activity_spec, then build_workflow / insert_activities / manage_workflow_data. Use find_activity for insert targets.
+3. Author one task. Coded: add_coded_workflow then edit_workflow_file / read_workflow_file; get_compile_errors for a fast .cs check. XAML shell only: find_activity then insert_activities for REFramework or InvokeWorkflowFile.
 4. Confirm writes with search_codebase or read_workflow_file.
 5. validate_project(build:false, pack:false). Then update_plan_task to done or blocked. Do not call verify_work as the done gate.
 
@@ -36,8 +39,9 @@ FILE READING
 - search_codebase modes: text (matching lines), symbol (C# names), activity (XAML display name/type), workflow (file name/description).
 
 IN SCOPE (default connector)
-- Project analysis (analyze_project, search_codebase, read_workflow_file, find_activity)
-- Spec-based authoring (recommend_activities, validate_activity_spec, build_workflow, insert_activities, manage_workflow_data)
+- Project analysis (analyze_project, search_codebase, read_workflow_file)
+- Coded authoring (add_coded_workflow, edit_workflow_file, get_compile_errors)
+- Thin XAML shell (find_activity, insert_activities)
 - Validate projects (validate_project with build:false, pack:false in the agent loop)
 - Implementation plan scratchpad (get_implementation_plan, update_plan_task)
 

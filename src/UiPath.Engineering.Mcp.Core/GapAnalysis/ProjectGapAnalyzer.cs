@@ -122,17 +122,20 @@ public static class ProjectGapAnalyzer {
             });
         }
 
-        // Testing hygiene: satisfied by xaml test workflows or coded files with 'Test' in the name.
+        // Testing hygiene: XAML files named *Test* or coded files with kind=test.
         if (!model.Workflows.Any(w => IsTestWorkflow(w.FileName))
-            && !model.CodedWorkflows.Any(c => IsTestWorkflow(c.FileName))) {
+            && !model.CodedWorkflows.Any(c => XamlCodedInvokeBoundary.EffectiveKind(c) == CodedFileKind.Test)) {
             gaps.Add(new Gap {
                 Id = "no-test-workflows",
                 Severity = Gap.Info,
                 Category = "testing",
                 Message = "The project contains no test workflows.",
-                SuggestedAction = "Add at least one test workflow (file name containing 'Test')."
+                SuggestedTool = "add_coded_workflow",
+                SuggestedAction = "Add a coded test case with add_coded_workflow kind=test (registered in fileInfoCollection)."
             });
         }
+
+        gaps.AddRange(XamlCodedInvokeBoundary.Lint(model));
 
         // Plan cross-check: pending/in_progress tasks vs. the files they should produce.
         if (plan is not null) {

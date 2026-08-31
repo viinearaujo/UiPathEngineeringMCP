@@ -7,5 +7,6 @@ namespace UiPath.Engineering.Mcp.Core.Models;
 public sealed class ArgumentMappingModel {
     public string Direction { get; init; } = string.Empty; // In, Out, In/Out
     public string TargetArgument { get; init; } = string.Empty;
+    public string Type { get; init; } = string.Empty;
     public string Expression { get; init; } = string.Empty;
 }

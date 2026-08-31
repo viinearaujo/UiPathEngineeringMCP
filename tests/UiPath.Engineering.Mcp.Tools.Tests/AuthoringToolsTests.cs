@@ -262,6 +262,35 @@ public class CreateCodedWorkflowToolTests {
         var csPath = Path.Combine(Path.GetFullPath(ProjectPath), "Helpers.cs");
         Assert.DoesNotContain("CodedWorkflow", fs.Writes[csPath]);
     }
+
+    [Fact]
+    public void AddCodedWorkflow_Test_RegistersFileInfoCollectionNotEntryPoints() {
+        var fs = CreateFs();
+        var tool = new CreateCodedWorkflowTool(fs);
+        var projectJsonPath = fs.ProjectJson!;
+
+        var result = tool.AddCodedWorkflow(ProjectPath, "InvoiceTests", "test");
+        var data = JsonSerializer.SerializeToElement(result.Data);
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal("test", data.GetProperty("kind").GetString());
+        Assert.False(data.GetProperty("entryPointRegistered").GetBoolean());
+        Assert.True(data.GetProperty("testCaseRegistered").GetBoolean());
+
+        var csPath = Path.Combine(Path.GetFullPath(ProjectPath), "InvoiceTests.cs");
+        Assert.Contains("class InvoiceTests : CodedWorkflow", fs.Writes[csPath]);
+        Assert.Contains("[TestCase]", fs.Writes[csPath]);
+        Assert.DoesNotContain("[Workflow]", fs.Writes[csPath]);
+
+        using var updatedJson = JsonDocument.Parse(fs.Writes[projectJsonPath]);
+        Assert.Equal(0, updatedJson.RootElement.GetProperty("entryPoints").GetArrayLength());
+        var fileInfo = Assert.Single(
+            updatedJson.RootElement.GetProperty("designOptions").GetProperty("fileInfoCollection").EnumerateArray());
+        Assert.Equal("InvoiceTests.cs", fileInfo.GetProperty("fileName").GetString());
+        Assert.Equal("TestCase", fileInfo.GetProperty("testCaseType").GetString());
+        Assert.True(fileInfo.GetProperty("publishAsTestCase").GetBoolean());
+        Assert.True(Guid.TryParse(fileInfo.GetProperty("testCaseId").GetString(), out _));
+    }
 }
 
 public class CreateProjectToolTests {

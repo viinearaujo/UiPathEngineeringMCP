@@ -147,12 +147,53 @@ public class ProjectGapAnalyzerTests : IDisposable {
             ProjectName = "p",
             MainWorkflow = "Main.xaml",
             Workflows = [Wf("Main.xaml", isMain: true, exceptionHandlers: 1, logMessages: 1)],
-            CodedWorkflows = [new CodedWorkflowModel { FileName = "InvoiceTests.cs" }]
+            CodedWorkflows = [new CodedWorkflowModel { FileName = "InvoiceTests.cs", Kind = CodedFileKind.Test, IsCodedWorkflow = true }]
         };
 
         var gaps = ProjectGapAnalyzer.Analyze(model);
 
         Assert.DoesNotContain(gaps, g => g.Id == "no-test-workflows");
+    }
+
+    [Fact]
+    public void Analyze_CodedSourceNamedTest_DoesNotSatisfyTestWorkflowRule() {
+        var model = new UiPathProjectModel {
+            ProjectName = "p",
+            MainWorkflow = "Main.xaml",
+            Workflows = [Wf("Main.xaml", isMain: true, exceptionHandlers: 1, logMessages: 1)],
+            CodedWorkflows = [new CodedWorkflowModel { FileName = "InvoiceTests.cs", Kind = CodedFileKind.Source }]
+        };
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        Assert.Contains(gaps, g => g.Id == "no-test-workflows");
+    }
+
+    [Fact]
+    public void Analyze_XamlInvokeOfCodedWorkflowWithCustomType_ReportsBoundaryError() {
+        var model = CleanModel();
+        model.Workflows[0].InvokeWorkflows.Add(new InvokeWorkflowModel {
+            SourceWorkflow = "Main.xaml",
+            TargetWorkflow = "InvoiceFlow.cs",
+            ArgumentMappings = [
+                new ArgumentMappingModel { Direction = "In", TargetArgument = "in_Customer", Type = "CustomerRecord" }
+            ]
+        });
+        model.CodedWorkflows.Add(new CodedWorkflowModel {
+            FileName = "InvoiceFlow.cs",
+            ClassName = "InvoiceFlow",
+            Kind = CodedFileKind.Workflow,
+            IsCodedWorkflow = true
+        });
+        model.CodedWorkflows.Add(new CodedWorkflowModel {
+            FileName = "CustomerRecord.cs",
+            ClassName = "CustomerRecord",
+            Kind = CodedFileKind.Source
+        });
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        Assert.Contains(gaps, g => g.Category == "boundary" && g.Severity == Gap.Error && g.Id.Contains("in_Customer"));
     }
 
     [Fact]

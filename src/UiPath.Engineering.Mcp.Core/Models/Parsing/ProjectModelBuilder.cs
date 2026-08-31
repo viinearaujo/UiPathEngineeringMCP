@@ -1,5 +1,6 @@
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.GapAnalysis;
 
 namespace UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -28,6 +29,7 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
         ParseCodedFiles(model, projectPath, cancellationToken);
         model.FolderStructure = _filesystem.GetDirectoryTree(projectPath);
         AppendDependencyGraphRisks(model);
+        AppendCodedBoundaryRisks(model);
         return Task.FromResult(model);
     }
 
@@ -111,6 +113,12 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
 
         foreach (var edge in graph.Edges.Where(e => !e.IsResolved)) {
             model.Risks.Add($"Unresolved workflow invocation: {edge.Source} -> {edge.Target} (target file not found in project)");
+        }
+    }
+
+    private static void AppendCodedBoundaryRisks(UiPathProjectModel model) {
+        foreach (var gap in XamlCodedInvokeBoundary.Lint(model)) {
+            model.Risks.Add(gap.Message);
         }
     }
 }

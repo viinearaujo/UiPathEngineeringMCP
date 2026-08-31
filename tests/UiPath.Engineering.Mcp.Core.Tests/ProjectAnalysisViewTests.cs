@@ -38,7 +38,7 @@ public class ProjectAnalysisViewTests {
                 }
             ],
             CodedWorkflows = [
-                new CodedWorkflowModel { FileName = "Helpers.cs", ClassName = "Helpers", IsCodedWorkflow = false }
+                new CodedWorkflowModel { FileName = "Helpers.cs", ClassName = "Helpers", Kind = CodedFileKind.Source, IsCodedWorkflow = false }
             ],
             Variables = [new VariableModel { Name = "row" }],
             Arguments = [new ArgumentModel { Name = "in_TransactionItem" }],
@@ -59,6 +59,7 @@ public class ProjectAnalysisViewTests {
         Assert.True(result.Summary.WorkflowIndex[0].IsMain);
         Assert.True(result.Summary.WorkflowIndex[2].HasParseError);
         Assert.Equal("Helpers", result.Summary.CodedWorkflowIndex[0].ClassName);
+        Assert.Equal(CodedFileKind.Source, result.Summary.CodedWorkflowIndex[0].Kind);
         Assert.Equal("UiPath.System.Activities", result.Summary.Packages[0].Id);
         Assert.Contains("Cycle", result.Summary.Risks[0]);
         Assert.False(result.Truncated);

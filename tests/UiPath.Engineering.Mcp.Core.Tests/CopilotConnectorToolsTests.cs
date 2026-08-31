@@ -4,10 +4,23 @@ namespace UiPath.Engineering.Mcp.Core.Tests;
 
 public class CopilotConnectorToolsTests {
     [Fact]
-    public void DefaultNames_IsAtMostTwelveAndIncludesRecommendActivities() {
-        Assert.Equal(CopilotConnectorTools.MaxDefaultCount, CopilotConnectorTools.DefaultNames.Length);
+    public void DefaultNames_IsAtMostTwelveAndIsCodedFirst() {
         Assert.True(CopilotConnectorTools.DefaultNames.Length <= CopilotConnectorTools.MaxDefaultCount);
-        Assert.Contains("recommend_activities", CopilotConnectorTools.DefaultNames);
+        Assert.Equal(new[] {
+            "analyze_project",
+            "search_codebase",
+            "read_workflow_file",
+            "validate_project",
+            "get_implementation_plan",
+            "update_plan_task",
+            "add_coded_workflow",
+            "edit_workflow_file",
+            "find_activity",
+            "insert_activities",
+            "get_compile_errors",
+        }, CopilotConnectorTools.DefaultNames);
+        Assert.DoesNotContain("recommend_activities", CopilotConnectorTools.DefaultNames);
+        Assert.DoesNotContain("write_workflow_file", CopilotConnectorTools.DefaultNames);
         Assert.Equal(CopilotConnectorTools.DefaultNames.Length, CopilotConnectorTools.DefaultNames.Distinct(StringComparer.Ordinal).Count());
     }
 

@@ -34,12 +34,24 @@ public class TemplatesTests {
     }
 
     [Fact]
+    public void CodedTestCase_ContainsBaseClassTestCaseAttributeAndNamespace() {
+        var code = CodedWorkflowTemplates.CodedTestCase("My_Project", "InvoiceTests");
+
+        Assert.Contains("class InvoiceTests : CodedWorkflow", code);
+        Assert.Contains("[TestCase]", code);
+        Assert.DoesNotContain("[Workflow]", code);
+        Assert.Contains("namespace My_Project", code);
+        Assert.Contains("using UiPath.CodedWorkflows;", code);
+    }
+
+    [Fact]
     public void CodedSourceFile_HasNoWorkflowAttributeOrBaseClass() {
         var code = CodedWorkflowTemplates.CodedSourceFile("My_Project", "Helpers");
 
         Assert.Contains("class Helpers", code);
         Assert.DoesNotContain("CodedWorkflow", code);
         Assert.DoesNotContain("[Workflow]", code);
+        Assert.DoesNotContain("[TestCase]", code);
     }
 
     [Theory]

@@ -97,6 +97,7 @@ public static class ProjectAnalysisView {
             FileName = c.FileName,
             FilePath = c.FilePath,
             ClassName = c.ClassName,
+            Kind = c.Kind,
             IsCodedWorkflow = c.IsCodedWorkflow,
             HasParseError = c.HasParseError
         }).ToList(),

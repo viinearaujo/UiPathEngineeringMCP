@@ -28,7 +28,7 @@ public sealed class AnalyzeProjectGapsTool {
         _docsValidator = docsValidator;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging/descriptions/tests, unresolved invocations), docs errors, and plan cross-checks, and names the MCP tool that fixes each gap.")]
+    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging/descriptions/tests, unresolved invocations, coded/XAML invoke boundary that forbids project-defined types), docs errors, and plan cross-checks, and names the MCP tool that fixes each gap.")]
     public async Task<ToolResult> AnalyzeProjectGaps(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {

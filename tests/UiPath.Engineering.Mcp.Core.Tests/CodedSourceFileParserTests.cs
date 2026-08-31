@@ -1,3 +1,4 @@
+using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
@@ -51,6 +52,7 @@ public class CodedSourceFileParserTests {
         Assert.Equal("InvoiceFlow", model.ClassName);
         Assert.Equal("MyTest_Project", model.Namespace);
         Assert.True(model.IsCodedWorkflow);
+        Assert.Equal(CodedFileKind.Workflow, model.Kind);
         Assert.Equal(["Execute"], model.EntryMethods);
     }
 
@@ -83,6 +85,7 @@ public class CodedSourceFileParserTests {
 
         Assert.False(model.HasParseError);
         Assert.False(model.IsCodedWorkflow);
+        Assert.Equal(CodedFileKind.Source, model.Kind);
         Assert.Empty(model.EntryMethods);
         Assert.Equal(["Format"], model.PublicMethods);
     }
@@ -100,6 +103,7 @@ public class CodedSourceFileParserTests {
         var model = new CodedSourceFileParser().Parse("Flow.cs", "/p/Flow.cs", content);
 
         Assert.True(model.IsCodedWorkflow);
+        Assert.Equal(CodedFileKind.Workflow, model.Kind);
         Assert.Equal(["Run"], model.EntryMethods);
     }
 
@@ -118,5 +122,53 @@ public class CodedSourceFileParserTests {
 
         Assert.True(model.HasParseError);
         Assert.NotNull(model.ParseError);
+    }
+
+    [Fact]
+    public void Parse_CodedTestCase_KindIsTestAndCapturesTestCaseEntry() {
+        const string content = """
+            using UiPath.CodedWorkflows;
+
+            namespace MyTest_Project
+            {
+                public class InvoiceTests : CodedWorkflow
+                {
+                    [TestCase]
+                    public void Execute(string in_CustomerId, System.Data.DataTable in_Table)
+                    {
+                    }
+                }
+            }
+            """;
+
+        var model = new CodedSourceFileParser().Parse("InvoiceTests.cs", "/p/InvoiceTests.cs", content);
+
+        Assert.False(model.HasParseError);
+        Assert.True(model.IsCodedWorkflow);
+        Assert.Equal(CodedFileKind.Test, model.Kind);
+        Assert.Equal(["Execute"], model.EntryMethods);
+        Assert.Equal(2, model.EntryArguments.Count);
+        Assert.Contains(model.EntryArguments, a => a.Name == "in_CustomerId" && a.Type == "string");
+        Assert.Contains(model.EntryArguments, a => a.Name == "in_Table" && a.Type.Contains("DataTable"));
+    }
+
+    [Fact]
+    public void Parse_WorkflowExecuteParameters_CapturesPrimitiveAndArrayTypes() {
+        const string content = """
+            public class InvoiceFlow : CodedWorkflow
+            {
+                [Workflow]
+                public void Execute(string in_Name, int in_Count, string[] in_Ids, CustomerRecord in_Customer)
+                {
+                }
+            }
+            """;
+
+        var model = new CodedSourceFileParser().Parse("InvoiceFlow.cs", "/p/InvoiceFlow.cs", content);
+
+        Assert.Equal(CodedFileKind.Workflow, model.Kind);
+        Assert.Equal(4, model.EntryArguments.Count);
+        Assert.Equal("string[]", model.EntryArguments.Single(a => a.Name == "in_Ids").Type);
+        Assert.Equal("CustomerRecord", model.EntryArguments.Single(a => a.Name == "in_Customer").Type);
     }
 }

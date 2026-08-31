@@ -101,7 +101,7 @@ public sealed class ProjectContextRenderer {
             sb.AppendLine("## Coded files");
             sb.AppendLine();
             foreach (var coded in model.CodedWorkflows.Take(40)) {
-                sb.AppendLine($"- `{coded.FileName}`");
+                sb.AppendLine($"- `{coded.FileName}` ({coded.Kind})");
             }
             sb.AppendLine();
         }

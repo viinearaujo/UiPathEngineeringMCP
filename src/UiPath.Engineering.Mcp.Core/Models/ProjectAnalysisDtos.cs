@@ -51,6 +51,7 @@ public sealed class CodedWorkflowIndexEntry {
     public string FileName { get; init; } = string.Empty;
     public string FilePath { get; init; } = string.Empty;
     public string ClassName { get; init; } = string.Empty;
+    public string Kind { get; init; } = CodedFileKind.Source;
     public bool IsCodedWorkflow { get; init; }
     public bool HasParseError { get; init; }
 }

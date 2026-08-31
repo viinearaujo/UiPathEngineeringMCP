@@ -163,6 +163,7 @@ public sealed class XamlWorkflowParser {
             invoke.ArgumentMappings.Add(new ArgumentMappingModel {
                 Direction = direction,
                 TargetArgument = key,
+                Type = ExtractTypeArguments(argument),
                 Expression = ExtractExpressionText(argument)
             });
         }

@@ -1,10 +1,11 @@
 namespace UiPath.Engineering.Mcp.Core.Templates;
 
-// Templates for UiPath Coded Workflows and plain coded source files.
-// Rules (from UiPath's coding-agent skills): a coded workflow inherits CodedWorkflow,
-// marks its entry method with [Workflow], one class per file, class name == file name,
+// Templates for UiPath Coded Workflows, coded test cases, and plain coded source files.
+// Rules (from UiPath's coding-agent skills): a coded workflow inherits CodedWorkflow
+// and marks its entry method with [Workflow]; a coded test case inherits CodedWorkflow
+// and marks its entry method with [TestCase]; one class per file, class name == file name,
 // namespace = sanitized project name. Helper/source files must NOT inherit
-// CodedWorkflow and carry no [Workflow] attribute.
+// CodedWorkflow and carry no [Workflow] or [TestCase] attribute.
 public static class CodedWorkflowTemplates {
     public static string CodedWorkflow(string namespaceName, string className) => $$"""
         using System;
@@ -19,6 +20,28 @@ public static class CodedWorkflowTemplates {
                 public void Execute()
                 {
                     // TODO: implement the workflow.
+                }
+            }
+        }
+        """;
+
+    public static string CodedTestCase(string namespaceName, string className) => $$"""
+        using System;
+        using System.Collections.Generic;
+        using UiPath.CodedWorkflows;
+
+        namespace {{namespaceName}}
+        {
+            public class {{className}} : CodedWorkflow
+            {
+                [TestCase]
+                public void Execute()
+                {
+                    // Arrange
+
+                    // Act
+
+                    // Assert
                 }
             }
         }

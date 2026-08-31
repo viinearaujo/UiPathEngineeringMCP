@@ -26,17 +26,17 @@ Tools resolve **only** `docs/implementation-plan.json` inside the target UiPath 
 
 This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions (source of truth for the loop): [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt).
 
-Enable these 12 tools on the default Copilot connector:
+Enable these tools on the default Copilot connector (≤12):
 
-- `analyze_project`, `search_codebase`, `read_workflow_file`, `find_activity`
-- `validate_activity_spec`, `build_workflow`, `insert_activities`, `manage_workflow_data`
+- `analyze_project`, `search_codebase`, `read_workflow_file`
 - `validate_project` (always pass `build: false`, `pack: false` in the loop)
 - `get_implementation_plan`, `update_plan_task`
-- `recommend_activities` (package-aware catalog lookup; enable when the server exposes it)
+- `add_coded_workflow`, `edit_workflow_file`, `get_compile_errors`
+- Thin XAML pair: `find_activity`, `insert_activities` (REFramework / InvokeWorkflowFile only)
 
 HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only those names. Set `All` for Inspector. GitLab tools stay on the server.
 
-Leave off the default connector: C# Roslyn suite, `compile_project`, `verify_work`, `run_ui_path_cli`, `create_implementation_plan`, `generate_documentation`, `write_workflow_file`, GitLab (`search_repository`, `create_work_items`), `list_skills`, `read_skill`.
+Leave off the default connector: full C# Roslyn suite except `get_compile_errors`, `compile_project`, `verify_work`, `run_ui_path_cli`, `create_implementation_plan`, `generate_documentation`, `write_workflow_file`, `recommend_activities`, `validate_activity_spec`, `build_workflow`, `manage_workflow_data`, GitLab (`search_repository`, `create_work_items`), `list_skills`, `read_skill`.
 
 Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
 
@@ -45,7 +45,7 @@ Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
 ```text
 analyze_project (detail=summary)
   → get_implementation_plan (continue if none exists)
-  → recommend_activities → validate_activity_spec → build_workflow / insert_activities
+  → add_coded_workflow / edit_workflow_file  (or find_activity + insert_activities for REFramework/Invoke)
   → search_codebase / read_workflow_file to confirm the write
   → validate_project(build:false, pack:false)
   → update_plan_task(done|blocked)
