@@ -28,7 +28,8 @@ public class ImplementUiPathGoalPromptTests {
         Assert.Contains("get_implementation_plan", text);
         Assert.Contains("Do not call verify_work", text);
         Assert.Contains("not blocked on docs/ADR freshness", text);
-        Assert.DoesNotContain("analyze_project_gaps", text);
+        Assert.Contains("analyze_project_gaps", text);
+        Assert.Contains("IDIOM", text);
         Assert.DoesNotContain("manage_project_docs", text);
         Assert.DoesNotContain("sync_project_context", text);
         Assert.DoesNotContain("done requires current docs", text);

@@ -53,7 +53,7 @@ public class ProjectGapAnalyzerTests : IDisposable {
 
         var gap = Assert.Single(gaps, g => g.Id == "no-entry-point");
         Assert.Equal(Gap.Error, gap.Severity);
-        Assert.Equal("write_workflow_file", gap.SuggestedTool);
+        Assert.Equal("add_coded_workflow", gap.SuggestedTool);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class ProjectGapAnalyzerTests : IDisposable {
 
         var gaps = ProjectGapAnalyzer.Analyze(model);
 
-        Assert.Contains(gaps, g => g.Id == "entry-no-exception-handling" && g.Severity == Gap.Warning && g.SuggestedTool == "edit_workflow_activity");
+        Assert.Contains(gaps, g => g.Id == "entry-no-exception-handling" && g.Severity == Gap.Warning && g.SuggestedTool == "insert_activities");
         Assert.Contains(gaps, g => g.Id == "entry-no-logging" && g.Severity == Gap.Info);
     }
 
@@ -229,7 +229,7 @@ public class ProjectGapAnalyzerTests : IDisposable {
         var gap = Assert.Single(gaps, g => g.Id == "plan-artifact-missing:task-1");
         Assert.Equal(Gap.Warning, gap.Severity);
         Assert.Equal("Main.xaml", gap.TargetFile);
-        Assert.Equal("write_workflow_file", gap.SuggestedTool);
+        Assert.Equal("add_coded_workflow", gap.SuggestedTool);
     }
 
     [Fact]
@@ -262,5 +262,120 @@ public class ProjectGapAnalyzerTests : IDisposable {
         var gap = Assert.Single(gaps, g => g.Category == "docs");
         Assert.Equal(Gap.Error, gap.Severity);
         Assert.Equal("sync_project_context", gap.SuggestedTool);
+    }
+
+    [Fact]
+    public void Analyze_CodedWorkflowWithoutTryOrLog_ReportsBoth() {
+        var model = CleanModel();
+        model.CodedWorkflows.Add(new CodedWorkflowModel {
+            FileName = "InvoiceFlow.cs",
+            Kind = CodedFileKind.Workflow,
+            IsCodedWorkflow = true,
+            EntryMethods = ["Execute"],
+            EntryHasTryCatch = false,
+            EntryHasLog = false
+        });
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        var resilience = Assert.Single(gaps, g => g.Id == "coded-no-exception-handling:InvoiceFlow.cs");
+        Assert.Equal(Gap.Warning, resilience.Severity);
+        Assert.Equal("resilience", resilience.Category);
+        Assert.Equal("edit_workflow_file", resilience.SuggestedTool);
+        var observability = Assert.Single(gaps, g => g.Id == "coded-no-logging:InvoiceFlow.cs");
+        Assert.Equal(Gap.Info, observability.Severity);
+        Assert.Equal("observability", observability.Category);
+        Assert.Equal("edit_workflow_file", observability.SuggestedTool);
+    }
+
+    [Fact]
+    public void Analyze_CodedWorkflowWithTryAndLog_DoesNotReportCodedIdiomGaps() {
+        var model = CleanModel();
+        model.CodedWorkflows.Add(new CodedWorkflowModel {
+            FileName = "InvoiceFlow.cs",
+            Kind = CodedFileKind.Workflow,
+            IsCodedWorkflow = true,
+            EntryMethods = ["Execute"],
+            EntryHasTryCatch = true,
+            EntryHasLog = true
+        });
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        Assert.DoesNotContain(gaps, g => g.Id.StartsWith("coded-no-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_CodedSourceAndTest_DoNotReportCodedIdiomGaps() {
+        var model = CleanModel();
+        model.CodedWorkflows.Add(new CodedWorkflowModel {
+            FileName = "Helpers.cs",
+            Kind = CodedFileKind.Source,
+            EntryHasTryCatch = false,
+            EntryHasLog = false
+        });
+        model.CodedWorkflows.Add(new CodedWorkflowModel {
+            FileName = "InvoiceTests.cs",
+            Kind = CodedFileKind.Test,
+            IsCodedWorkflow = true,
+            EntryHasTryCatch = false,
+            EntryHasLog = false
+        });
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        Assert.DoesNotContain(gaps, g => g.Id.StartsWith("coded-no-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_NonFrameworkXamlWithExcel_PrefersCodedWorkflow() {
+        var model = CleanModel();
+        model.Workflows.Add(new WorkflowModel {
+            FileName = "Process.xaml",
+            Description = "Process.",
+            Activities = [new ActivityModel { Type = "ReadRangeX", DisplayName = "Read invoices" }]
+        });
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        var gap = Assert.Single(gaps, g => g.Id == "xaml-business-logic:Process.xaml");
+        Assert.Equal(Gap.Warning, gap.Severity);
+        Assert.Equal("boundary", gap.Category);
+        Assert.Equal("add_coded_workflow", gap.SuggestedTool);
+        Assert.Contains("prefer a coded workflow", gap.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Analyze_MainAndFrameworkXamlWithExcel_DoesNotPreferCoded() {
+        var model = CleanModel();
+        model.Workflows[0].Activities.Add(new ActivityModel { Type = "ReadRangeX", DisplayName = "Read in Main" });
+        model.Workflows.Add(new WorkflowModel {
+            FileName = "InitAllSettings.xaml",
+            FilePath = "/p/Framework/InitAllSettings.xaml",
+            Description = "Init.",
+            Activities = [new ActivityModel { Type = "HttpClient", DisplayName = "GET config" }]
+        });
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        Assert.DoesNotContain(gaps, g => g.Id.StartsWith("xaml-business-logic:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_XamlWithOnlyInvokeAndLog_DoesNotPreferCoded() {
+        var model = CleanModel();
+        model.Workflows.Add(new WorkflowModel {
+            FileName = "Dispatcher.xaml",
+            Description = "Dispatcher shell.",
+            Activities = [
+                new ActivityModel { Type = "Sequence", DisplayName = "Body" },
+                new ActivityModel { Type = "InvokeWorkflowFile", DisplayName = "Call coded" },
+                new ActivityModel { Type = "LogMessage", DisplayName = "Log" }
+            ]
+        });
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        Assert.DoesNotContain(gaps, g => g.Id.StartsWith("xaml-business-logic:", StringComparison.Ordinal));
     }
 }

@@ -22,6 +22,7 @@ public static class CopilotConnectorTools {
         "find_activity",
         "insert_activities",
         "get_compile_errors",
+        "analyze_project_gaps",
     ];
 
     public static readonly string[] LeaveOffNames = [
@@ -52,7 +53,6 @@ public static class CopilotConnectorTools {
         "manage_project_docs",
         "sync_project_context",
         "validate_project_docs",
-        "analyze_project_gaps",
     ];
 
     private static readonly HashSet<string> DefaultSet = new(DefaultNames, StringComparer.Ordinal);

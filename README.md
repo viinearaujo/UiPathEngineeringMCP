@@ -183,8 +183,8 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop; green gate is `validate_project(build:false, pack:false)` then `update_plan_task`). New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with primitives only; never custom types or source-file methods from XAML.
-- **Recommended tools (default connector, ≤12):** `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`
+- **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop; green gate is `validate_project(build:false, pack:false)` then `analyze_project_gaps` then `update_plan_task`). New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with primitives only; never custom types or source-file methods from XAML.
+- **Recommended tools (default connector, ≤12):** `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`, `analyze_project_gaps`
 - **Leave off the default connector:** `CopilotConnectorTools.LeaveOffNames`. Notable overlaps: `compile_project` (use `validate_project(build:true)`), `verify_work` (use `validate_project` then `update_plan_task`), `edit_workflow_activity` (prefer `insert_activities`; fragment hatch on `All`), `write_workflow_file` (full-file overwrite on `ToolSurface=All` only). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only `CopilotConnectorTools.DefaultNames`; set `All` for Inspector. GitLab tools stay registered on the server.
 - **Full tool surface** (Inspector / `ToolSurface=All`): every name in `CopilotConnectorTools.DefaultNames` plus `LeaveOffNames` (canonical C# arrays — do not hand-copy a third catalog here).
 
@@ -240,20 +240,24 @@ The server answers one deterministic tool call at a time. The client drives the 
 analyze_project (summary) → get_implementation_plan
    → add_coded_workflow / edit_workflow_file  (or find_activity + insert_activities for REFramework/Invoke)
    → get_compile_errors (optional .cs check)
-   → validate_project(build:false, pack:false) → update_plan_task
+   → validate_project(build:false, pack:false) → analyze_project_gaps
+   → remediate resilience / observability / structure / boundary (ignore category=docs)
+   → update_plan_task
 ```
 
 Example prompt:
 
 > Analyze my UiPath project (summary), resume the existing implementation plan if present,
 > implement the next pending task, validate with `validate_project` build false pack false,
+> run `analyze_project_gaps` and remediate resilience/boundary gaps (ignore category=docs),
 > then mark the task done with `update_plan_task`.
 
 Plans live at `docs/implementation-plan.json` (scratchpad). Marking a task `done` is not
 blocked on docs or ADR freshness. Do not use `verify_work` as the done gate. It defaults
 `build: false` and does not auto-block on a build-only failure; the green gate is still
-`validate_project(build:false, pack:false)` then `update_plan_task`. Connection
-recipes and traps: [docs/agent-connection.md](docs/agent-connection.md).
+`validate_project(build:false, pack:false)` then `analyze_project_gaps` then
+`update_plan_task`. Connection recipes and traps:
+[docs/agent-connection.md](docs/agent-connection.md).
 
 ---
 

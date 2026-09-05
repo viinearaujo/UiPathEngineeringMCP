@@ -54,6 +54,8 @@ public class CodedSourceFileParserTests {
         Assert.True(model.IsCodedWorkflow);
         Assert.Equal(CodedFileKind.Workflow, model.Kind);
         Assert.Equal(["Execute"], model.EntryMethods);
+        Assert.False(model.EntryHasTryCatch);
+        Assert.False(model.EntryHasLog);
     }
 
     [Fact]
@@ -170,5 +172,61 @@ public class CodedSourceFileParserTests {
         Assert.Equal(4, model.EntryArguments.Count);
         Assert.Equal("string[]", model.EntryArguments.Single(a => a.Name == "in_Ids").Type);
         Assert.Equal("CustomerRecord", model.EntryArguments.Single(a => a.Name == "in_Customer").Type);
+    }
+
+    [Fact]
+    public void Parse_WorkflowEntryWithTryCatchAndLog_SetsIdiomFlags() {
+        const string content = """
+            public class InvoiceFlow : CodedWorkflow
+            {
+                [Workflow]
+                public void Execute()
+                {
+                    try
+                    {
+                        Log("started");
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error(ex.Message);
+                        throw;
+                    }
+                }
+            }
+            """;
+
+        var model = new CodedSourceFileParser().Parse("InvoiceFlow.cs", "/p/InvoiceFlow.cs", content);
+
+        Assert.Equal(CodedFileKind.Workflow, model.Kind);
+        Assert.True(model.EntryHasTryCatch);
+        Assert.True(model.EntryHasLog);
+    }
+
+    [Fact]
+    public void Parse_WorkflowEntryWithTryButNoLog_SetsFlagsIndependently() {
+        const string content = """
+            public class InvoiceFlow : CodedWorkflow
+            {
+                [Workflow]
+                public void Execute()
+                {
+                    try { Run(); }
+                    catch (Exception) { throw; }
+                }
+            }
+            """;
+
+        var model = new CodedSourceFileParser().Parse("InvoiceFlow.cs", "/p/InvoiceFlow.cs", content);
+
+        Assert.True(model.EntryHasTryCatch);
+        Assert.False(model.EntryHasLog);
+    }
+
+    [Fact]
+    public void Parse_PlainSourceFile_DoesNotScanIdiomFlags() {
+        var model = new CodedSourceFileParser().Parse("Helpers.cs", "/p/Helpers.cs", PlainSource);
+
+        Assert.Null(model.EntryHasTryCatch);
+        Assert.Null(model.EntryHasLog);
     }
 }

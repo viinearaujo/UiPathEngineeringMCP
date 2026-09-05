@@ -28,6 +28,12 @@ public sealed class CodedSourceFileParser {
         @"^\s*public\s+(?:static\s+|async\s+|virtual\s+|override\s+|sealed\s+|partial\s+)*[\w<>\[\],.?]+\s+([A-Za-z_]\w*)\s*\(",
         RegexOptions.Multiline | RegexOptions.Compiled);
 
+    private static readonly Regex TryKeyword = new(@"\btry\b", RegexOptions.Compiled);
+    private static readonly Regex CatchKeyword = new(@"\bcatch\b", RegexOptions.Compiled);
+    private static readonly Regex LogCall = new(
+        @"\bLog\s*\(|\bLogMessage\b|\blog\.",
+        RegexOptions.Compiled);
+
     public CodedWorkflowModel Parse(string fileName, string filePath, string content) {
         var model = new CodedWorkflowModel { FileName = fileName, FilePath = filePath };
         if (string.IsNullOrWhiteSpace(content)) {
@@ -87,7 +93,77 @@ public sealed class CodedSourceFileParser {
             .Distinct()
             .Except(model.EntryMethods));
 
+        AnalyzeEntryIdioms(model, content, attributed);
+
         return model;
+    }
+
+    private static void AnalyzeEntryIdioms(CodedWorkflowModel model, string content, MatchCollection attributed) {
+        if (model.Kind != CodedFileKind.Workflow || model.HasParseError) {
+            return;
+        }
+
+        var bodies = new List<string>();
+        foreach (Match match in attributed) {
+            if (!match.Groups["attr"].Value.Equals("Workflow", StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+
+            var body = ExtractMethodBody(content, match.Index + match.Length);
+            if (body is not null) {
+                bodies.Add(body);
+            }
+        }
+
+        if (bodies.Count > 0) {
+            model.EntryHasTryCatch = bodies.All(HasTryCatch);
+            model.EntryHasLog = bodies.Any(HasLog);
+        } else {
+            model.EntryHasTryCatch = HasTryCatch(content);
+            model.EntryHasLog = HasLog(content);
+        }
+    }
+
+    private static bool HasTryCatch(string text) =>
+        TryKeyword.IsMatch(text) && CatchKeyword.IsMatch(text);
+
+    private static bool HasLog(string text) => LogCall.IsMatch(text);
+
+    private static string? ExtractMethodBody(string content, int afterSignature) {
+        var i = afterSignature;
+        while (i < content.Length && char.IsWhiteSpace(content[i])) {
+            i++;
+        }
+
+        if (i >= content.Length || content[i] == ';') {
+            return null;
+        }
+
+        if (i + 1 < content.Length && content[i] == '=' && content[i + 1] == '>') {
+            var start = i;
+            var end = content.IndexOf(';', i);
+            return end < 0 ? content[start..] : content[start..(end + 1)];
+        }
+
+        if (content[i] != '{') {
+            return null;
+        }
+
+        var depth = 0;
+        var startBrace = i;
+        for (; i < content.Length; i++) {
+            var c = content[i];
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return content[startBrace..(i + 1)];
+                }
+            }
+        }
+
+        return null;
     }
 
     internal static List<ArgumentModel> ParseParameters(string raw) {

@@ -18,6 +18,7 @@ public class CopilotConnectorToolsTests {
             "find_activity",
             "insert_activities",
             "get_compile_errors",
+            "analyze_project_gaps",
         }, CopilotConnectorTools.DefaultNames);
         Assert.DoesNotContain("recommend_activities", CopilotConnectorTools.DefaultNames);
         Assert.DoesNotContain("write_workflow_file", CopilotConnectorTools.DefaultNames);

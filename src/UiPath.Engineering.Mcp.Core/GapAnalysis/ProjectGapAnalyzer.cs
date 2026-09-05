@@ -28,7 +28,7 @@ public static class ProjectGapAnalyzer {
                 Severity = Gap.Error,
                 Category = "project",
                 Message = "project.json does not declare an entry point ('main').",
-                SuggestedTool = "write_workflow_file",
+                SuggestedTool = "add_coded_workflow",
                 SuggestedAction = "Create Main.xaml and set it as the entry point in project.json."
             });
         } else if (entry is null) {
@@ -38,7 +38,7 @@ public static class ProjectGapAnalyzer {
                 Category = "project",
                 Message = $"Entry point '{model.MainWorkflow}' is declared in project.json but the file is missing on disk.",
                 TargetFile = model.MainWorkflow,
-                SuggestedTool = "write_workflow_file",
+                SuggestedTool = "add_coded_workflow",
                 SuggestedAction = $"Create '{model.MainWorkflow}' or fix the 'main' setting in project.json."
             });
         }
@@ -53,7 +53,7 @@ public static class ProjectGapAnalyzer {
                     Category = "project",
                     Message = $"'{entryPoint}' is declared in project.json entryPoints but the file is missing on disk.",
                     TargetFile = entryPoint,
-                    SuggestedTool = "write_workflow_file",
+                    SuggestedTool = "add_coded_workflow",
                     SuggestedAction = $"Create '{entryPoint}' or remove it from project.json entryPoints."
                 });
             }
@@ -80,12 +80,12 @@ public static class ProjectGapAnalyzer {
                 Category = "structure",
                 Message = $"'{edge.Source}' invokes '{edge.Target}', which does not exist in the project.",
                 TargetFile = edge.Target,
-                SuggestedTool = "write_workflow_file",
+                SuggestedTool = "add_coded_workflow",
                 SuggestedAction = $"Create '{edge.Target}' or fix the InvokeWorkflowFile in '{edge.Source}'."
             });
         }
 
-        // Entry workflow resilience/observability.
+        // Entry workflow resilience/observability (hybrid REFramework XAML still matters).
         if (entry is not null && entry.ExceptionHandlers.Count == 0) {
             gaps.Add(new Gap {
                 Id = "entry-no-exception-handling",
@@ -93,7 +93,7 @@ public static class ProjectGapAnalyzer {
                 Category = "resilience",
                 Message = $"Entry workflow '{entry.FileName}' has no TryCatch exception handling.",
                 TargetFile = entry.FileName,
-                SuggestedTool = "edit_workflow_activity",
+                SuggestedTool = "insert_activities",
                 SuggestedAction = "Wrap the entry workflow body in a TryCatch."
             });
         }
@@ -105,10 +105,13 @@ public static class ProjectGapAnalyzer {
                 Category = "observability",
                 Message = $"Entry workflow '{entry.FileName}' contains no LogMessage activities.",
                 TargetFile = entry.FileName,
-                SuggestedTool = "edit_workflow_activity",
+                SuggestedTool = "insert_activities",
                 SuggestedAction = "Add LogMessage activities to the entry workflow."
             });
         }
+
+        LintCodedWorkflows(model, gaps);
+        LintXamlBusinessLogic(model, gaps);
 
         // Documentation hygiene.
         foreach (var workflow in model.Workflows.Where(w => string.IsNullOrWhiteSpace(w.Description))) {
@@ -157,7 +160,7 @@ public static class ProjectGapAnalyzer {
                         Category = "plan",
                         Message = $"Task '{task.Id}' ({task.Title}) is '{task.Status}' but planned file(s) are missing: {string.Join(", ", missing)}.",
                         TargetFile = missing[0],
-                        SuggestedTool = "write_workflow_file",
+                        SuggestedTool = "add_coded_workflow",
                         SuggestedAction = "Create the planned file(s), or adjust the plan if they are no longer needed."
                     });
                 }
@@ -179,6 +182,115 @@ public static class ProjectGapAnalyzer {
         }
 
         return gaps;
+    }
+
+    private static void LintCodedWorkflows(UiPathProjectModel model, List<Gap> gaps) {
+        foreach (var coded in model.CodedWorkflows) {
+            if (XamlCodedInvokeBoundary.EffectiveKind(coded) != CodedFileKind.Workflow) {
+                continue;
+            }
+
+            if (coded.EntryHasTryCatch == false) {
+                gaps.Add(new Gap {
+                    Id = $"coded-no-exception-handling:{coded.FileName}",
+                    Severity = Gap.Warning,
+                    Category = "resilience",
+                    Message = $"Coded workflow '{coded.FileName}' entry method has no try/catch.",
+                    TargetFile = coded.FileName,
+                    SuggestedTool = "edit_workflow_file",
+                    SuggestedAction = "Wrap the coded workflow entry method in try/catch."
+                });
+            }
+
+            if (coded.EntryHasLog == false) {
+                gaps.Add(new Gap {
+                    Id = $"coded-no-logging:{coded.FileName}",
+                    Severity = Gap.Info,
+                    Category = "observability",
+                    Message = $"Coded workflow '{coded.FileName}' entry method has no Log(...), LogMessage, or log. call.",
+                    TargetFile = coded.FileName,
+                    SuggestedTool = "edit_workflow_file",
+                    SuggestedAction = "Add Log(...) to the coded workflow entry method."
+                });
+            }
+        }
+    }
+
+    private static void LintXamlBusinessLogic(UiPathProjectModel model, List<Gap> gaps) {
+        foreach (var workflow in model.Workflows) {
+            if (IsFrameworkOrExemptXaml(workflow)) {
+                continue;
+            }
+
+            if (!workflow.Activities.Any(a => IsBusinessLogicActivity(a.Type))) {
+                continue;
+            }
+
+            gaps.Add(new Gap {
+                Id = $"xaml-business-logic:{workflow.FileName}",
+                Severity = Gap.Warning,
+                Category = "boundary",
+                Message = $"'{workflow.FileName}' contains Excel, HTTP, Mail, or UI activities; prefer a coded workflow; keep XAML as REFramework/Invoke shell.",
+                TargetFile = workflow.FileName,
+                SuggestedTool = "add_coded_workflow",
+                SuggestedAction = "Move business logic into a coded workflow; keep this XAML as a REFramework/Invoke shell."
+            });
+        }
+    }
+
+    private static bool IsFrameworkOrExemptXaml(WorkflowModel workflow) {
+        var name = workflow.FileName ?? string.Empty;
+        var path = workflow.FilePath ?? string.Empty;
+        var nameOnly = Path.GetFileNameWithoutExtension(name);
+        if (nameOnly.Equals("Main", StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        if (name.Contains("Framework", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("Framework", StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        return IsTestWorkflow(name) || IsTestWorkflow(path) || nameOnly.Contains("_Test", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsBusinessLogicActivity(string type) {
+        if (string.IsNullOrEmpty(type)) {
+            return false;
+        }
+
+        if (type.Contains("Excel", StringComparison.OrdinalIgnoreCase)
+            || type.Contains("Http", StringComparison.OrdinalIgnoreCase)
+            || type.Contains("Mail", StringComparison.OrdinalIgnoreCase)
+            || type.Contains("Outlook", StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        if (type is "ReadRange" or "ReadRangeX" or "WriteRange" or "WriteRangeX"
+            or "ForEachRow" or "ForEachExcelRow" or "UseExcelFile" or "ExcelApplicationScope"
+            or "Click" or "TypeInto" or "NClick" or "NTypeInto"
+            or "UseApplication" or "ApplicationCard" or "NApplicationCard"
+            or "SendHotkey" or "NHotkey") {
+            return true;
+        }
+
+        if (type.StartsWith('N') && type.Length > 1 && char.IsUpper(type[1])) {
+            return type.Contains("Click", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Type", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Application", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Hotkey", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Keyboard", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("GetText", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Check", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Select", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Hover", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Image", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Screenshot", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Find", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Element", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 
     private static bool IsTestWorkflow(string fileName) =>

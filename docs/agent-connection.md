@@ -26,11 +26,11 @@ Tools resolve **only** `docs/implementation-plan.json` inside the target UiPath 
 
 This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions (source of truth for the loop): [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt).
 
-Enable only `CopilotConnectorTools.DefaultNames` on the default Copilot connector (≤12). Canonical list: README recommended-tools line and the DEFAULT CONNECTOR line in [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt) — both must match the C# array. Always pass `validate_project` `build: false`, `pack: false` in the loop. XAML shell: `find_activity` + `insert_activities` (REFramework / InvokeWorkflowFile only); `edit_workflow_activity` is a leave-off fragment hatch.
+Enable only `CopilotConnectorTools.DefaultNames` on the default Copilot connector (≤12, including `analyze_project_gaps`). Canonical list: README recommended-tools line and the DEFAULT CONNECTOR line in [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt) — both must match the C# array. Always pass `validate_project` `build: false`, `pack: false` in the loop, then `analyze_project_gaps`. XAML shell: `find_activity` + `insert_activities` (REFramework / InvokeWorkflowFile only); `edit_workflow_activity` is a leave-off fragment hatch.
 
 HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only those names. Set `All` for Inspector. GitLab tools stay registered on the server.
 
-Leave-off names live in `CopilotConnectorTools.LeaveOffNames`. Notable: `compile_project` → `validate_project(build:true)`; `verify_work` → `validate_project` then `update_plan_task`; `write_workflow_file` is a full-file overwrite hatch on `ToolSurface=All` only.
+Leave-off names live in `CopilotConnectorTools.LeaveOffNames`. Notable: `compile_project` → `validate_project(build:true)`; `verify_work` → `validate_project` then `update_plan_task`; `write_workflow_file` is a full-file overwrite hatch on `ToolSurface=All` only. Do not leave `analyze_project_gaps` off the default connector.
 
 Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
 
@@ -42,10 +42,12 @@ analyze_project (detail=summary)
   → add_coded_workflow / edit_workflow_file  (or find_activity + insert_activities for REFramework/Invoke)
   → search_codebase / read_workflow_file to confirm the write
   → validate_project(build:false, pack:false)
+  → analyze_project_gaps
+  → remediate resilience / observability / structure / boundary (ignore category=docs)
   → update_plan_task(done|blocked)
 ```
 
-Close tasks with `validate_project(build:false, pack:false)` then `update_plan_task`. Marking `done` is not blocked on docs/ADR freshness. `verify_work` still refuses auto-done on docs errors and is not the green gate.
+Close tasks with `validate_project(build:false, pack:false)`, then `analyze_project_gaps`, then `update_plan_task`. Remediate `resilience`, `observability`, `structure`, and coded/XAML boundary gaps before `done`. Ignore `category=docs`. Marking `done` is not blocked on docs/ADR freshness. `verify_work` still refuses auto-done on docs errors and is not the green gate.
 
 File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` alone.
 
@@ -87,3 +89,9 @@ URI templates (MCP resources):
 Worked example for a Windows project root:
 
 `uipath://project/C%3A%2FUsers%2Farauj%2FDocuments%2Fuipath%2Fperf/model`
+
+## Copilot prompt pack
+
+Copy-paste user messages (new feature, change existing, debug, update project documentation) live in [copilot-prompts.md](copilot-prompts.md). Each template carries `{PROJECT_PATH}`, `{GOAL}`, optional `{PLAN_MD}`, and optional `{IDIOM_DIR}` (default `docs/idioms`).
+
+Idiom samples to copy into a UiPath project’s `docs/idioms/` are in [copilot-idioms/](copilot-idioms/). Copilot grounds on those local paths with `read_workflow_file` — not SharePoint or Dataverse. The files must sit inside an allowed project (`project.json` + `Projects:AllowedRoots`).

@@ -9,7 +9,7 @@ CODED-FIRST
 New work is a coded workflow, coded test case, or coded source file unless the task is REFramework or orchestration XAML. XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
 
 DEFAULT CONNECTOR (enable only this comma-separated list; leave everything else off)
-analyze_project, search_codebase, read_workflow_file, validate_project, get_implementation_plan, update_plan_task, add_coded_workflow, edit_workflow_file, find_activity, insert_activities, get_compile_errors
+analyze_project, search_codebase, read_workflow_file, validate_project, get_implementation_plan, update_plan_task, add_coded_workflow, edit_workflow_file, find_activity, insert_activities, get_compile_errors, analyze_project_gaps
 
 get_compile_errors is the fast in-memory .cs check. list_skills / read_skill are not required on the default connector — this instruction file is the loop. find_activity + insert_activities are the recommended surgical XAML pair for REFramework and InvokeWorkflowFile wiring only. edit_workflow_activity is a leave-off fragment hatch (ToolSurface=All).
 
@@ -22,7 +22,7 @@ TOOL USE RULES (MOST IMPORTANT)
 - XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
 - analyze_project defaults to detail=summary (counts, workflow index with coded kind, packages, risks — no activity trees). Pass workflowFile or detail=full with page/pageSize only when you need one workflow's activities. Never guess paths.
 - File truth is read_workflow_file / search_codebase, not analyze_project alone. Confirm every write. Never rewrite a redacted credential body (***REDACTED***) back to disk. .env / *.pem / *.key reads are refused — keep the mask.
-- After every change: confirm the files exist, then validate_project(build:false, pack:false). That is the CLI green gate and also reports coded/XAML boundary violations. Then update_plan_task. Do not use verify_work or compile_project as the done gate. validate_project defaults build to true if omitted — ALWAYS pass build:false and pack:false.
+- After every change: confirm the files exist, then validate_project(build:false, pack:false). Then analyze_project_gaps; remediate resilience, observability, structure, and coded/XAML boundary gaps (ignore category=docs). Then update_plan_task. Do not use verify_work or compile_project as the done gate. validate_project defaults build to true if omitted — ALWAYS pass build:false and pack:false.
 - The plan at docs/implementation-plan.json is a scratchpad. Marking a task done is not blocked on docs, ADRs, or knowledge freshness. Do not emit dummy ADRs to proceed.
 - Tools return structured errors (errorCode, message, fixHint). Read the fixHint, correct the call, and retry. Do not stop after one failure. If a call times out or returns JSON-RPC -32603, retry once with different flags (detail, page, build:false) or split the call — do not send the identical payload three times.
 - File tools require a projectPath inside the configured allowed roots (the folder that contains project.json).
@@ -32,7 +32,12 @@ AUTHORING LOOP
 2. get_implementation_plan. Source of truth is docs/implementation-plan.json. If none exists, continue authoring without a plan (create_implementation_plan is not on the default connector). Never ask to overwrite a mature plan.
 3. Author one task. Coded: add_coded_workflow then edit_workflow_file / read_workflow_file; get_compile_errors for a fast .cs check. XAML shell only: find_activity then insert_activities for REFramework or InvokeWorkflowFile.
 4. Confirm writes with search_codebase or read_workflow_file.
-5. validate_project(build:false, pack:false). Then update_plan_task to done or blocked. Do not call verify_work as the done gate.
+5. validate_project(build:false, pack:false). Then analyze_project_gaps. Remediate resilience, observability, structure, and coded/XAML boundary gaps before done. Ignore category=docs. Then update_plan_task to done or blocked. Do not call verify_work as the done gate.
+
+IDIOM
+- Coded [Workflow] entry: try/catch plus Log(...) (or LogMessage / log.). Do not put business logic or UI clicks in XAML.
+- XAML may only wire REFramework and InvokeWorkflowFile with BCL/framework argument types.
+- Before done: analyze_project_gaps has no remaining resilience or boundary warnings for files you touched. Ignore category=docs.
 
 FILE READING
 - When the user asks about the contents of any file (XAML, .cs, JSON, configs, docs, "what does X say", "show me line N"), call read_workflow_file with projectPath and relativePath. Use startLine/lineCount to page long files (default 1000 lines).
@@ -43,6 +48,7 @@ IN SCOPE (default connector)
 - Coded authoring (add_coded_workflow, edit_workflow_file, get_compile_errors)
 - Thin XAML shell (find_activity, insert_activities)
 - Validate projects (validate_project with build:false, pack:false in the agent loop)
+- Gap hygiene (analyze_project_gaps after validate; ignore category=docs)
 - Implementation plan scratchpad (get_implementation_plan, update_plan_task)
 
 OUT OF SCOPE

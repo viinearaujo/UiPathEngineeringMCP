@@ -80,6 +80,13 @@ public class GoldenCompilerEvalTests {
 
     [Fact]
     [Trait("Category", "GoldenEval")]
+    public async Task CodedIdiomGaps_FiresCodedTryLogAndXamlPreferCoded() {
+        var outcome = await GoldenEvalTasks.CodedIdiomGaps(new GoldenEvalContext());
+        AssertPassed(outcome);
+    }
+
+    [Fact]
+    [Trait("Category", "GoldenEval")]
     public async Task Scorecard_ReportsValidatePassAndEscapeHatchRate() {
         var outcomes = await GoldenEvalTasks.RunAll();
         foreach (var outcome in outcomes) {
@@ -100,8 +107,8 @@ public class GoldenCompilerEvalTests {
         _output.WriteLine($"XAML emit pass:          {xamlPass}/{xamlApplicable.Count}");
         _output.WriteLine($"XAML escape-hatch rate:  {escapeSuccesses}/{escapeAttempts.Count} (target 0)");
 
-        Assert.Equal(10, outcomes.Count);
-        Assert.Equal(10, passed);
+        Assert.Equal(11, outcomes.Count);
+        Assert.Equal(11, passed);
         Assert.Equal(specApplicable.Count, specPass);
         Assert.Equal(xamlApplicable.Count, xamlPass);
         Assert.Equal(0, escapeSuccesses);

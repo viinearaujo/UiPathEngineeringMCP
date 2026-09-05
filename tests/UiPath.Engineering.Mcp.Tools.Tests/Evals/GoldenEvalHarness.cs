@@ -1,6 +1,8 @@
 using System.Text.Json;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Authoring;
+using UiPath.Engineering.Mcp.Core.GapAnalysis;
+using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
@@ -291,8 +293,116 @@ internal static class GoldenEvalTasks {
             await BrokenInvokeFix(ctx),
             await UnknownXamlWriteRefused(ctx),
             await RecommendActivitiesHits(ctx),
-            await ValidateProjectDiagnostics(ctx)
+            await ValidateProjectDiagnostics(ctx),
+            await CodedIdiomGaps(ctx)
         ];
+    }
+
+    public static Task<EvalOutcome> CodedIdiomGaps(GoldenEvalContext ctx) {
+        _ = ctx;
+        const string mainXaml = """
+            <Activity x:Class="Main"
+                      sap2010:Annotation.AnnotationText="REFramework shell"
+                      xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                      xmlns:s="clr-namespace:System;assembly=mscorlib"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                      xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation">
+              <Sequence DisplayName="Main Sequence">
+                <ui:LogMessage DisplayName="Log start" Level="Info" Message="start" />
+                <TryCatch DisplayName="Try invoke">
+                  <TryCatch.Try>
+                    <ui:InvokeWorkflowFile DisplayName="Process" WorkflowFileName="Process.xaml" />
+                  </TryCatch.Try>
+                  <TryCatch.Catch>
+                    <Catch x:TypeArguments="s:Exception">
+                      <ActivityAction x:TypeArguments="s:Exception">
+                        <ui:LogMessage DisplayName="Log error" Level="Error" Message="failed" />
+                      </ActivityAction>
+                    </Catch>
+                  </TryCatch.Catch>
+                </TryCatch>
+              </Sequence>
+            </Activity>
+            """;
+        const string processXaml = """
+            <Activity x:Class="Process"
+                      sap2010:Annotation.AnnotationText="Invoice process"
+                      xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                      xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation">
+              <Sequence DisplayName="Process">
+                <ui:ReadRangeX DisplayName="Read invoices" />
+              </Sequence>
+            </Activity>
+            """;
+        const string coded = """
+            using UiPath.CodedWorkflows;
+            public class InvoiceFlow : CodedWorkflow
+            {
+                [Workflow]
+                public void Execute()
+                {
+                    Run();
+                }
+            }
+            """;
+        const string codedTest = """
+            using UiPath.CodedWorkflows;
+            public class InvoiceTests : CodedWorkflow
+            {
+                [TestCase]
+                public void Execute()
+                {
+                }
+            }
+            """;
+
+        var xamlParser = new XamlWorkflowParser();
+        var codedParser = new CodedSourceFileParser();
+        var main = xamlParser.Parse("Main.xaml", GoldenEvalContext.Target("Main.xaml"), mainXaml);
+        main.IsMain = true;
+        var process = xamlParser.Parse("Process.xaml", GoldenEvalContext.Target("Process.xaml"), processXaml);
+        var invoice = codedParser.Parse("InvoiceFlow.cs", GoldenEvalContext.Target("InvoiceFlow.cs"), coded);
+        var tests = codedParser.Parse("InvoiceTests.cs", GoldenEvalContext.Target("Tests/InvoiceTests.cs"), codedTest);
+
+        var model = new UiPathProjectModel {
+            ProjectPath = GoldenEvalContext.ProjectPath,
+            ProjectName = "EvalProcess",
+            MainWorkflow = "Main.xaml",
+            Workflows = [main, process],
+            CodedWorkflows = [invoice, tests]
+        };
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+        var codedTry = gaps.Exists(g => g.Id == "coded-no-exception-handling:InvoiceFlow.cs");
+        var codedLog = gaps.Exists(g => g.Id == "coded-no-logging:InvoiceFlow.cs");
+        var preferCoded = gaps.Exists(g => g.Id == "xaml-business-logic:Process.xaml");
+        var passed = codedTry && codedLog && preferCoded;
+        var missing = new List<string>();
+        if (!codedTry) {
+            missing.Add("coded-no-exception-handling");
+        }
+
+        if (!codedLog) {
+            missing.Add("coded-no-logging");
+        }
+
+        if (!preferCoded) {
+            missing.Add("xaml-business-logic:Process.xaml");
+        }
+
+        return Task.FromResult(new EvalOutcome(
+            "11-coded-idiom-gaps",
+            "Coded try/log + XAML Excel prefer-coded",
+            Passed: passed,
+            SpecValidates: null,
+            XamlEmits: null,
+            UnknownXamlWriteSucceeded: null,
+            Detail: passed
+                ? "coded resilience/observability and Process.xaml prefer-coded gaps fired"
+                : $"missing gaps: {string.Join(", ", missing)}"));
     }
 
     private static async Task<EvalOutcome> Author(

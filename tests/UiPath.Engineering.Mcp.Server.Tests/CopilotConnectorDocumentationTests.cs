@@ -21,6 +21,7 @@ public class CopilotConnectorDocumentationTests {
 
         Assert.Contains("McpServer:HttpAuth", readme);
         Assert.Contains("not blocked on docs", instructions);
+        Assert.Contains("IDIOM", instructions);
         Assert.Contains("write_workflow_file", readme);
         Assert.Contains("ToolSurface=All", readme);
     }
