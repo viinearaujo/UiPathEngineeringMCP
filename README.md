@@ -42,9 +42,9 @@ The skills feed under `.agents/skills` is **RPA-only** — do not reinstall the 
 
 A workshop for agents that work on **UiPath RPA** (`.xaml` / `.cs`) — not a full UiPath product catalog.
 
-- HTTP on `http://localhost:5000` (`/health`, `/sse`) or local stdio (`--stdio`)
-- Default HTTP tool surface is the Copilot connector (**12** tools from `CopilotConnectorTools.DefaultNames`)
-- Inspector and `McpServer:ToolSurface=All` see the full surface (`DefaultNames` plus `LeaveOffNames` in C# — do not hand-copy a third catalog)
+- HTTP on `http://localhost:5000` (`/health`, `/sse`) **or** local stdio (`--stdio`) — one process, one transport
+- Default HTTP (`McpServer:ToolSurface=CopilotDefault`) advertises **12** tool names in `CopilotConnectorTools.DefaultNames`
+- Inspector / `McpServer:ToolSurface=All` advertises the full live catalog of every registered `[McpServerTool]` (same tools the grouped Toolkit already describes). `LeaveOffNames` is the set hidden on the Copilot default connector, not the runtime source for All
 - New work is **coded-first** unless the task is REFramework or orchestration XAML
 
 <a id="quick-start"></a>
@@ -129,7 +129,7 @@ dotnet run --project src/UiPath.Engineering.Mcp.Server
 dotnet run --project src/UiPath.Engineering.Mcp.Server -- --stdio
 ```
 
-The server listens on `http://localhost:5000`. MCP (Streamable HTTP) is at `/sse`.
+HTTP listens on `http://localhost:5000`. MCP (Streamable HTTP) is at `/sse`. `--stdio` is already shipped as a separate process: logs on stderr, does not bind port 5000, unauthenticated, full tool surface (not the Copilot 12). One process, one transport — do not run HTTP and `--stdio` together.
 
 <a id="open-with-dev-tunnel"></a>
 ## 🌐 Open with Dev Tunnel
@@ -177,7 +177,7 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 - **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop). New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with primitives only; never custom types or source-file methods from XAML.
 - **Recommended tools (default connector, ≤12)** — canonical names from `CopilotConnectorTools.DefaultNames`: `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`, `analyze_project_gaps`
 - **Leave off the default connector:** `CopilotConnectorTools.LeaveOffNames`. Notable overlaps: `compile_project` (use `validate_project(build:true)`), `verify_work` (use `validate_project` then `update_plan_task`), `edit_workflow_activity` (prefer `insert_activities`; fragment hatch on `All`), `write_workflow_file` (full-file overwrite on `ToolSurface=All` only). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only `CopilotConnectorTools.DefaultNames`; set `All` for Inspector. GitLab tools stay registered on the server.
-- **Full tool surface** (Inspector / `ToolSurface=All`): every name in `CopilotConnectorTools.DefaultNames` plus `LeaveOffNames` (canonical C# arrays — do not hand-copy a third catalog here).
+- **Full tool surface** (Inspector / `ToolSurface=All`): the live catalog of every registered `[McpServerTool]` — the same tools the grouped Toolkit already describes. `LeaveOffNames` is not the runtime source for All; it is the set hidden on the Copilot default connector.
 
 > ✅ **Green gate:** `validate_project(build:false, pack:false)` → `analyze_project_gaps` → `update_plan_task`. Do not use `verify_work` as the done gate.
 
@@ -253,8 +253,8 @@ blocked on docs or ADR freshness. Do not use `verify_work` as the done gate. It 
 <a id="toolkit"></a>
 ## 🛠️ Toolkit
 
-Grouped by job. Copilot's default 12 are listed first; Inspector / `ToolSurface=All` still
-resolves names from the C# arrays (`DefaultNames` + `LeaveOffNames`).
+Grouped by job. Copilot's default 12 are listed first; Inspector / `ToolSurface=All` is the
+full live catalog of every registered `[McpServerTool]` (the same tools grouped below).
 
 ### ⭐ Copilot default (12)
 
