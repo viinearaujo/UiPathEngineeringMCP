@@ -73,4 +73,9 @@ public static class XamlActivityLocator {
 
         return null;
     }
+
+    public static bool MatchesAddress(LocatedActivity activity, string activityId) =>
+        string.Equals(activity.Id, activityId, StringComparison.Ordinal)
+        || (!string.IsNullOrWhiteSpace(activity.IdRef)
+            && string.Equals(activity.IdRef, activityId, StringComparison.Ordinal));
 }

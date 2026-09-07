@@ -39,15 +39,11 @@ public class CodeAnalysisToolsTests {
     }
 
     [Fact]
-    public async Task FindCodeSymbol_ServiceThrows_ReturnsStructuredError() {
+    public async Task FindCodeSymbol_ServiceThrows_PropagatesToHostExceptionBoundary() {
         var analysis = new FakeCSharpAnalysisService { ToThrow = new InvalidOperationException("boom") };
         var tool = new FindCodeSymbolTool(ProjectFilesystem(), analysis);
 
-        var result = await tool.FindCodeSymbol("/projects/testProcess", "Execute");
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
-        Assert.DoesNotContain("boom", string.Join(" ", result.Errors));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tool.FindCodeSymbol("/projects/testProcess", "Execute"));
     }
 
     // --- get_code_context ---

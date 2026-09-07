@@ -23,7 +23,7 @@ public sealed class ValidateProjectDocsTool {
         _validator = validator;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Inspects project docs without changing plan state. Wiki hygiene only — findings do not block update_plan_task(done). verify_work still refuses auto-done on docs errors.")]
+    [McpServerTool(UseStructuredContent = true), Description("Inspects project docs without changing plan state. Wiki hygiene only — findings do not block update_plan_task(done). verify_work still refuses auto-done on docs errors. Next: sync_project_context.")]
     public async Task<ToolResult> ValidateProjectDocs(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         CancellationToken cancellationToken = default) {
@@ -34,12 +34,7 @@ public sealed class ValidateProjectDocsTool {
             return guardFailure;
         }
 
-        UiPathProjectModel model;
-        try {
-            model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Project analysis failed.", sw);
-        }
+        var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
 
         var findings = _validator.Validate(projectPath, model);
         var errors = findings.Count(f => f.Severity == DocsFinding.Error);

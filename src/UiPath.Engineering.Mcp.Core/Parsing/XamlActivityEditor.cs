@@ -96,7 +96,7 @@ public static class XamlActivityEditor {
         }
 
         var located = XamlActivityLocator.Locate(doc)
-            .FirstOrDefault(a => string.Equals(a.Id, activityId, StringComparison.Ordinal));
+            .FirstOrDefault(a => XamlActivityLocator.MatchesAddress(a, activityId));
         if (located is null) {
             return XamlEditResult.Failure($"No activity found with ID '{activityId}'.",
                 ToolErrorCodes.ActivityNotFound);

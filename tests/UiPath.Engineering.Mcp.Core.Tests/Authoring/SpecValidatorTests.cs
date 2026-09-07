@@ -4,27 +4,23 @@ using UiPath.Engineering.Mcp.Core.Authoring;
 
 namespace UiPath.Engineering.Mcp.Core.Tests.Authoring;
 
-public class SpecValidatorTests
-{
+public class SpecValidatorTests {
     [Fact]
-    public void Validate_NullSpec_EmptySpec()
-    {
+    public void Validate_NullSpec_EmptySpec() {
         var e = Assert.Single(SpecValidator.Validate(null!));
         Assert.Equal(ToolErrorCodes.SpecEmptySpec, e.ErrorCode);
         Assert.Equal("validate_activity_spec", e.SuggestedTool);
     }
 
     [Fact]
-    public void Validate_BlankName_EmptySpec()
-    {
+    public void Validate_BlankName_EmptySpec() {
         var e = Assert.Single(SpecValidator.Validate(new ActivitySpec { Name = "  " }));
         Assert.Equal(ToolErrorCodes.SpecEmptySpec, e.ErrorCode);
         Assert.Equal("validate_activity_spec", e.SuggestedTool);
     }
 
     [Fact]
-    public void Validate_UnknownActivity_SuggestsClosest()
-    {
+    public void Validate_UnknownActivity_SuggestsClosest() {
         var errors = SpecValidator.Validate(new ActivitySpec { Name = "FoeEach" });
         var e = Assert.Single(errors);
         Assert.Equal(ToolErrorCodes.SpecUnknownActivity, e.ErrorCode);
@@ -32,8 +28,7 @@ public class SpecValidatorTests
     }
 
     [Fact]
-    public void Validate_MissingRequiredProperty_MissingRequired()
-    {
+    public void Validate_MissingRequiredProperty_MissingRequired() {
         var spec = new ActivitySpec { Name = "Assign", Properties = new() { ["to"] = "[a]" } };
         var e = Assert.Single(SpecValidator.Validate(spec));
         Assert.Equal(ToolErrorCodes.SpecMissingRequiredProperty, e.ErrorCode);
@@ -41,80 +36,91 @@ public class SpecValidatorTests
     }
 
     [Fact]
-    public void Validate_ChildrenOnLeaf_InvalidNesting()
-    {
-        var spec = new ActivitySpec { Name = "LogMessage",
+    public void Validate_ChildrenOnLeaf_InvalidNesting() {
+        var spec = new ActivitySpec {
+            Name = "LogMessage",
             Properties = new() { ["message"] = "[x]" },
-            Children = [new ActivitySpec { Name = "Rethrow" }] };
+            Children = [new ActivitySpec { Name = "Rethrow" }]
+        };
         Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
     }
 
     [Fact]
-    public void Validate_VariablesOnNonRoot_InvalidNesting()
-    {
-        var spec = new ActivitySpec { Name = "Sequence", Children =
-            [new ActivitySpec { Name = "Rethrow", Variables = [new VariableSpec { Name = "v", Type = "Int32" }] }] };
+    public void Validate_VariablesOnNonRoot_InvalidNesting() {
+        var spec = new ActivitySpec {
+            Name = "Sequence", Children =
+            [new ActivitySpec { Name = "Rethrow", Variables = [new VariableSpec { Name = "v", Type = "Int32" }] }]
+        };
         Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
     }
 
     [Fact]
-    public void Validate_CatchesOnNonTryCatch_InvalidNesting()
-    {
-        var spec = new ActivitySpec { Name = "Sequence", Children =
-            [new ActivitySpec { Name = "If",
+    public void Validate_CatchesOnNonTryCatch_InvalidNesting() {
+        var spec = new ActivitySpec {
+            Name = "Sequence", Children =
+            [new ActivitySpec {
+                Name = "If",
                 Properties = new() { ["condition"] = "[flag]" },
-                Catches = [new CatchSpec()] }] };
+                Catches = [new CatchSpec()]
+            }]
+        };
         Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
     }
 
     [Fact]
-    public void Validate_ExpressionGivenLiteral_Mismatch()
-    {
-        var spec = new ActivitySpec { Name = "Assign",
-            Properties = new() { ["to"] = "counter", ["value"] = "[counter + 1]" } }; // "to" missing brackets
+    public void Validate_ExpressionGivenLiteral_Mismatch() {
+        var spec = new ActivitySpec {
+            Name = "Assign",
+            Properties = new() { ["to"] = "counter", ["value"] = "[counter + 1]" }
+        }; // "to" missing brackets
         Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecValueFormMismatch);
     }
 
     [Fact]
-    public void Validate_LiteralGivenExpressionForm_Mismatch()
-    {
-        var spec = new ActivitySpec { Name = "LogMessage",
-            Properties = new() { ["message"] = "[x]", ["level"] = "[Info]" } }; // Level is Literal, must not be bracket-wrapped
+    public void Validate_LiteralGivenExpressionForm_Mismatch() {
+        var spec = new ActivitySpec {
+            Name = "LogMessage",
+            Properties = new() { ["message"] = "[x]", ["level"] = "[Info]" }
+        }; // Level is Literal, must not be bracket-wrapped
         Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecValueFormMismatch);
     }
 
     [Fact]
-    public void Validate_TypeArgumentWithBrackets_Mismatch()
-    {
-        var spec = new ActivitySpec { Name = "ForEach",
-            Properties = new() { ["values"] = "[items]", ["typeArgument"] = "[DataRow]" } };
+    public void Validate_TypeArgumentWithBrackets_Mismatch() {
+        var spec = new ActivitySpec {
+            Name = "ForEach",
+            Properties = new() { ["values"] = "[items]", ["typeArgument"] = "[DataRow]" }
+        };
         Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecValueFormMismatch);
     }
 
     [Fact]
-    public void Validate_MultipleViolations_AllCollected()
-    {
-        var spec = new ActivitySpec { Name = "Sequence", Children =
-            [ new ActivitySpec { Name = "Bogus" },
-              new ActivitySpec { Name = "Assign", Properties = new() { ["to"] = "[a]" } } ] }; // missing required "value"
+    public void Validate_MultipleViolations_AllCollected() {
+        var spec = new ActivitySpec {
+            Name = "Sequence", Children =
+            [new ActivitySpec { Name = "Bogus" },
+                new ActivitySpec { Name = "Assign", Properties = new() { ["to"] = "[a]" } }]
+        }; // missing required "value"
         var errors = SpecValidator.Validate(spec);
         Assert.Contains(errors, e => e.ErrorCode == ToolErrorCodes.SpecUnknownActivity);
         Assert.Contains(errors, e => e.ErrorCode == ToolErrorCodes.SpecMissingRequiredProperty);
     }
 
     [Fact]
-    public void Validate_NestedViolation_PathInMessage()
-    {
-        var spec = new ActivitySpec { Name = "Sequence", Children =
-            [new ActivitySpec { Name = "Sequence", Children =
-                [new ActivitySpec { Name = "Bogus" }] }] };
+    public void Validate_NestedViolation_PathInMessage() {
+        var spec = new ActivitySpec {
+            Name = "Sequence", Children =
+            [new ActivitySpec {
+                Name = "Sequence", Children =
+                [new ActivitySpec { Name = "Bogus" }]
+            }]
+        };
         var e = Assert.Single(SpecValidator.Validate(spec));
         Assert.Contains("children[0].children[0]", e.Message);
     }
 
     [Fact]
-    public void Validate_DesignDocExample_NoErrors()
-    {
+    public void Validate_DesignDocExample_NoErrors() {
         const string json = """
         { "name": "Sequence",
           "variables": [{ "name": "rowCount", "type": "Int32", "default": "0" }],
@@ -131,10 +137,8 @@ public class SpecValidatorTests
     }
 
     [Fact]
-    public void Validate_IfElse_NoErrors()
-    {
-        var spec = new ActivitySpec
-        {
+    public void Validate_IfElse_NoErrors() {
+        var spec = new ActivitySpec {
             Name = "If",
             Properties = new() { ["condition"] = "[flag]" },
             Children = [new ActivitySpec { Name = "Rethrow" }],
@@ -144,17 +148,14 @@ public class SpecValidatorTests
     }
 
     [Fact]
-    public void Validate_ElseOnNonIf_InvalidNesting()
-    {
+    public void Validate_ElseOnNonIf_InvalidNesting() {
         var spec = new ActivitySpec { Name = "Sequence", Else = [new ActivitySpec { Name = "Rethrow" }] };
         Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
     }
 
     [Fact]
-    public void Validate_Switch_MissingKey_MissingRequired()
-    {
-        var spec = new ActivitySpec
-        {
+    public void Validate_Switch_MissingKey_MissingRequired() {
+        var spec = new ActivitySpec {
             Name = "Switch",
             Properties = new() { ["expression"] = "[status]", ["typeArgument"] = "Int32" },
             Cases = [new SwitchCaseSpec { Key = "", Children = [new ActivitySpec { Name = "Rethrow" }] }]
@@ -163,10 +164,8 @@ public class SpecValidatorTests
     }
 
     [Fact]
-    public void Validate_Switch_ChildrenInsteadOfCases_InvalidNesting()
-    {
-        var spec = new ActivitySpec
-        {
+    public void Validate_Switch_ChildrenInsteadOfCases_InvalidNesting() {
+        var spec = new ActivitySpec {
             Name = "Switch",
             Properties = new() { ["expression"] = "[status]", ["typeArgument"] = "Int32" },
             Children = [new ActivitySpec { Name = "Rethrow" }]
@@ -175,10 +174,8 @@ public class SpecValidatorTests
     }
 
     [Fact]
-    public void Validate_InvokeArguments_InvalidDirection()
-    {
-        var spec = new ActivitySpec
-        {
+    public void Validate_InvokeArguments_InvalidDirection() {
+        var spec = new ActivitySpec {
             Name = "InvokeWorkflowFile",
             Properties = new() { ["workflowFileName"] = "Child.xaml" },
             Arguments = [new ArgumentMappingSpec { Name = "in_X", Direction = "Sideways", Value = "[x]" }]
@@ -187,10 +184,8 @@ public class SpecValidatorTests
     }
 
     [Fact]
-    public void Validate_ArgumentsOnNonInvoke_InvalidNesting()
-    {
-        var spec = new ActivitySpec
-        {
+    public void Validate_ArgumentsOnNonInvoke_InvalidNesting() {
+        var spec = new ActivitySpec {
             Name = "LogMessage",
             Properties = new() { ["message"] = "[x]" },
             Arguments = [new ArgumentMappingSpec { Name = "in_X" }]

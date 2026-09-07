@@ -4,6 +4,7 @@ public sealed class UiPathProjectModel {
     public string ProjectName { get; init; } = string.Empty;
     public string? MainWorkflow { get; init; }
     public List<string> EntryPoints { get; init; } = [];
+    public List<string> FileInfoCollection { get; init; } = [];
     public string? ProjectJsonPath { get; init; }
     public string? Description { get; set; }
     public string? TargetFramework { get; init; }

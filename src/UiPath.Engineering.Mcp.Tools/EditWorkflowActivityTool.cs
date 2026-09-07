@@ -16,7 +16,7 @@ public sealed class EditWorkflowActivityTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Leave-off XAML fragment hatch (ToolSurface=All only). Prefer insert_activities on the Copilot default connector. Inserts a raw activity fragment into a container, or replaces/removes one activity, targeted by activityId (preferred, from find_activity) or DisplayName.")]
+    [McpServerTool(UseStructuredContent = true), Description("Leave-off XAML fragment hatch (ToolSurface=All only). Prefer insert_activities on the Copilot default connector. Inserts a raw activity fragment into a container, or replaces/removes one activity, targeted by activityId (preferred, from find_activity) or DisplayName. Next: validate_project.")]
     public ToolResult EditWorkflowActivity(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,
@@ -45,14 +45,12 @@ public sealed class EditWorkflowActivityTool {
                 "Run find_activity to list activity IDs."), sw);
         }
 
-        var normalizedOperation = operation?.Trim().ToLowerInvariant();
-        if (normalizedOperation is not (XamlActivityEditor.Insert or XamlActivityEditor.Replace or XamlActivityEditor.Remove)) {
-            return ToolResults.Failure("operation must be insert, replace, or remove.", sw);
+        if (ToolArgs.ParseChoice(operation, "operation", [XamlActivityEditor.Insert, XamlActivityEditor.Replace, XamlActivityEditor.Remove], sw, out var normalizedOperation) is { } operationError) {
+            return operationError;
         }
 
-        var normalizedPosition = position?.Trim().ToLowerInvariant();
-        if (normalizedPosition is not (XamlActivityEditor.First or XamlActivityEditor.Last)) {
-            return ToolResults.Failure("position must be first or last.", sw);
+        if (ToolArgs.ParseChoice(position, "position", [XamlActivityEditor.First, XamlActivityEditor.Last], sw, out var normalizedPosition) is { } positionError) {
+            return positionError;
         }
 
         if (!ToolResults.TryResolveWithinProject(projectPath, relativePath, out var targetPath)) {

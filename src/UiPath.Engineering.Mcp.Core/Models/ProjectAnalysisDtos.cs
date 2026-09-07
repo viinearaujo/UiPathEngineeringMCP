@@ -43,6 +43,7 @@ public sealed class ProjectAnalysisCounts {
 public sealed class WorkflowIndexEntry {
     public string FileName { get; init; } = string.Empty;
     public string FilePath { get; init; } = string.Empty;
+    public string RelativePath { get; init; } = string.Empty;
     public bool IsMain { get; init; }
     public bool HasParseError { get; init; }
     public int ActivityCount { get; init; }

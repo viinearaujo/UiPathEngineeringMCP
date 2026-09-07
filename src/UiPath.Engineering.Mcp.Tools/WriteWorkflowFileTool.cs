@@ -21,7 +21,7 @@ public sealed class WriteWorkflowFileTool {
         _catalogResolver = catalogResolver;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Leave-off full-file overwrite (ToolSurface=All only). Prefer edit_workflow_file for small string edits and insert_activities for spec-based XAML inserts. Creates or fully overwrites a .xaml or .cs file. For .xaml, activity types must be in the project catalog unless allowUnknownActivities is true.")]
+    [McpServerTool(UseStructuredContent = true), Description("Leave-off full-file overwrite (ToolSurface=All only). Prefer edit_workflow_file for small string edits and insert_activities for spec-based XAML inserts. Creates or fully overwrites a .xaml or .cs file. For .xaml, activity types must be in the project catalog unless allowUnknownActivities is true. Next: validate_project.")]
     public async Task<ToolResult> WriteWorkflowFile(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the file relative to the project root, e.g. 'Main.xaml' or 'Workflows/SendEmail.xaml'.")] string relativePath,
@@ -90,7 +90,7 @@ public sealed class WriteWorkflowFileTool {
             existed ? $"Updated '{relativePath}'." : $"Created '{relativePath}'.",
             new {
                 filePath = targetPath,
-                bytesWritten = content.Length,
+                bytesWritten = System.Text.Encoding.UTF8.GetByteCount(content),
                 sha256,
                 className,
                 overwritten = existed

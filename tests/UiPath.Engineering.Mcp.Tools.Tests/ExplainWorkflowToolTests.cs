@@ -164,29 +164,21 @@ public class ExplainWorkflowToolTests {
     }
 
     [Fact]
-    public async Task ExplainWorkflow_WhenProjectJsonMissing_ReturnsStructuredError() {
+    public async Task ExplainWorkflow_WhenProjectJsonMissing_PropagatesFileNotFound() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder { ToThrow = new FileNotFoundException("project.json not found.") };
         var tool = new ExplainWorkflowTool(fs, builder);
 
-        var result = await tool.ExplainWorkflow("/projects/empty", "Main.xaml");
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal("project.json not found.", result.Summary);
+        await Assert.ThrowsAsync<FileNotFoundException>(() => tool.ExplainWorkflow("/projects/empty", "Main.xaml"));
     }
 
     [Fact]
-    public async Task ExplainWorkflow_WhenUnexpectedError_DoesNotThrowAndReturnsError() {
+    public async Task ExplainWorkflow_WhenUnexpectedError_PropagatesToHostExceptionBoundary() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder { ToThrow = new InvalidOperationException("boom") };
         var tool = new ExplainWorkflowTool(fs, builder);
 
-        var result = await tool.ExplainWorkflow("/projects/testProcess", "Main.xaml");
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal("Workflow explanation failed.", result.Summary);
-        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
-        Assert.DoesNotContain("boom", string.Join(" ", result.Errors));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tool.ExplainWorkflow("/projects/testProcess", "Main.xaml"));
     }
 
     [Fact]

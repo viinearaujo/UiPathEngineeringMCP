@@ -5,13 +5,11 @@ using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
-public class ToolResultsTests
-{
+public class ToolResultsTests {
     private static readonly Stopwatch Sw = Stopwatch.StartNew();
 
     [Fact]
-    public void Ok_ProducesSuccessEnvelope()
-    {
+    public void Ok_ProducesSuccessEnvelope() {
         var result = ToolResults.Ok("done.", new { value = 1 }, Sw);
 
         Assert.Equal("success", result.Status);
@@ -21,8 +19,7 @@ public class ToolResultsTests
     }
 
     [Fact]
-    public void Failure_StructuredError_SetsStatusAndDetails()
-    {
+    public void Failure_StructuredError_SetsStatusAndDetails() {
         var sw = Stopwatch.StartNew();
         var error = new ToolError("SPEC_UNKNOWN_ACTIVITY", "Unknown activity 'FoeEach'.", "Did you mean 'ForEach'? Check ActivityCatalog.All for valid names.");
         var result = ToolResults.Failure(error, sw);
@@ -33,8 +30,7 @@ public class ToolResultsTests
     }
 
     [Fact]
-    public void Failure_MirrorsMessageIntoSummaryAndErrors()
-    {
+    public void Failure_MirrorsMessageIntoSummaryAndErrors() {
         var result = ToolResults.Failure("broken.", Sw);
 
         Assert.Equal("error", result.Status);
@@ -43,8 +39,7 @@ public class ToolResultsTests
     }
 
     [Fact]
-    public void Failure_WithErrorList_CarriesAllErrors()
-    {
+    public void Failure_WithErrorList_CarriesAllErrors() {
         var result = ToolResults.Failure("two things broke.", new[] { "e1", "e2" }, Sw);
 
         Assert.Equal("error", result.Status);
@@ -53,8 +48,7 @@ public class ToolResultsTests
     }
 
     [Fact]
-    public void GuardAllowedPath_WhenNotAllowed_ReturnsFailure()
-    {
+    public void GuardAllowedPath_WhenNotAllowed_ReturnsFailure() {
         var fs = new FakeFilesystemProvider { Allowed = false };
 
         var result = ToolResults.GuardAllowedPath(fs, "/x", Sw);
@@ -67,8 +61,7 @@ public class ToolResultsTests
     }
 
     [Fact]
-    public void GuardProject_WhenProjectJsonMissing_ReturnsFailure()
-    {
+    public void GuardProject_WhenProjectJsonMissing_ReturnsFailure() {
         var fs = new FakeFilesystemProvider { ProjectJson = null };
 
         var result = ToolResults.GuardProject(fs, "/x", Sw);
@@ -80,23 +73,20 @@ public class ToolResultsTests
     }
 
     [Fact]
-    public void GuardProject_WhenUsable_ReturnsNull()
-    {
+    public void GuardProject_WhenUsable_ReturnsNull() {
         var fs = new FakeFilesystemProvider();
 
         Assert.Null(ToolResults.GuardProject(fs, "/x", Sw));
     }
 
     [Fact]
-    public void TryResolveWithinProject_AcceptsChildAndRejectsEscape()
-    {
+    public void TryResolveWithinProject_AcceptsChildAndRejectsEscape() {
         Assert.True(ToolResults.TryResolveWithinProject("/projects/p", "Main.xaml", out _));
         Assert.False(ToolResults.TryResolveWithinProject("/projects/p", "../evil.xaml", out _));
     }
 
     [Fact]
-    public void FromException_MapsKnownFailureModes()
-    {
+    public void FromException_MapsKnownFailureModes() {
         var notFound = ToolResults.FromException(new FileNotFoundException("leaked-path-xyz"), "Failed.", Sw);
         var badJson = ToolResults.FromException(new JsonException("Unexpected token at line 4"), "Failed.", Sw);
         var other = ToolResults.FromException(new InvalidOperationException("boom"), "Failed.", Sw);

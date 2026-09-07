@@ -6,8 +6,7 @@ namespace UiPath.Engineering.Mcp.Core.Authoring;
 // already qualified with '.' or ':' pass through verbatim. Both XamlBuilder
 // and WorkflowSurfaceEditor use this so the same user input renders the
 // same XAML regardless of the tool.
-internal static class TypeToken
-{
+internal static class TypeToken {
     public static string Render(string type) {
         var trimmed = type.Trim();
         if (trimmed.Contains(':') || trimmed.Contains('.')) {

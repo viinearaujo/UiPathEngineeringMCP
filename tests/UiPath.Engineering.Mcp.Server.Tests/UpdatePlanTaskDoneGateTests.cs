@@ -8,11 +8,12 @@ namespace UiPath.Engineering.Mcp.Server.Tests;
 public class UpdatePlanTaskDoneGateTests : IDisposable {
     private readonly string _projectPath = Path.Combine(Path.GetTempPath(), "mcp-done-gate-" + Guid.NewGuid().ToString("N"));
     private readonly PlanTestFilesystem _fs;
-    private readonly ImplementationPlanStore _store = new();
+    private readonly ImplementationPlanStore _store;
 
     public UpdatePlanTaskDoneGateTests() {
         Directory.CreateDirectory(_projectPath);
         _fs = new PlanTestFilesystem { ProjectJson = Path.Combine(_projectPath, "project.json") };
+        _store = new ImplementationPlanStore(_fs);
     }
 
     public void Dispose() {
@@ -39,19 +40,21 @@ public class UpdatePlanTaskDoneGateTests : IDisposable {
     private sealed class PlanTestFilesystem : IFilesystemProvider {
         public bool Allowed { get; set; } = true;
         public string? ProjectJson { get; set; }
+        public Dictionary<string, string> FileContents { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public bool IsPathAllowed(string requestedPath) => Allowed;
         public string? FindProjectJson(string projectPath) => ProjectJson;
         public IReadOnlyList<string> FindXamlFiles(string projectPath) => [];
         public IReadOnlyList<string> FindCSharpFiles(string projectPath) => [];
-        public string ReadAllText(string filePath) => "";
-        public long GetFileSize(string filePath) => 0;
+        public string ReadAllText(string filePath) =>
+            FileContents.TryGetValue(filePath, out var content) ? content : throw new FileNotFoundException(filePath);
+        public long GetFileSize(string filePath) => ReadAllText(filePath).Length;
         public DateTime GetLastWriteTimeUtc(string filePath) => DateTime.UnixEpoch;
         public DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3) => new() { Name = root };
         public void CreateDirectory(string path) { }
-        public void WriteAllText(string filePath, string content) { }
-        public void DeleteFile(string filePath) { }
-        public bool FileExists(string path) => false;
+        public void WriteAllText(string filePath, string content) => FileContents[filePath] = content;
+        public void DeleteFile(string filePath) => FileContents.Remove(filePath);
+        public bool FileExists(string path) => FileContents.ContainsKey(path);
     }
 }
 

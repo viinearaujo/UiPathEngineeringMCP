@@ -28,6 +28,21 @@ public sealed class ProjectJsonParser {
             }
         }
 
+        var fileInfoCollection = new List<string>();
+        if (root.TryGetProperty("designOptions", out var designOptions)
+            && designOptions.ValueKind == JsonValueKind.Object
+            && designOptions.TryGetProperty("fileInfoCollection", out var fic)
+            && fic.ValueKind == JsonValueKind.Array) {
+            foreach (var item in fic.EnumerateArray()) {
+                var fileName = item.ValueKind == JsonValueKind.Object && item.TryGetProperty("fileName", out var fn)
+                    ? fn.GetString()
+                    : null;
+                if (!string.IsNullOrWhiteSpace(fileName)) {
+                    fileInfoCollection.Add(fileName);
+                }
+            }
+        }
+
         var dependencies = new List<string>();
         var packages = new List<PackageModel>();
         if (root.TryGetProperty("dependencies", out var deps) && deps.ValueKind == JsonValueKind.Object) {
@@ -44,6 +59,7 @@ public sealed class ProjectJsonParser {
             ProjectName = root.TryGetProperty("name", out var name) ? name.GetString() ?? "Unknown" : "Unknown",
             MainWorkflow = mainWorkflow,
             EntryPoints = entryPoints,
+            FileInfoCollection = fileInfoCollection,
             Description = root.TryGetProperty("description", out var desc) ? desc.GetString() : null,
             TargetFramework = root.TryGetProperty("targetFramework", out var tf) ? tf.GetString() : null,
             ExpressionLanguage = root.TryGetProperty("expressionLanguage", out var el) ? el.GetString() : null,

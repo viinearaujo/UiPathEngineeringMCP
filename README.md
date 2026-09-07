@@ -9,7 +9,7 @@ A custom **.NET 8** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, and friends) analyze and validate
 UiPath RPA projects over HTTP, reached from the outside world with **Microsoft Dev Tunnel**.
 
-This is the **MVP / POC (v4)** milestone. Thirty-eight tools are implemented.
+This is the **MVP / POC (v4)** milestone. Tool names and the Copilot default set are listed under Toolkit; do not hard-code a count.
 The skills feed under `.agents/skills` is **RPA-only** — do not reinstall the full UiPath marketplace catalog.
 
 **What you can do tonight**
@@ -175,7 +175,7 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
 - **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop). New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with primitives only; never custom types or source-file methods from XAML.
-- **Recommended tools (default connector, ≤12)** — canonical names from `CopilotConnectorTools.DefaultNames`: `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`, `analyze_project_gaps`
+- **Recommended tools (default connector, ≤12):** `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`, `analyze_project_gaps`
 - **Leave off the default connector:** `CopilotConnectorTools.LeaveOffNames`. Notable overlaps: `compile_project` (use `validate_project(build:true)`), `verify_work` (use `validate_project` then `update_plan_task`), `edit_workflow_activity` (prefer `insert_activities`; fragment hatch on `All`), `write_workflow_file` (full-file overwrite on `ToolSurface=All` only). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only `CopilotConnectorTools.DefaultNames`; set `All` for Inspector. GitLab tools stay registered on the server.
 - **Full tool surface** (Inspector / `ToolSurface=All`): the live catalog of every registered `[McpServerTool]` — the same tools the grouped Toolkit already describes. `LeaveOffNames` is not the runtime source for All; it is the set hidden on the Copilot default connector.
 

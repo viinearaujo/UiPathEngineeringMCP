@@ -117,6 +117,7 @@ public sealed class XamlWorkflowParser {
 
             var activity = new ActivityModel {
                 Id = located.Id,
+                IdRef = located.IdRef,
                 ParentId = located.ParentId,
                 DisplayName = element.Attribute("DisplayName")?.Value ?? local,
                 Type = local,

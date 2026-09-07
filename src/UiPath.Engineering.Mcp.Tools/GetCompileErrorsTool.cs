@@ -17,7 +17,7 @@ public sealed class GetCompileErrorsTool {
         _analysis = analysis;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Fast in-memory C# compiler diagnostics (Roslyn) without a UiPath CLI build. Do not use for XAML, and do not use as the agent-loop green gate (that is validate_project). For an authoritative CLI build, call validate_project(build:true).")]
+    [McpServerTool(UseStructuredContent = true), Description("Fast in-memory C# compiler diagnostics (Roslyn) without a UiPath CLI build. Do not use for XAML, and do not use as the agent-loop green gate (that is validate_project). For an authoritative CLI build, call validate_project(build:true). Next: edit_workflow_file.")]
     public async Task<ToolResult> GetCompileErrors(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Minimum severity to include: 'error' (default), 'warning', or 'all'.")] string? severity = null,
@@ -28,14 +28,15 @@ public sealed class GetCompileErrorsTool {
             return guardFailure;
         }
 
-        try {
-            var result = await _analysis.GetDiagnosticsAsync(projectPath, severity, cancellationToken);
-            var summary = result.Diagnostics.Count == 0
-                ? "No compiler diagnostics."
-                : $"Found {result.Diagnostics.Count} compiler diagnostic(s).";
-            return ToolResults.Ok(summary, result, sw, result.Warnings);
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Failed to get compiler diagnostics.", sw);
+        if (!string.IsNullOrWhiteSpace(severity)
+            && ToolArgs.ParseChoice(severity, "severity", ["error", "warning", "all"], sw, out _) is { } severityError) {
+            return severityError;
         }
+
+        var result = await _analysis.GetDiagnosticsAsync(projectPath, severity, cancellationToken);
+        var summary = result.Diagnostics.Count == 0
+            ? "No compiler diagnostics. Next: validate_project."
+            : $"Found {result.Diagnostics.Count} compiler diagnostic(s). Next: edit_workflow_file.";
+        return ToolResults.Ok(summary, result, sw, result.Warnings);
     }
 }

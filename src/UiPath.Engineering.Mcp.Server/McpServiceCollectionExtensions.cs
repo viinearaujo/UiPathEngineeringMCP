@@ -1,7 +1,9 @@
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Protocol;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
@@ -9,10 +11,10 @@ using UiPath.Engineering.Mcp.Core.CodeSearch;
 using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.Authoring;
+using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Core.Planning;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
-using UiPath.Engineering.Mcp.Providers.Git;
 using UiPath.Engineering.Mcp.Providers.GitLab;
 using UiPath.Engineering.Mcp.Providers.Skills;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
@@ -21,6 +23,10 @@ using UiPath.Engineering.Mcp.Tools;
 namespace UiPath.Engineering.Mcp.Server;
 
 public static class McpServiceCollectionExtensions {
+    private static readonly JsonSerializerOptions ToolResultJson = new() {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     public static IServiceCollection AddUiPathEngineeringServices(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -45,7 +51,6 @@ public static class McpServiceCollectionExtensions {
         services.AddSingleton<ISkillsProvider, SkillsProvider>();
         services.AddSingleton(sp =>
             new CliCommandPolicy(sp.GetRequiredService<IOptions<UiPathCliOptions>>().Value));
-        services.AddSingleton<IGitProvider, GitProvider>();
         services.AddHttpClient<IGitLabProvider, GitLabProvider>();
 
         services.AddSingleton<ProjectModelBuilder>();
@@ -109,16 +114,35 @@ public static class McpServiceCollectionExtensions {
                 }
 
                 filters.AddCallToolFilter(next => async (context, cancellationToken) => {
-                    var result = await next(context, cancellationToken);
-                    if (result.IsError is true) {
+                    try {
+                        var result = await next(context, cancellationToken);
+                        if (result.IsError is true) {
+                            return result;
+                        }
+
+                        if (McpToolErrorMapper.StructuredContentIndicatesError(result.StructuredContent)) {
+                            result.IsError = true;
+                        }
+
                         return result;
+                    } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                        throw;
+                    } catch (Exception ex) {
+                        var error = McpToolErrorMapper.ToToolError(ex, "The tool call failed.");
+                        var payload = new ToolResult {
+                            Status = "error",
+                            Summary = error.Message,
+                            Errors = [$"{error.ErrorCode}: {error.Message} Fix: {error.FixHint}"],
+                            ErrorDetails = [error]
+                        };
+                        return new CallToolResult {
+                            IsError = true,
+                            StructuredContent = JsonSerializer.SerializeToElement(payload, ToolResultJson),
+                            Content = [
+                                new TextContentBlock { Text = $"{error.ErrorCode}: {error.Message}" }
+                            ]
+                        };
                     }
-
-                    if (McpToolErrorMapper.StructuredContentIndicatesError(result.StructuredContent)) {
-                        result.IsError = true;
-                    }
-
-                    return result;
                 });
             });
     }

@@ -17,7 +17,7 @@ public sealed class GetImplementationPlanTool {
         _planStore = planStore;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Returns the project's implementation plan with derived per-status task counts.")]
+    [McpServerTool(UseStructuredContent = true), Description("Returns the project's implementation plan with derived per-status task counts. Next: update_plan_task.")]
     public ToolResult GetImplementationPlan(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath) {
 

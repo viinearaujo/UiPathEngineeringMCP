@@ -7,7 +7,7 @@ The server is passive. The client drives the loop. UiPath facts come from tools;
 1. `dotnet run --project src/UiPath.Engineering.Mcp.Server` — listens on `http://localhost:5000`.
 2. MCP Streamable HTTP endpoint: `http://localhost:5000/sse` (path name is historical; this is not legacy SSE).
 3. Health: `GET http://localhost:5000/health` (never authenticated).
-4. Copilot registration endpoint is the Dev Tunnel URL plus `/sse`. See README §4–§5.
+4. Copilot registration endpoint is the Dev Tunnel URL plus `/sse`. See README [Microsoft 365 Copilot](../README.md#microsoft-365-copilot) and [Open with Dev Tunnel](../README.md#open-with-dev-tunnel).
 5. `/sse` auth: non-Development HTTP requires `McpServer:HttpAuth:Enabled` and a non-empty `ApiKey` at startup. Send `X-Api-Key` or `Authorization: Bearer`. Stdio is unauthenticated.
 
 ## stdio (local agents)
@@ -26,7 +26,7 @@ Tools resolve **only** `docs/implementation-plan.json` inside the target UiPath 
 
 This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions (source of truth for the loop): [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt).
 
-Enable only `CopilotConnectorTools.DefaultNames` on the default Copilot connector (≤12, including `analyze_project_gaps`). Canonical list: README recommended-tools line and the DEFAULT CONNECTOR line in [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt) — both must match the C# array. Always pass `validate_project` `build: false`, `pack: false` in the loop, then `analyze_project_gaps`. XAML shell: `find_activity` + `insert_activities` (REFramework / InvokeWorkflowFile only); `edit_workflow_activity` is a leave-off fragment hatch.
+Enable only `CopilotConnectorTools.DefaultNames` on the default Copilot connector (≤12, including `analyze_project_gaps`). Canonical list: README recommended-tools line and the DEFAULT CONNECTOR line in [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt) — both must match the C# array. The agent green gate is `validate_project` (`build` defaults to false, `pack: false`), then `analyze_project_gaps`. XAML shell: `find_activity` + `insert_activities` (REFramework / InvokeWorkflowFile only); `edit_workflow_activity` is a leave-off fragment hatch.
 
 HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only those names. Set `All` for Inspector. GitLab tools stay registered on the server.
 
@@ -68,7 +68,7 @@ File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` al
 
 ## validate_project flags
 
-The agent green gate is `validate=true`, `build=false`, `pack=false` (typically 24–91s, 0/0). The tool default for `build` remains `true` for callers that omit the flag — **always pass `build: false` in this loop**.
+The agent green gate is `validate=true`, `build=false` (the tool default), `pack=false` (typically 24–91s, 0/0). Pass `build:true` or `compile_project` only for an authoritative CLI compile.
 
 ## Prompt
 

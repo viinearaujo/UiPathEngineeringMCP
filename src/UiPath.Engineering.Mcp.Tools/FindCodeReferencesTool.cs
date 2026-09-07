@@ -17,7 +17,7 @@ public sealed class FindCodeReferencesTool {
         _analysis = analysis;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Finds all usage sites of a C# symbol by exact name across a project's .cs files (Roslyn, with identifier fallback for external symbols). Do not use for XAML activity search — that is search_codebase mode=activity.")]
+    [McpServerTool(UseStructuredContent = true), Description("Finds all usage sites of a C# symbol by exact name across a project's .cs files (Roslyn, with identifier fallback for external symbols). Do not use for XAML activity search — that is search_codebase mode=activity. Next: edit_workflow_file.")]
     public async Task<ToolResult> FindCodeReferences(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Exact symbol name whose references to find, e.g. 'ProcessTransaction'.")] string symbol,
@@ -28,14 +28,10 @@ public sealed class FindCodeReferencesTool {
             return guardFailure;
         }
 
-        try {
-            var result = await _analysis.FindReferencesAsync(projectPath, symbol, cancellationToken);
-            var summary = result.References.Count == 0
-                ? $"No references to '{symbol}' found."
-                : $"Found {result.References.Count} reference(s) to '{symbol}'.";
-            return ToolResults.Ok(summary, result, sw, result.Warnings);
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Reference search failed.", sw);
-        }
+        var result = await _analysis.FindReferencesAsync(projectPath, symbol, cancellationToken);
+        var summary = result.References.Count == 0
+            ? $"No references to '{symbol}' found."
+            : $"Found {result.References.Count} reference(s) to '{symbol}'. Next: edit_workflow_file.";
+        return ToolResults.Ok(summary, result, sw, result.Warnings);
     }
 }

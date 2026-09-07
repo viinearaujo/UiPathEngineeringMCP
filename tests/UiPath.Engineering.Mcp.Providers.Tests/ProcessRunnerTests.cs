@@ -37,6 +37,14 @@ public class ProcessRunnerTests {
     }
 
     [Fact]
+    public void CreateStartInfo_PinsUtf8StreamEncoding() {
+        var psi = ProcessRunner.CreateStartInfo("git", ["status"], null);
+
+        Assert.Equal(System.Text.Encoding.UTF8.WebName, psi.StandardOutputEncoding?.WebName);
+        Assert.Equal(System.Text.Encoding.UTF8.WebName, psi.StandardErrorEncoding?.WebName);
+    }
+
+    [Fact]
     public void SplitQuotedArguments_SplitsOnWhitespace_AndKeepsQuotedSegments() {
         var tokens = ProcessRunner.SplitQuotedArguments(
             "rpa validate --project-dir \"C:\\projects\\test Process\" --output json");

@@ -17,7 +17,7 @@ public sealed class FindCodeSymbolTool {
         _analysis = analysis;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Finds a C# symbol definition by exact name (method, class, property, field, interface) using Roslyn. Prefer this over reading whole .cs files. Do not use for substring search across XAML or text — that is search_codebase.")]
+    [McpServerTool(UseStructuredContent = true), Description("Finds a C# symbol definition by exact name (method, class, property, field, interface) using Roslyn. Prefer this over reading whole .cs files. Do not use for substring search across XAML or text — that is search_codebase. Next: get_code_context.")]
     public async Task<ToolResult> FindCodeSymbol(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Exact symbol name to find, e.g. 'ProcessTransaction'.")] string symbol,
@@ -29,14 +29,15 @@ public sealed class FindCodeSymbolTool {
             return guardFailure;
         }
 
-        try {
-            var result = await _analysis.FindSymbolAsync(projectPath, symbol, kind, cancellationToken);
-            var summary = result.Matches.Count == 0
-                ? $"No symbols named '{symbol}' found."
-                : $"Found {result.Matches.Count} symbol(s) named '{symbol}'.";
-            return ToolResults.Ok(summary, result, sw, result.Warnings);
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Symbol search failed.", sw);
+        if (!string.IsNullOrWhiteSpace(kind)
+            && ToolArgs.ParseChoice(kind, "kind", ["method", "property", "field", "class", "interface"], sw, out _) is { } kindError) {
+            return kindError;
         }
+
+        var result = await _analysis.FindSymbolAsync(projectPath, symbol, kind, cancellationToken);
+        var summary = result.Matches.Count == 0
+            ? $"No symbols named '{symbol}' found."
+            : $"Found {result.Matches.Count} symbol(s) named '{symbol}'. Next: get_code_context.";
+        return ToolResults.Ok(summary, result, sw, result.Warnings);
     }
 }

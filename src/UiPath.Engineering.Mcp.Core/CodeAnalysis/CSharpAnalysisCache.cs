@@ -94,7 +94,7 @@ public sealed class CSharpAnalysisCache : ICSharpContextBuilder, IDisposable {
             }
 
             var extra = GetPackageFolders(projectJson)
-                .Select(folder => (Path: folder, Ticks: SafeGetWriteTicks(folder)));
+                .Select(folder => (Path: folder, Ticks: _resolver.SafeGetWriteTicks(folder)));
             return ProjectFingerprint.TryCompute(_filesystem, files, out fingerprint, extra);
         } catch (Exception ex) when (ProjectFingerprint.IsIoFailure(ex)) {
             return false;
@@ -134,16 +134,6 @@ public sealed class CSharpAnalysisCache : ICSharpContextBuilder, IDisposable {
             var idFolder = Path.Combine(packagesFolder, package.Id.ToLowerInvariant());
             yield return idFolder;
             yield return Path.Combine(idFolder, package.Version.ToLowerInvariant());
-        }
-    }
-
-    // Missing package folders contribute nothing (constant ticks); when a restore
-    // creates them, the ticks change and the fingerprint invalidates.
-    private long SafeGetWriteTicks(string path) {
-        try {
-            return _filesystem.GetLastWriteTimeUtc(path).Ticks;
-        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException or ArgumentException) {
-            return 0;
         }
     }
 }

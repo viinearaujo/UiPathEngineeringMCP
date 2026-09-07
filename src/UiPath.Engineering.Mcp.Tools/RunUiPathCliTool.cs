@@ -6,6 +6,7 @@ using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Models;
+using UiPath.Engineering.Mcp.Providers;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
 namespace UiPath.Engineering.Mcp.Tools;
@@ -28,7 +29,7 @@ public sealed class RunUiPathCliTool {
         _options = options.Value;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Runs an allowlisted UiPath CLI (uip) command and returns structured output. Allowed verbs are configured server-side (default: rpa, solution); mutating subcommands are blocked unless enabled in server config. stdout/stderr are redacted and capped.")]
+    [McpServerTool(UseStructuredContent = true), Description("Runs an allowlisted UiPath CLI (uip) command and returns structured output. Allowed verbs are configured server-side (default: rpa, solution); mutating subcommands are blocked unless enabled in server config. stdout/stderr are redacted and capped. Path-like arguments must canonicalize inside Projects:AllowedRoots. Next: validate_project.")]
     public async Task<ToolResult> RunUiPathCli(
         [Description("Top-level uip verb, e.g. 'rpa' or 'solution'.")] string verb,
         [Description("Arguments appended verbatim after the verb, e.g. 'validate --project-dir \"C:/proj\" --output json'.")] string arguments,
@@ -72,6 +73,10 @@ public sealed class RunUiPathCliTool {
             return guardFailure;
         }
 
+        if (TryRejectDisallowedPathArguments(arguments, workingDirectory, sw) is { } pathFailure) {
+            return pathFailure;
+        }
+
         // The provider tokenizes the argument string into ArgumentList entries;
         // `verb` is only a label there, so the verb must be prepended here to make
         // the executed command `uip <verb> <args>`. CliCommandPolicy.Classify
@@ -95,5 +100,39 @@ public sealed class RunUiPathCliTool {
             Warnings = result.Warnings,
             DurationMs = sw.ElapsedMilliseconds
         };
+    }
+
+    private ToolResult? TryRejectDisallowedPathArguments(string arguments, string? workingDirectory, Stopwatch sw) {
+        foreach (var token in ProcessRunner.SplitQuotedArguments(arguments)) {
+            if (!TryExistingPath(token, workingDirectory, out var full)) {
+                continue;
+            }
+
+            if (!_filesystem.IsPathAllowed(full)) {
+                return ToolResults.PathNotAllowed(
+                    sw,
+                    "CLI path argument is outside allowed roots.",
+                    $"The argument path '{full}' is outside Projects:AllowedRoots.");
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryExistingPath(string token, string? workingDirectory, out string fullPath) {
+        fullPath = string.Empty;
+        if (string.IsNullOrWhiteSpace(token) || token.StartsWith('-')) {
+            return false;
+        }
+
+        try {
+            fullPath = Path.IsPathRooted(token)
+                ? Path.GetFullPath(token)
+                : Path.GetFullPath(Path.Combine(workingDirectory ?? Environment.CurrentDirectory, token));
+        } catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) {
+            return false;
+        }
+
+        return File.Exists(fullPath) || Directory.Exists(fullPath);
     }
 }

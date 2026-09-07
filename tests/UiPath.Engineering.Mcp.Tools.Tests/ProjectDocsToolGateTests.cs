@@ -37,7 +37,7 @@ public class ProjectDocsToolGateTests {
 
     [Fact]
     public async Task VerifyWork_DoesNotMarkDoneOnDocsErrors() {
-        var store = new UiPath.Engineering.Mcp.Core.Planning.ImplementationPlanStore();
+        var store = new UiPath.Engineering.Mcp.Core.Planning.ImplementationPlanStore(_fs);
         store.Save(_projectPath, new ImplementationPlan {
             Goal = "g",
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main workflow", TargetFiles = ["Main.xaml"] }]
@@ -55,7 +55,7 @@ public class ProjectDocsToolGateTests {
 
     [Fact]
     public async Task AnalyzeProjectGaps_DocsErrorAppearsAsGap() {
-        var store = new UiPath.Engineering.Mcp.Core.Planning.ImplementationPlanStore();
+        var store = new UiPath.Engineering.Mcp.Core.Planning.ImplementationPlanStore(_fs);
         var model = new UiPathProjectModel {
             ProjectPath = _projectPath,
             ProjectName = "clean",

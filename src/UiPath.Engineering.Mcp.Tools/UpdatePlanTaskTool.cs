@@ -19,7 +19,7 @@ public sealed class UpdatePlanTaskTool {
         _planStore = planStore;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Updates the status (pending/in_progress/done/blocked) and optional notes of a single task in the project's implementation plan. The plan is a scratchpad; marking done is not blocked on docs or ADR freshness.")]
+    [McpServerTool(UseStructuredContent = true), Description("Updates the status (pending/in_progress/done/blocked) and optional notes of a single task in the project's implementation plan. The plan is a scratchpad; marking done is not blocked on docs or ADR freshness. Next: analyze_project_gaps.")]
     public Task<ToolResult> UpdatePlanTask(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("ID of the task to update (e.g. 'task-1').")] string taskId,
@@ -34,11 +34,8 @@ public sealed class UpdatePlanTaskTool {
             return Task.FromResult(guardFailure);
         }
 
-        if (status is not (PlanTask.Pending or PlanTask.InProgress or PlanTask.Done or PlanTask.Blocked)) {
-            return Task.FromResult(ToolResults.Failure(
-                $"Invalid status '{status}'.",
-                $"Status must be one of: {PlanTask.Pending}, {PlanTask.InProgress}, {PlanTask.Done}, {PlanTask.Blocked}.",
-                sw));
+        if (ToolArgs.ParseChoice(status, "status", [PlanTask.Pending, PlanTask.InProgress, PlanTask.Done, PlanTask.Blocked], sw, out var parsedStatus) is { } statusError) {
+            return Task.FromResult(statusError);
         }
 
         var plan = _planStore.Load(projectPath);
@@ -54,13 +51,13 @@ public sealed class UpdatePlanTaskTool {
             return Task.FromResult(ToolResults.Failure($"Task '{taskId}' not found in the implementation plan.", sw));
         }
 
-        task.Status = status;
+        task.Status = parsedStatus;
         if (notes is not null) {
             task.Notes = notes;
         }
 
         _planStore.Save(projectPath, plan);
 
-        return Task.FromResult(ToolResults.Ok($"Task '{task.Id}' updated to '{status}'.", task, sw));
+        return Task.FromResult(ToolResults.Ok($"Task '{task.Id}' updated to '{parsedStatus}'.", task, sw));
     }
 }

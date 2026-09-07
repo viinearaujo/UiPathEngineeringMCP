@@ -14,6 +14,8 @@ public sealed class PathPolicy : IPathPolicy {
 
     private readonly string[] _allowedRoots;
 
+    private readonly Lazy<string[]> _canonicalRoots;
+
     public PathPolicy(ProjectRootOptions options)
         : this(options.AllowedRoots) {
     }
@@ -22,6 +24,16 @@ public sealed class PathPolicy : IPathPolicy {
         _allowedRoots = allowedRoots?
             .Where(r => !string.IsNullOrWhiteSpace(r))
             .ToArray() ?? [];
+        _canonicalRoots = new Lazy<string[]>(() => {
+            var roots = new List<string>(_allowedRoots.Length);
+            foreach (var root in _allowedRoots) {
+                if (TryCanonicalize(root, out var canonicalRoot)) {
+                    roots.Add(canonicalRoot);
+                }
+            }
+
+            return roots.ToArray();
+        });
     }
 
     public bool IsAllowed(string path) {
@@ -145,11 +157,7 @@ public sealed class PathPolicy : IPathPolicy {
         $"'{relativePath}' looks like a secret or key file and cannot be read.";
 
     private bool IsWithinAnyRoot(string canonicalPath) {
-        foreach (var root in _allowedRoots) {
-            if (!TryCanonicalize(root, out var canonicalRoot)) {
-                continue;
-            }
-
+        foreach (var canonicalRoot in _canonicalRoots.Value) {
             if (HasPrefixBoundary(canonicalRoot, canonicalPath, allowEqual: true)) {
                 return true;
             }

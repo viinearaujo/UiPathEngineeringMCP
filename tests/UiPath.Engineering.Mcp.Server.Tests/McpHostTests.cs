@@ -82,6 +82,50 @@ public class McpHostTests {
         }
     }
 
+    [Fact]
+    public async Task HttpHost_AnalyzeProject_InvalidProjectJson_MapsExceptionWithoutLeakingParserText() {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "mcp-host-" + Guid.NewGuid().ToString("N"));
+        var projectPath = Path.Combine(tempRoot, "HostTestProject");
+        Directory.CreateDirectory(projectPath);
+        await File.WriteAllTextAsync(Path.Combine(projectPath, "project.json"), "{not-json");
+
+        try {
+            await using var factory = new McpHostFactory(tempRoot);
+            using var authorized = factory.CreateClient();
+            authorized.DefaultRequestHeaders.Add("X-Api-Key", ApiKey);
+            authorized.Timeout = TimeSpan.FromSeconds(30);
+
+            await using var transport = new HttpClientTransport(
+                new HttpClientTransportOptions {
+                    Endpoint = new Uri(authorized.BaseAddress!, "sse"),
+                    TransportMode = HttpTransportMode.StreamableHttp
+                },
+                authorized,
+                ownsHttpClient: false);
+            await using var client = await McpClient.CreateAsync(transport);
+
+            var call = await client.CallToolAsync(
+                "analyze_project",
+                new Dictionary<string, object?> { ["projectPath"] = projectPath });
+
+            Assert.True(call.IsError is true);
+            using var structured = JsonDocument.Parse(call.StructuredContent?.GetRawText() ?? "{}");
+            var raw = structured.RootElement.GetRawText();
+            Assert.Contains("PROJECT_JSON_INVALID", raw);
+            Assert.DoesNotContain("not-json", raw, StringComparison.OrdinalIgnoreCase);
+            var status = structured.RootElement.TryGetProperty("status", out var camel)
+                ? camel.GetString()
+                : structured.RootElement.GetProperty("Status").GetString();
+            Assert.Equal("error", status);
+        } finally {
+            try {
+                Directory.Delete(tempRoot, recursive: true);
+            } catch (IOException) {
+                // Best-effort cleanup of the temp project.
+            }
+        }
+    }
+
     private sealed class McpHostFactory : WebApplicationFactory<Program> {
         private readonly string _allowedRoot;
 

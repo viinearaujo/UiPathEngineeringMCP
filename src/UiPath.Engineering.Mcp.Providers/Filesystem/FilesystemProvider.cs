@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Text;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
 
@@ -17,6 +19,7 @@ public sealed class FilesystemProvider : IFilesystemProvider {
     ];
 
     private readonly IPathPolicy _pathPolicy;
+    private readonly ConcurrentDictionary<string, byte> _enumeratedAllowed = new(StringComparer.OrdinalIgnoreCase);
 
     public FilesystemProvider(IPathPolicy pathPolicy) => _pathPolicy = pathPolicy;
 
@@ -44,7 +47,12 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
         // Enumerate manually so we can skip noise folders (bin/obj/.git/etc.) instead of
         // returning build artifacts and version-control internals as if they were workflows.
-        return EnumerateFiles(path, pattern).ToList();
+        var files = EnumerateFiles(path, pattern).ToList();
+        foreach (var file in files) {
+            _enumeratedAllowed.TryAdd(file, 0);
+        }
+
+        return files;
     }
 
     private static IEnumerable<string> EnumerateFiles(string directory, string pattern) {
@@ -125,18 +133,21 @@ public sealed class FilesystemProvider : IFilesystemProvider {
         return node;
     }
 
+    private string EnsureAllowed(string filePath) =>
+        _enumeratedAllowed.ContainsKey(filePath) ? filePath : _pathPolicy.EnsureAllowed(filePath);
+
     public string ReadAllText(string filePath) {
-        var path = _pathPolicy.EnsureAllowed(filePath);
+        var path = EnsureAllowed(filePath);
         return File.ReadAllText(path);
     }
 
     public long GetFileSize(string filePath) {
-        var path = _pathPolicy.EnsureAllowed(filePath);
+        var path = EnsureAllowed(filePath);
         return new FileInfo(path).Length;
     }
 
     public DateTime GetLastWriteTimeUtc(string filePath) {
-        var path = _pathPolicy.EnsureAllowed(filePath);
+        var path = EnsureAllowed(filePath);
         return File.GetLastWriteTimeUtc(path);
     }
 
@@ -147,7 +158,34 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
     public void WriteAllText(string filePath, string content) {
         var path = _pathPolicy.EnsureAllowed(filePath);
-        File.WriteAllText(path, content);
+        var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        if (File.Exists(path)) {
+            var existing = File.ReadAllBytes(path);
+            var hasBom = existing.Length >= 3
+                && existing[0] == 0xEF
+                && existing[1] == 0xBB
+                && existing[2] == 0xBF;
+            encoding = new UTF8Encoding(hasBom);
+            content = MatchNewlines(content, existing, hasBom);
+        }
+
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory)) {
+            Directory.CreateDirectory(directory);
+        }
+
+        var tempPath = path + ".tmp";
+        File.WriteAllText(tempPath, content, encoding);
+        File.Move(tempPath, path, overwrite: true);
+    }
+
+    private static string MatchNewlines(string content, byte[] existing, bool hasBom) {
+        var start = hasBom ? 3 : 0;
+        var text = Encoding.UTF8.GetString(existing, start, existing.Length - start);
+        var newline = text.Contains("\r\n", StringComparison.Ordinal)
+            ? "\r\n"
+            : text.Contains('\n') ? "\n" : Environment.NewLine;
+        return content.Replace("\r\n", "\n").Replace("\n", newline);
     }
 
     public void DeleteFile(string filePath) {

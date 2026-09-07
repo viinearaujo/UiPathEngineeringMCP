@@ -2,11 +2,9 @@ using UiPath.Engineering.Mcp.Core.Authoring;
 
 namespace UiPath.Engineering.Mcp.Core.Tests.Authoring;
 
-public class ActivityFindParserTests
-{
+public class ActivityFindParserTests {
     [Fact]
-    public void Parse_ArrayOfActivities_ReadsNameAndPackage()
-    {
+    public void Parse_ArrayOfActivities_ReadsNameAndPackage() {
         const string json = """
             [
               { "name": "Click", "fullName": "UiPath.Core.Activities.Click", "package": "UiPath.UIAutomation.Activities", "packageVersion": "[24.10.3]" }
@@ -20,8 +18,7 @@ public class ActivityFindParserTests
     }
 
     [Fact]
-    public void Parse_EnvelopeWithActivitiesProperty_CollectsHits()
-    {
+    public void Parse_EnvelopeWithActivitiesProperty_CollectsHits() {
         const string json = """
             { "Result": "Success", "activities": [
               { "activityClassName": "UiPath.Excel.Activities.Business.ReadRangeX", "packageId": "UiPath.Excel.Activities", "version": "3.5.0" }
@@ -33,8 +30,7 @@ public class ActivityFindParserTests
     }
 
     [Fact]
-    public void Parse_GenericSwitchName_StripsArity()
-    {
+    public void Parse_GenericSwitchName_StripsArity() {
         Assert.Equal("Switch", ActivityFindParser.ShortName("System.Activities.Statements.Switch`1"));
     }
 
@@ -43,8 +39,7 @@ public class ActivityFindParserTests
         Assert.Empty(ActivityFindParser.Parse("{ not json"));
 
     [Fact]
-    public void Parse_PropertiesArray_MapsKinds()
-    {
+    public void Parse_PropertiesArray_MapsKinds() {
         const string json = """
             { "name": "Assign", "properties": [
               { "name": "To", "required": true, "kind": "Expression" },
@@ -58,11 +53,9 @@ public class ActivityFindParserTests
     }
 }
 
-public class ActivityCatalogResolverTests
-{
+public class ActivityCatalogResolverTests {
     [Fact]
-    public async Task ResolveAsync_NoProject_ReturnsFallback()
-    {
+    public async Task ResolveAsync_NoProject_ReturnsFallback() {
         var resolver = new ActivityCatalogResolver();
         var catalog = await resolver.ResolveAsync(null);
         Assert.Equal("fallback", catalog.Source);
@@ -71,15 +64,12 @@ public class ActivityCatalogResolverTests
     }
 
     [Fact]
-    public async Task ResolveAsync_MergesDiscoveredActivitiesAndStampsPackageVersion()
-    {
-        var fs = new MemoryFilesystem
-        {
+    public async Task ResolveAsync_MergesDiscoveredActivitiesAndStampsPackageVersion() {
+        var fs = new MemoryFilesystem {
             ProjectJsonPath = "/p/project.json",
             ProjectJson = """{ "name": "P", "dependencies": { "UiPath.Excel.Activities": "[3.5.0]", "UiPath.System.Activities": "[26.4.0]" } }"""
         };
-        var discovery = new StubDiscovery
-        {
+        var discovery = new StubDiscovery {
             Hits =
             [
                 new DiscoveredActivity("ReadRangeX", "UiPath.Excel.Activities.Business.ReadRangeX",
@@ -99,10 +89,8 @@ public class ActivityCatalogResolverTests
     }
 
     [Fact]
-    public async Task ResolveAsync_DiscoveryThrows_FallsBackToStaticCatalog()
-    {
-        var fs = new MemoryFilesystem
-        {
+    public async Task ResolveAsync_DiscoveryThrows_FallsBackToStaticCatalog() {
+        var fs = new MemoryFilesystem {
             ProjectJsonPath = "/p/project.json",
             ProjectJson = """{ "name": "P", "dependencies": { "UiPath.System.Activities": "26.4.0" } }"""
         };
@@ -116,8 +104,7 @@ public class ActivityCatalogResolverTests
     }
 
     [Fact]
-    public async Task RecommendAsync_LimitsToFiveAndRanksExactNameFirst()
-    {
+    public async Task RecommendAsync_LimitsToFiveAndRanksExactNameFirst() {
         var resolver = new ActivityCatalogResolver();
         var hits = await resolver.RecommendAsync("LogMessage", projectPath: null, limit: 5);
         Assert.True(hits.Count <= 5);
@@ -126,21 +113,17 @@ public class ActivityCatalogResolverTests
     }
 
     [Fact]
-    public void Rank_TokenQuery_MatchesReadRange()
-    {
+    public void Rank_TokenQuery_MatchesReadRange() {
         var ranked = ActivityCatalogResolver.Rank("read range", ActivityCatalog.All, new Dictionary<string, string>());
         Assert.Contains(ranked, r => r.Name == "ReadRange");
     }
 
-    private sealed class StubDiscovery : IActivityDiscovery
-    {
+    private sealed class StubDiscovery : IActivityDiscovery {
         public IReadOnlyList<DiscoveredActivity> Hits { get; set; } = [];
         public Exception? ToThrow { get; set; }
 
-        public Task<IReadOnlyList<DiscoveredActivity>> FindAsync(string projectPath, string query, CancellationToken cancellationToken = default)
-        {
-            if (ToThrow is not null)
-            {
+        public Task<IReadOnlyList<DiscoveredActivity>> FindAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
+            if (ToThrow is not null) {
                 throw ToThrow;
             }
 
@@ -148,8 +131,7 @@ public class ActivityCatalogResolverTests
         }
     }
 
-    private sealed class MemoryFilesystem : UiPath.Engineering.Mcp.Core.Abstractions.IFilesystemProvider
-    {
+    private sealed class MemoryFilesystem : UiPath.Engineering.Mcp.Core.Abstractions.IFilesystemProvider {
         public string? ProjectJsonPath { get; set; }
         public string ProjectJson { get; set; } = "{}";
 
@@ -168,11 +150,9 @@ public class ActivityCatalogResolverTests
     }
 }
 
-public class XamlCatalogGuardTests
-{
+public class XamlCatalogGuardTests {
     [Fact]
-    public void FindUnknownActivities_KnownSequence_Empty()
-    {
+    public void FindUnknownActivities_KnownSequence_Empty() {
         const string xaml = """
             <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities">
               <Sequence />
@@ -182,8 +162,7 @@ public class XamlCatalogGuardTests
     }
 
     [Fact]
-    public void FindUnknownActivities_Click_ReportsUnknown()
-    {
+    public void FindUnknownActivities_Click_ReportsUnknown() {
         const string xaml = """
             <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
                       xmlns:ui="http://schemas.uipath.com/workflow/activities">

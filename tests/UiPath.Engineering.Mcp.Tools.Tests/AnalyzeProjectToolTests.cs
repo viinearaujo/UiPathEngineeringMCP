@@ -28,7 +28,7 @@ public class AnalyzeProjectToolTests {
         var result = await tool.AnalyzeProject("/projects/testProcess");
 
         Assert.Equal("success", result.Status);
-        Assert.Equal("Project analyzed successfully.", result.Summary);
+        Assert.StartsWith("Project analyzed successfully.", result.Summary);
         var data = Assert.IsType<ProjectAnalysisResult>(result.Data);
         Assert.Equal("summary", data.Detail);
         Assert.Equal("testProcess", data.Summary.ProjectName);
@@ -70,34 +70,24 @@ public class AnalyzeProjectToolTests {
     }
 
     [Fact]
-    public async Task AnalyzeProject_WhenProjectJsonMissing_ReturnsStructuredError() {
+    public async Task AnalyzeProject_WhenProjectJsonMissing_PropagatesFileNotFound() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder {
             ToThrow = new FileNotFoundException("project.json not found.")
         };
         var tool = new AnalyzeProjectTool(fs, builder);
 
-        var result = await tool.AnalyzeProject("/projects/empty");
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal("project.json not found.", result.Summary);
-        Assert.Equal(ToolErrorCodes.ProjectJsonNotFound, Assert.Single(result.ErrorDetails).ErrorCode);
-        Assert.NotEmpty(result.Errors);
+        await Assert.ThrowsAsync<FileNotFoundException>(() => tool.AnalyzeProject("/projects/empty"));
     }
 
     [Fact]
-    public async Task AnalyzeProject_WhenUnexpectedError_DoesNotThrowAndReturnsError() {
+    public async Task AnalyzeProject_WhenUnexpectedError_PropagatesToHostExceptionBoundary() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder {
             ToThrow = new InvalidOperationException("boom")
         };
         var tool = new AnalyzeProjectTool(fs, builder);
 
-        var result = await tool.AnalyzeProject("/projects/testProcess");
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal("Project analysis failed.", result.Summary);
-        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
-        Assert.DoesNotContain("boom", string.Join(" ", result.Errors));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tool.AnalyzeProject("/projects/testProcess"));
     }
 }

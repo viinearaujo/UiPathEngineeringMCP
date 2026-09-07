@@ -67,17 +67,12 @@ public class ValidateProjectToolTests {
     }
 
     [Fact]
-    public async Task ValidateProject_WhenCliThrows_ReturnsStructuredErrorInsteadOfThrowing() {
+    public async Task ValidateProject_WhenCliThrows_PropagatesToHostExceptionBoundary() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var cli = new FakeUiPathCliProvider { ValidateException = new InvalidOperationException("boom") };
         var tool = new ValidateProjectTool(cli, fs);
 
-        var result = await tool.ValidateProject("/projects/testProcess");
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal("Project validation failed.", result.Summary);
-        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
-        Assert.DoesNotContain("boom", result.Errors[0]);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tool.ValidateProject("/projects/testProcess"));
     }
 
     private static JsonElement SerializeData(object? data) =>
@@ -143,7 +138,7 @@ public class ValidateProjectToolTests {
 
         await tool.ValidateProject("/projects/testProcess");
 
-        Assert.Equal((true, true, false), cli.LastValidateFlags);
+        Assert.Equal((true, false, false), cli.LastValidateFlags);
     }
 
     [Fact]

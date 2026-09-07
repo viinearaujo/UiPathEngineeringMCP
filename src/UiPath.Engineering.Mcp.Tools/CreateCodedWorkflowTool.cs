@@ -18,7 +18,7 @@ public sealed class CreateCodedWorkflowTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Adds a coded workflow (.cs inheriting CodedWorkflow with [Workflow], registered in project.json entryPoints), a coded test case ([TestCase], registered in designOptions.fileInfoCollection — never entryPoints), or a plain coded source file to an existing UiPath project. Process projects default kind=test files to Tests\\; pass relativeFolder for other layouts.")]
+    [McpServerTool(UseStructuredContent = true), Description("Adds a coded workflow (.cs inheriting CodedWorkflow with [Workflow], registered in project.json entryPoints), a coded test case ([TestCase], registered in designOptions.fileInfoCollection — never entryPoints), or a plain coded source file to an existing UiPath project. Process projects default kind=test files to Tests\\; pass relativeFolder for other layouts. Next: edit_workflow_file, then get_compile_errors.")]
     public ToolResult AddCodedWorkflow(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Class name for the new file; must be a valid C# identifier and becomes the file stem (<ClassName>.cs). Paths belong in relativeFolder, not in className.")] string className,
@@ -31,8 +31,8 @@ public sealed class CreateCodedWorkflowTool {
             return guardFailure;
         }
 
-        if (kind is not (CodedFileKind.Workflow or CodedFileKind.Test or CodedFileKind.Source)) {
-            return ToolResults.Failure("kind must be 'workflow', 'test', or 'source'.", sw);
+        if (ToolArgs.ParseChoice(kind, "kind", [CodedFileKind.Workflow, CodedFileKind.Test, CodedFileKind.Source], sw, out var parsedKind) is { } kindError) {
+            return kindError;
         }
 
         if (!CodedWorkflowTemplates.IsValidClassName(className)) {
@@ -40,17 +40,11 @@ public sealed class CreateCodedWorkflowTool {
         }
 
         var projectJsonPath = _filesystem.FindProjectJson(projectPath)!;
-        string projectName;
-        JsonObject projectJson;
-        try {
-            projectJson = JsonNode.Parse(_filesystem.ReadAllText(projectJsonPath)) as JsonObject
-                ?? throw new InvalidDataException("project.json root is not an object.");
-            projectName = projectJson["name"]?.GetValue<string>() ?? "UiPathProject";
-        } catch (Exception ex) {
-            return ToolResults.Failure($"Could not parse project.json: {ex.Message}", sw);
-        }
+        var projectJson = JsonNode.Parse(_filesystem.ReadAllText(projectJsonPath)) as JsonObject
+            ?? throw new System.Text.Json.JsonException("project.json root is not an object.");
+        var projectName = projectJson["name"]?.GetValue<string>() ?? "UiPathProject";
 
-        var folder = ResolveFolder(kind, relativeFolder, projectJson);
+        var folder = ResolveFolder(parsedKind, relativeFolder, projectJson);
         var relativeNormalized = string.IsNullOrEmpty(folder)
             ? className + ".cs"
             : ProjectFilePolicy.NormalizeRelativePath(folder + "/" + className + ".cs");
@@ -65,7 +59,7 @@ public sealed class CreateCodedWorkflowTool {
         }
 
         var namespaceName = CodedWorkflowTemplates.SanitizeNamespace(projectName);
-        var content = kind switch {
+        var content = parsedKind switch {
             CodedFileKind.Test => CodedWorkflowTemplates.CodedTestCase(namespaceName, className),
             CodedFileKind.Source => CodedWorkflowTemplates.CodedSourceFile(namespaceName, className),
             _ => CodedWorkflowTemplates.CodedWorkflow(namespaceName, className)
@@ -77,23 +71,25 @@ public sealed class CreateCodedWorkflowTool {
 
         var entryPointRegistered = false;
         var testCaseRegistered = false;
-        if (kind == CodedFileKind.Workflow) {
-            var entryPoints = projectJson["entryPoints"] as JsonArray ?? new JsonArray();
-            projectJson["entryPoints"] = entryPoints;
-            entryPoints.Add(new JsonObject {
-                ["filePath"] = relativeStudio,
-                ["uniqueId"] = Guid.NewGuid().ToString(),
-                ["input"] = new JsonArray(),
-                ["output"] = new JsonArray()
-            });
-            _filesystem.WriteAllText(projectJsonPath, projectJson.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        if (parsedKind == CodedFileKind.Workflow) {
+            var patch = ProjectJsonPatcher.Apply(
+                projectJson.ToJsonString(),
+                ProjectJsonPatcher.AddEntryPoint,
+                filePath: relativeStudio);
+            if (!patch.Success || patch.UpdatedJson is null) {
+                _filesystem.DeleteFile(targetPath);
+                return ToolResults.Failure(patch.Error ?? "Could not register the workflow as an entry point.", sw);
+            }
+
+            _filesystem.WriteAllText(projectJsonPath, patch.UpdatedJson);
             entryPointRegistered = true;
-        } else if (kind == CodedFileKind.Test) {
+        } else if (parsedKind == CodedFileKind.Test) {
             var patch = ProjectJsonPatcher.Apply(
                 projectJson.ToJsonString(),
                 ProjectJsonPatcher.UpsertFileInfo,
                 filePath: relativeStudio);
             if (!patch.Success || patch.UpdatedJson is null) {
+                _filesystem.DeleteFile(targetPath);
                 return ToolResults.Failure(patch.Error ?? "Could not register the test case in fileInfoCollection.", sw);
             }
 
@@ -101,7 +97,7 @@ public sealed class CreateCodedWorkflowTool {
             testCaseRegistered = true;
         }
 
-        var summary = kind switch {
+        var summary = parsedKind switch {
             CodedFileKind.Workflow => $"Coded workflow '{className}' added and registered as an entry point.",
             CodedFileKind.Test => $"Coded test case '{className}' added and registered in fileInfoCollection.",
             _ => $"Coded source file '{className}' added."
@@ -113,7 +109,7 @@ public sealed class CreateCodedWorkflowTool {
                 filePath = targetPath,
                 relativePath = relativeStudio,
                 @namespace = namespaceName,
-                kind,
+                kind = parsedKind,
                 entryPointRegistered,
                 testCaseRegistered
             }, sw);

@@ -9,11 +9,12 @@ public class VerifyWorkToolTests : IDisposable {
     private readonly string _projectPath = Path.Combine(Path.GetTempPath(), "mcp-verify-" + Guid.NewGuid().ToString("N"));
     private readonly FakeFilesystemProvider _fs;
     private readonly FakeUiPathCliProvider _cli = new();
-    private readonly ImplementationPlanStore _store = new();
+    private readonly ImplementationPlanStore _store;
 
     public VerifyWorkToolTests() {
         Directory.CreateDirectory(_projectPath);
         _fs = new FakeFilesystemProvider { ProjectJson = Path.Combine(_projectPath, "project.json") };
+        _store = new ImplementationPlanStore(_fs);
     }
 
     public void Dispose() {
@@ -110,15 +111,11 @@ public class VerifyWorkToolTests : IDisposable {
     }
 
     [Fact]
-    public async Task VerifyWork_CliThrows_ReportsErrorAndLeavesTasksUnchanged() {
+    public async Task VerifyWork_CliThrows_PropagatesToHostExceptionBoundary() {
         SeedPlanWithExistingTarget();
         _cli.ValidateException = new InvalidOperationException("uip.exe not found");
 
-        var result = await CreateTool().VerifyWork(_projectPath, ["task-1"]);
-
-        Assert.Equal("error", result.Status);
-        Assert.Contains("uip.exe not found", result.Errors);
-        Assert.Null(result.Data);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => CreateTool().VerifyWork(_projectPath, ["task-1"]));
         Assert.Equal(PlanTask.Pending, _store.Load(_projectPath)!.Tasks[0].Status);
     }
 

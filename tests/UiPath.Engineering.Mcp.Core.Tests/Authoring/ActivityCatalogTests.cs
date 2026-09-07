@@ -2,8 +2,7 @@ using UiPath.Engineering.Mcp.Core.Authoring;
 
 namespace UiPath.Engineering.Mcp.Core.Tests.Authoring;
 
-public class ActivityCatalogTests
-{
+public class ActivityCatalogTests {
     [Theory]
     [InlineData("Sequence", true)]
     [InlineData("sequence", true)]   // case-insensitive

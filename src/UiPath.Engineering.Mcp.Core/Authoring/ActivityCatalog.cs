@@ -2,8 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
-public static class ActivityCatalog
-{
+public static class ActivityCatalog {
     private static readonly (string Prefix, string Ns) Wf = ("", "http://schemas.microsoft.com/netfx/2009/xaml/activities");
     private static readonly (string Prefix, string Ns) Ui = ("ui", "http://schemas.uipath.com/workflow/activities");
 
@@ -22,27 +21,27 @@ public static class ActivityCatalog
 
     public static IReadOnlyList<ActivitySchema> All { get; } =
     [
-        S("Sequence",   Wf, true,  L("DisplayName")),
-        S("Assign",     Wf, false, L("DisplayName"), E("To"), E("Value")),
-        S("If",         Wf, true,  L("DisplayName"), E("Condition")),
-        S("Switch",     Wf, true,  L("DisplayName"), E("Expression"), T("TypeArgument")),
-        S("ForEach",    Wf, true,  L("DisplayName"), E("Values"), T("TypeArgument"), L("ItemName")),
-        S("ForEachRow", Ui, true,  L("DisplayName"), E("DataTable")),
-        S("While",      Wf, true,  L("DisplayName"), E("Condition")),
-        S("DoWhile",    Wf, true,  L("DisplayName"), E("Condition")),
-        S("TryCatch",   Wf, true,  L("DisplayName")),
+        S("Sequence", Wf, true, L("DisplayName")),
+        S("Assign", Wf, false, L("DisplayName"), E("To"), E("Value")),
+        S("If", Wf, true, L("DisplayName"), E("Condition")),
+        S("Switch", Wf, true, L("DisplayName"), E("Expression"), T("TypeArgument")),
+        S("ForEach", Wf, true, L("DisplayName"), E("Values"), T("TypeArgument"), L("ItemName")),
+        S("ForEachRow", Ui, true, L("DisplayName"), E("DataTable")),
+        S("While", Wf, true, L("DisplayName"), E("Condition")),
+        S("DoWhile", Wf, true, L("DisplayName"), E("Condition")),
+        S("TryCatch", Wf, true, L("DisplayName")),
         S("LogMessage", Ui, false, L("DisplayName"), E("Message"), L("Level")),
-        S("WriteLine",  Wf, false, L("DisplayName"), E("Text")),
+        S("WriteLine", Wf, false, L("DisplayName"), E("Text")),
         S("InvokeWorkflowFile", Ui, false, L("DisplayName"), L("WorkflowFileName", required: true)),
-        S("Delay",      Wf, false, L("DisplayName"), E("Duration")),
-        S("Throw",      Wf, false, L("DisplayName"), E("Exception")),
-        S("Rethrow",    Wf, false, L("DisplayName")),
-        S("RetryScope", Ui, true,  L("DisplayName"), L("NumberOfRetries"), L("RetryInterval")),
+        S("Delay", Wf, false, L("DisplayName"), E("Duration")),
+        S("Throw", Wf, false, L("DisplayName"), E("Exception")),
+        S("Rethrow", Wf, false, L("DisplayName")),
+        S("RetryScope", Ui, true, L("DisplayName"), L("NumberOfRetries"), L("RetryInterval")),
         S("BuildDataTable", Ui, false, L("DisplayName"), E("DataTable")),
         S("AddDataRow", Ui, false, L("DisplayName"), E("DataTable"), E("ArrayRow")),
-        S("ReadRange",  Ui, false, L("DisplayName"), L("Range"), L("SheetName"), E("DataTable")),
+        S("ReadRange", Ui, false, L("DisplayName"), L("Range"), L("SheetName"), E("DataTable")),
         S("WriteRange", Ui, false, L("DisplayName"), L("Range"), L("SheetName"), E("DataTable")),
-        S("InvokeCode", Ui, true,  L("DisplayName"), L("Code", required: true), L("Language")),
+        S("InvokeCode", Ui, true, L("DisplayName"), L("Code", required: true), L("Language")),
     ];
 
     public static IActivityCatalog Fallback { get; } = new ListActivityCatalog(All, "fallback");
@@ -55,15 +54,12 @@ public static class ActivityCatalog
 
     public static string? Suggest(string name) => Suggest(name, All);
 
-    public static string? Suggest(string name, IEnumerable<ActivitySchema> schemas)
-    {
+    public static string? Suggest(string name, IEnumerable<ActivitySchema> schemas) {
         string? best = null;
         var bestDistance = 4;
-        foreach (var schema in schemas)
-        {
+        foreach (var schema in schemas) {
             var distance = Levenshtein(name, schema.Name);
-            if (distance < bestDistance)
-            {
+            if (distance < bestDistance) {
                 bestDistance = distance;
                 best = schema.Name;
             }
@@ -78,19 +74,16 @@ public static class ActivityCatalog
         "TryCatch", "WriteLine", "Delay", "Throw", "Rethrow"
     };
 
-    private static int Levenshtein(string a, string b)
-    {
+    private static int Levenshtein(string a, string b) {
         a = a.ToLowerInvariant();
         b = b.ToLowerInvariant();
         var previous = new int[b.Length + 1];
         var current = new int[b.Length + 1];
         for (var j = 0; j <= b.Length; j++) previous[j] = j;
 
-        for (var i = 1; i <= a.Length; i++)
-        {
+        for (var i = 1; i <= a.Length; i++) {
             current[0] = i;
-            for (var j = 1; j <= b.Length; j++)
-            {
+            for (var j = 1; j <= b.Length; j++) {
                 var cost = a[i - 1] == b[j - 1] ? 0 : 1;
                 current[j] = Math.Min(Math.Min(previous[j] + 1, current[j - 1] + 1), previous[j - 1] + cost);
             }

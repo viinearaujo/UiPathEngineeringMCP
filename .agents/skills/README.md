@@ -16,4 +16,3 @@ Do **not** reinstall the full marketplace set (`uip skills install` of `@uipath/
 |---|---|---|
 | `uipath-rpa` | `.xaml` / `.cs` RPA workflows: author, edit, validate. | [uipath-rpa/SKILL.md](uipath-rpa/SKILL.md) |
 | `guided-implementation-loop` | Multi-step implement / plan → verify loop over this MCP. | [guided-implementation-loop/SKILL.md](guided-implementation-loop/SKILL.md) |
-| `ccc` | Semantic search of **this Engineering MCP repo** (not Copilot Studio). | [ccc/SKILL.md](ccc/SKILL.md) |

@@ -25,11 +25,11 @@ public sealed class ValidateProjectTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Runs UiPath CLI validate / build / pack and returns structured per-step results plus diagnostics mapped to snapshot activity IDs. Each diagnostic is { activityId, property, message, specFix }. Agent green gate is validate:true, build:false, pack:false, then update_plan_task. Do not use verify_work as the done gate. For an authoritative CLI compile, pass build:true (compile_project is a leave-off alias of that).")]
+    [McpServerTool(UseStructuredContent = true), Description("Runs UiPath CLI validate / build / pack and returns structured per-step results plus diagnostics mapped to snapshot activity IDs. Each diagnostic is { activityId, property, message, specFix }. Agent green gate is validate:true (the default), pack:false, then analyze_project_gaps then update_plan_task. Do not use verify_work as the done gate. For an authoritative CLI compile, pass build:true (compile_project is a leave-off alias of that). Next: analyze_project_gaps.")]
     public async Task<ToolResult> ValidateProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Run validate (project diagnostics)?")] bool validate = true,
-        [Description("Run build (compile gate)?")] bool build = true,
+        [Description("Run build (compile gate)? Default false. Pass true for an authoritative CLI compile.")] bool build = false,
         [Description("Run pack?")] bool pack = false,
         CancellationToken cancellationToken = default) {
 
@@ -39,40 +39,40 @@ public sealed class ValidateProjectTool {
             return guardFailure;
         }
 
-        try {
-            var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, cancellationToken);
-            var diagnostics = ProjectDiagnostics(projectPath, cliResult);
-            var boundaryErrors = await BoundaryErrors(projectPath, cancellationToken);
-            var errors = cliResult.Errors.Concat(boundaryErrors.Select(e => $"{e.ErrorCode}: {e.Message} Fix: {e.FixHint}")).ToList();
-            var success = cliResult.Success && boundaryErrors.Count == 0;
-            var summary = !cliResult.Success
-                ? cliResult.Summary
-                : boundaryErrors.Count > 0
-                    ? $"{boundaryErrors.Count} coded/XAML boundary violation(s) found."
-                    : cliResult.Summary;
-
-            return new ToolResult {
-                Status = success ? "success" : "error",
-                Summary = summary,
-                Data = new {
-                    success,
-                    validate = StepData(cliResult.Validate),
-                    build = StepData(cliResult.Build),
-                    pack = StepData(cliResult.Pack),
-                    errors,
-                    warnings = cliResult.Warnings,
-                    diagnostics,
-                    boundary = boundaryErrors,
-                    recommendations = BuildRecommendations(cliResult, diagnostics, boundaryErrors)
-                },
-                Errors = errors,
-                ErrorDetails = boundaryErrors,
-                Warnings = cliResult.Warnings,
-                DurationMs = sw.ElapsedMilliseconds
-            };
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Project validation failed.", sw);
+        var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, cancellationToken);
+        var diagnostics = ProjectDiagnostics(projectPath, cliResult);
+        var (boundaryErrors, boundaryWarning) = await BoundaryErrors(projectPath, cancellationToken);
+        var errors = cliResult.Errors.Concat(boundaryErrors.Select(e => $"{e.ErrorCode}: {e.Message} Fix: {e.FixHint}")).ToList();
+        var success = cliResult.Success && boundaryErrors.Count == 0;
+        var summary = !cliResult.Success
+            ? cliResult.Summary
+            : boundaryErrors.Count > 0
+                ? $"{boundaryErrors.Count} coded/XAML boundary violation(s) found."
+                : cliResult.Summary;
+        var warnings = cliResult.Warnings.ToList();
+        if (boundaryWarning is not null) {
+            warnings.Add(boundaryWarning);
         }
+
+        return new ToolResult {
+            Status = success ? "success" : "error",
+            Summary = summary,
+            Data = new {
+                success,
+                validate = StepData(cliResult.Validate),
+                build = StepData(cliResult.Build),
+                pack = StepData(cliResult.Pack),
+                errors,
+                warnings,
+                diagnostics,
+                boundary = boundaryErrors,
+                recommendations = BuildRecommendations(cliResult, diagnostics, boundaryErrors)
+            },
+            Errors = errors,
+            ErrorDetails = boundaryErrors,
+            Warnings = warnings,
+            DurationMs = sw.ElapsedMilliseconds
+        };
     }
 
     private List<object> ProjectDiagnostics(string projectPath, UiPathCliResult cliResult) {
@@ -98,22 +98,23 @@ public sealed class ValidateProjectTool {
         warnings = step.Warnings
     };
 
-    private async Task<List<ToolError>> BoundaryErrors(string projectPath, CancellationToken cancellationToken) {
+    private async Task<(List<ToolError> Errors, string? Warning)> BoundaryErrors(string projectPath, CancellationToken cancellationToken) {
         if (_modelBuilder is null) {
-            return [];
+            return ([], null);
         }
 
         try {
             var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
-            return XamlCodedInvokeBoundary.Lint(model)
+            var errors = XamlCodedInvokeBoundary.Lint(model)
                 .Select(g => new ToolError(
                     ToolErrorCodes.XamlCodedBoundary,
                     g.Message,
                     g.SuggestedAction ?? string.Empty,
                     g.SuggestedTool))
                 .ToList();
-        } catch {
-            return [];
+            return (errors, null);
+        } catch (Exception ex) {
+            return ([], $"Coded/XAML boundary lint was skipped: {ex.GetType().Name}.");
         }
     }
 

@@ -14,44 +14,57 @@ public sealed class DependencyGraphResult {
     public List<DependencyGraphEdge> Edges { get; init; } = [];
     public List<List<string>> Cycles { get; init; } = [];
     public List<string> Orphans { get; init; } = [];
+    public List<string> Warnings { get; init; } = [];
     public IReadOnlyDictionary<string, List<DependencyGraphEdge>> CallersIndex { get; init; }
         = new Dictionary<string, List<DependencyGraphEdge>>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
 /// Builds the workflow invocation graph (InvokeWorkflowFile edges) from parsed workflows,
-/// matched by file name (case-insensitive). Detects cycles and workflows unreachable from Main.
+/// matched by project-relative path (case-insensitive), with a unique file-name fallback.
+/// Detects cycles and workflows unreachable from Main.
 /// </summary>
 public static class DependencyGraphBuilder {
     public static DependencyGraphResult Build(IReadOnlyList<WorkflowModel> workflows, string? mainWorkflow) {
         var result = new DependencyGraphResult();
-        var byFileName = new Dictionary<string, WorkflowModel>(StringComparer.OrdinalIgnoreCase);
+        var byRelative = new Dictionary<string, WorkflowModel>(StringComparer.OrdinalIgnoreCase);
+        var byFileName = new Dictionary<string, List<WorkflowModel>>(StringComparer.OrdinalIgnoreCase);
         foreach (var workflow in workflows) {
-            byFileName.TryAdd(workflow.FileName, workflow);
+            var identity = WorkflowPath.Identity(workflow);
+            byRelative.TryAdd(identity, workflow);
+            var name = workflow.FileName.Length > 0 ? workflow.FileName : Path.GetFileName(identity);
+            if (!byFileName.TryGetValue(name, out var list)) {
+                list = [];
+                byFileName[name] = list;
+            }
+
+            list.Add(workflow);
         }
 
         var adjacency = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var workflow in workflows) {
+            var source = WorkflowPath.Identity(workflow);
             foreach (var invoke in workflow.InvokeWorkflows) {
                 if (string.IsNullOrWhiteSpace(invoke.TargetWorkflow)) {
                     continue;
                 }
 
-                var resolved = byFileName.ContainsKey(invoke.TargetWorkflow);
+                var resolved = TryResolveTarget(
+                    invoke.TargetWorkflow, byRelative, byFileName, result.Warnings, out var targetIdentity);
                 result.Edges.Add(new DependencyGraphEdge {
-                    Source = workflow.FileName,
-                    Target = invoke.TargetWorkflow,
+                    Source = source,
+                    Target = resolved ? targetIdentity : WorkflowPath.NormalizeRef(invoke.TargetWorkflow),
                     DisplayName = invoke.DisplayName,
                     IsResolved = resolved,
                     ArgumentMappings = [.. invoke.ArgumentMappings]
                 });
 
                 if (resolved) {
-                    if (!adjacency.TryGetValue(workflow.FileName, out var targets)) {
+                    if (!adjacency.TryGetValue(source, out var targets)) {
                         targets = [];
-                        adjacency[workflow.FileName] = targets;
+                        adjacency[source] = targets;
                     }
-                    targets.Add(invoke.TargetWorkflow);
+                    targets.Add(targetIdentity);
                 }
             }
         }
@@ -65,12 +78,58 @@ public static class DependencyGraphBuilder {
             incoming.Add(edge);
         }
 
+        var resolvedMain = ResolveMain(mainWorkflow, byRelative, byFileName);
         return new DependencyGraphResult {
             Edges = result.Edges,
             CallersIndex = callers,
-            Cycles = DetectCycles(byFileName.Keys, adjacency),
-            Orphans = FindOrphans(byFileName.Keys, adjacency, mainWorkflow)
+            Cycles = DetectCycles(byRelative.Keys, adjacency),
+            Orphans = FindOrphans(byRelative.Keys, adjacency, resolvedMain),
+            Warnings = result.Warnings
         };
+    }
+
+    private static string? ResolveMain(
+        string? mainWorkflow,
+        Dictionary<string, WorkflowModel> byRelative,
+        Dictionary<string, List<WorkflowModel>> byFileName) {
+        if (string.IsNullOrWhiteSpace(mainWorkflow)) {
+            return null;
+        }
+
+        return TryResolveTarget(mainWorkflow, byRelative, byFileName, warnings: null, out var identity)
+            ? identity
+            : WorkflowPath.NormalizeRef(mainWorkflow);
+    }
+
+    private static bool TryResolveTarget(
+        string rawTarget,
+        Dictionary<string, WorkflowModel> byRelative,
+        Dictionary<string, List<WorkflowModel>> byFileName,
+        List<string>? warnings,
+        out string identity) {
+        var normalized = WorkflowPath.NormalizeRef(rawTarget);
+        identity = normalized;
+        if (normalized.Length == 0) {
+            return false;
+        }
+
+        if (byRelative.TryGetValue(normalized, out var exact)) {
+            identity = WorkflowPath.Identity(exact);
+            return true;
+        }
+
+        var fileName = Path.GetFileName(normalized);
+        if (!byFileName.TryGetValue(fileName, out var matches) || matches.Count != 1) {
+            return false;
+        }
+
+        identity = WorkflowPath.Identity(matches[0]);
+        if (!string.Equals(identity, normalized, StringComparison.OrdinalIgnoreCase)) {
+            warnings?.Add(
+                $"Invoke '{rawTarget}' matched '{identity}' by file name; prefer a project-relative path.");
+        }
+
+        return true;
     }
 
     private static List<List<string>> DetectCycles(IEnumerable<string> nodes, Dictionary<string, List<string>> adjacency) {

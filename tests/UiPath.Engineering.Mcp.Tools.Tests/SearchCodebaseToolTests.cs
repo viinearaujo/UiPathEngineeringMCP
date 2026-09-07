@@ -121,14 +121,10 @@ public class SearchCodebaseToolTests {
     }
 
     [Fact]
-    public async Task SearchCodebase_ServiceThrows_ReturnsStructuredError() {
+    public async Task SearchCodebase_ServiceThrows_PropagatesToHostExceptionBoundary() {
         var search = new FakeCodebaseSearchService { ToThrow = new InvalidOperationException("boom") };
         var tool = new SearchCodebaseTool(ProjectFilesystem(), search);
 
-        var result = await tool.SearchCodebase("/projects/testProcess", "queue", "text");
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
-        Assert.DoesNotContain("boom", string.Join(" ", result.Errors));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tool.SearchCodebase("/projects/testProcess", "queue", "text"));
     }
 }

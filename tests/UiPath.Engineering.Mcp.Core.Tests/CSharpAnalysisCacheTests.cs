@@ -36,9 +36,19 @@ public class CSharpAnalysisCacheTests {
     private sealed class FixedPackagesFolderResolver : NuGetReferenceResolver {
         private readonly string? _folder;
 
+        public Dictionary<string, DateTime> WriteTimesUtc { get; } = new(StringComparer.OrdinalIgnoreCase);
+
         public FixedPackagesFolderResolver(string? folder) => _folder = folder;
 
         public override string? GetPackagesFolder() => _folder;
+
+        public override DateTime GetLastWriteTimeUtc(string path) {
+            if (WriteTimesUtc.TryGetValue(path, out var timestamp)) {
+                return timestamp;
+            }
+
+            throw new DirectoryNotFoundException(path);
+        }
     }
 
     private static FakeFilesystemProvider CreateFilesystem() {
@@ -127,8 +137,10 @@ public class CSharpAnalysisCacheTests {
         // Regression: a `dotnet restore` only changes the machine-global NuGet
         // packages folder (outside the project tree), so it must invalidate the cache.
         var fs = CreateFilesystemWithDependency();
+        fs.AllowedRoots = [Root];
         var inner = new CountingContextBuilder();
-        var sut = new CSharpAnalysisCache(inner, fs, new FixedPackagesFolderResolver(PackagesFolder));
+        var resolver = new FixedPackagesFolderResolver(PackagesFolder);
+        var sut = new CSharpAnalysisCache(inner, fs, resolver);
 
         var first = await sut.BuildAsync(Root);
         Assert.Same(first, await sut.BuildAsync(Root));
@@ -136,8 +148,8 @@ public class CSharpAnalysisCacheTests {
 
         // Simulate restore: the package folders appear under the packages folder.
         var restored = new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Utc);
-        fs.WriteTimesUtc[PackageIdFolder] = restored;
-        fs.WriteTimesUtc[PackageVersionFolder] = restored;
+        resolver.WriteTimesUtc[PackageIdFolder] = restored;
+        resolver.WriteTimesUtc[PackageVersionFolder] = restored;
 
         var second = await sut.BuildAsync(Root);
 
@@ -148,14 +160,16 @@ public class CSharpAnalysisCacheTests {
     [Fact]
     public async Task BuildAsync_NuGetPackageFolderTimestampChanges_TriggersRebuild() {
         var fs = CreateFilesystemWithDependency();
+        fs.AllowedRoots = [Root];
         var stamp = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        fs.WriteTimesUtc[PackageIdFolder] = stamp;
-        fs.WriteTimesUtc[PackageVersionFolder] = stamp;
+        var resolver = new FixedPackagesFolderResolver(PackagesFolder);
+        resolver.WriteTimesUtc[PackageIdFolder] = stamp;
+        resolver.WriteTimesUtc[PackageVersionFolder] = stamp;
         var inner = new CountingContextBuilder();
-        var sut = new CSharpAnalysisCache(inner, fs, new FixedPackagesFolderResolver(PackagesFolder));
+        var sut = new CSharpAnalysisCache(inner, fs, resolver);
 
         var first = await sut.BuildAsync(Root);
-        fs.WriteTimesUtc[PackageVersionFolder] = new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        resolver.WriteTimesUtc[PackageVersionFolder] = new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc);
         var second = await sut.BuildAsync(Root);
 
         Assert.Equal(2, inner.CallCount);

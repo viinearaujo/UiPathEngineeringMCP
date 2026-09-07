@@ -17,7 +17,7 @@ public sealed class ExplainWorkflowTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Explains a single workflow in a UiPath project: arguments, variables, activity outline, exception handlers, invoked workflows, and log messages. Coded (.cs) files return kind (workflow, test, or source), class, namespace, entry methods, entry arguments, and public methods.")]
+    [McpServerTool(UseStructuredContent = true), Description("Explains a single workflow in a UiPath project: arguments, variables, activity outline, exception handlers, invoked workflows, and log messages. Coded (.cs) files return kind (workflow, test, or source), class, namespace, entry methods, entry arguments, and public methods. Next: find_activity.")]
     public async Task<ToolResult> ExplainWorkflow(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Workflow file to explain (file name, with or without .xaml/.cs, or a path).")] string workflowFile,
@@ -29,48 +29,35 @@ public sealed class ExplainWorkflowTool {
             return guardFailure;
         }
 
-        try {
-            var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
-
-            var requestedName = Path.GetFileName(workflowFile);
-            if (!requestedName.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)
-                && !requestedName.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) {
-                requestedName += ".xaml";
-            }
-
-            var workflow = model.Workflows.FirstOrDefault(w =>
-                string.Equals(w.FileName, requestedName, StringComparison.OrdinalIgnoreCase));
-
-            if (workflow is not null) {
-                return ExplainXamlWorkflow(workflow, includeActivityTree, sw);
-            }
-
-            var requestedCs = requestedName.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                ? requestedName
-                : Path.GetFileNameWithoutExtension(requestedName) + ".cs";
-
-            var coded = model.CodedWorkflows.FirstOrDefault(c =>
-                string.Equals(c.FileName, requestedCs, StringComparison.OrdinalIgnoreCase));
-
-            if (coded is not null) {
-                return ExplainCodedWorkflow(coded, sw);
-            }
-
-            var available = model.Workflows.Select(w => w.FileName)
-                .Concat(model.CodedWorkflows.Select(c => c.FileName))
-                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            return new ToolResult {
-                Status = "error",
-                Summary = $"Workflow '{requestedName}' not found.",
-                Errors = [$"Workflow '{requestedName}' was not found in project '{model.ProjectName}'."],
-                Data = new { AvailableWorkflows = available },
-                DurationMs = sw.ElapsedMilliseconds
-            };
-        } catch (Exception ex) {
-            // Never surface a raw exception/stack trace to the MCP client.
-            return ToolResults.FromException(ex, "Workflow explanation failed.", sw);
+        var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
+        var warnings = new List<string>();
+        var workflow = WorkflowPath.Find(model.Workflows, workflowFile, warnings);
+        if (workflow is not null) {
+            return ExplainXamlWorkflow(workflow, includeActivityTree, sw);
         }
+
+        var requestedCs = workflowFile.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+            ? Path.GetFileName(workflowFile)
+            : Path.GetFileNameWithoutExtension(workflowFile) + ".cs";
+        var coded = model.CodedWorkflows.FirstOrDefault(c =>
+            string.Equals(c.FileName, requestedCs, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(c.FilePath.Replace('\\', '/'), WorkflowPath.NormalizeRef(workflowFile), StringComparison.OrdinalIgnoreCase));
+        if (coded is not null) {
+            return ExplainCodedWorkflow(coded, sw);
+        }
+
+        var available = model.Workflows.Select(w => WorkflowPath.Identity(w))
+            .Concat(model.CodedWorkflows.Select(c => c.FileName))
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return new ToolResult {
+            Status = "error",
+            Summary = $"Workflow '{workflowFile}' not found.",
+            Errors = [$"Workflow '{workflowFile}' was not found in project '{model.ProjectName}'."],
+            Data = new { AvailableWorkflows = available },
+            Warnings = warnings,
+            DurationMs = sw.ElapsedMilliseconds
+        };
     }
 
     private static ToolResult ExplainXamlWorkflow(WorkflowModel workflow, bool includeActivityTree, Stopwatch sw) {

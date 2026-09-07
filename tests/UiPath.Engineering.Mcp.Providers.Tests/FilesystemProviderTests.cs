@@ -1,3 +1,4 @@
+using System.Text;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
 
@@ -208,6 +209,36 @@ public class FilesystemProviderTests {
 
         Assert.Equal("<x/>", File.ReadAllText(target));
         Assert.True(sut.FileExists(target));
+    }
+
+    [Fact]
+    public void WriteAllText_PreservesUtf8BomAndCrlf() {
+        using var temp = new TempDir();
+        var sut = CreateSut(temp.Path);
+        var target = Path.Combine(temp.Path, "Main.xaml");
+        File.WriteAllText(target, "<x>\r\n</x>\r\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+        sut.WriteAllText(target, "<x>\nupdated\n</x>\n");
+
+        var written = File.ReadAllBytes(target);
+        Assert.True(written.Length >= 3 && written[0] == 0xEF && written[1] == 0xBB && written[2] == 0xBF);
+        var text = Encoding.UTF8.GetString(written, 3, written.Length - 3);
+        Assert.Contains("\r\n", text);
+        Assert.Contains("updated", text);
+        Assert.DoesNotContain("\nupdated\n", text);
+    }
+
+    [Fact]
+    public void WriteAllText_ReplacesExistingFileAtomically() {
+        using var temp = new TempDir();
+        var sut = CreateSut(temp.Path);
+        var target = Path.Combine(temp.Path, "Main.xaml");
+        File.WriteAllText(target, "old");
+
+        sut.WriteAllText(target, "new");
+
+        Assert.Equal("new", File.ReadAllText(target));
+        Assert.False(File.Exists(target + ".tmp"));
     }
 
     [Fact]

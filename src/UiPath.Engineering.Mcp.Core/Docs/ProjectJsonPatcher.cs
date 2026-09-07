@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -23,7 +24,10 @@ public static class ProjectJsonPatcher {
 
     public static readonly string[] ImmutableKeys = ["expressionLanguage", "targetFramework", "schemaVersion"];
 
-    private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+    public static readonly JsonSerializerOptions WriteOptions = new() {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     public static ProjectJsonPatchResult Apply(
         string json,

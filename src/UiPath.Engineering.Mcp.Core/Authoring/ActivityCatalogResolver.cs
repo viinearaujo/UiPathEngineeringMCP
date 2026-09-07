@@ -6,8 +6,7 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
-public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposable
-{
+public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposable {
     public const int MaxRecommendations = 5;
     private const int MaxPackageQueries = 8;
 
@@ -19,49 +18,45 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
     public ActivityCatalogResolver(
         IFilesystemProvider? filesystem = null,
         IActivityDiscovery? discovery = null,
-        ILogger<ActivityCatalogResolver>? logger = null)
-    {
+        ILogger<ActivityCatalogResolver>? logger = null) {
         _filesystem = filesystem;
         _discovery = discovery;
         _logger = logger ?? NullLogger<ActivityCatalogResolver>.Instance;
     }
 
-    public async Task<IActivityCatalog> ResolveAsync(string? projectPath, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(projectPath) || _filesystem is null)
-        {
+    public async Task<IActivityCatalog> ResolveAsync(string? projectPath, CancellationToken cancellationToken = default) {
+        if (string.IsNullOrWhiteSpace(projectPath) || _filesystem is null) {
             return ActivityCatalog.Fallback;
         }
 
         var projectJson = _filesystem.FindProjectJson(projectPath);
-        if (projectJson is null)
-        {
+        if (projectJson is null) {
             return ActivityCatalog.Fallback;
         }
 
         DateTime writeTime;
-        try
-        {
+        try {
             writeTime = _filesystem.GetLastWriteTimeUtc(projectJson);
-        }
-        catch
-        {
+        } catch {
             writeTime = DateTime.MinValue;
         }
 
         var cacheKey = Path.GetFullPath(projectPath);
-        return await _cache.RunExclusiveAsync(cacheKey, async ct =>
-        {
-            if (_cache.TryGet(cacheKey, out var cached) && cached.ProjectJsonWriteTimeUtc == writeTime)
-            {
+        return await _cache.RunExclusiveAsync(cacheKey, async ct => {
+            if (_cache.TryGet(cacheKey, out var cached) && cached.ProjectJsonWriteTimeUtc == writeTime) {
                 _logger.LogDebug("Activity catalog cache hit for {CacheKey}", cacheKey);
                 return cached.Catalog;
             }
 
             _logger.LogDebug("Activity catalog cache miss for {CacheKey}", cacheKey);
             var packages = ReadPackages(projectJson);
-            var discovered = await DiscoverForProjectAsync(projectPath, packages, ct);
-            var catalog = Merge(ActivityCatalog.All, packages, discovered, discovered.Count > 0 ? "cli" : "project-packages");
+            var (discovered, discoveryFailed) = await DiscoverForProjectAsync(projectPath, packages, ct);
+            var catalog = Merge(
+                ActivityCatalog.All,
+                packages,
+                discovered,
+                discovered.Count > 0 ? "cli" : "project-packages",
+                discoveryFailed);
             _cache.Set(cacheKey, new CachedCatalog(catalog, writeTime));
             return catalog;
         }, cancellationToken);
@@ -69,28 +64,29 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
 
     public void Dispose() => _cache.Dispose();
 
+    public static string? DiscoveryWarning(IActivityCatalog catalog) =>
+        catalog.DiscoveryFailed
+            ? "Activity catalog discovery failed; unknown-activity checks used the fallback/project-packages catalog. Next: retry after the UiPath CLI is available, or pass unknownActivityEscapeHatch if the activity is real."
+            : null;
+
     public async Task<IReadOnlyList<ActivityRecommendation>> RecommendAsync(
-        string query, string? projectPath, int limit = MaxRecommendations, CancellationToken cancellationToken = default)
-    {
+        string query, string? projectPath, int limit = MaxRecommendations, CancellationToken cancellationToken = default) {
         limit = Math.Clamp(limit, 1, MaxRecommendations);
         var catalog = await ResolveAsync(projectPath, cancellationToken);
         IReadOnlyList<DiscoveredActivity> queryHits = [];
-        if (_discovery is not null && !string.IsNullOrWhiteSpace(projectPath))
-        {
-            queryHits = await SafeFindAsync(projectPath, query, cancellationToken);
+        if (_discovery is not null && !string.IsNullOrWhiteSpace(projectPath)) {
+            queryHits = await SafeFindAsync(projectPath, query, cancellationToken) ?? [];
         }
 
         var packages = ReadProjectPackages(projectPath);
-        var merged = Merge(catalog.All, packages, queryHits, catalog.Source);
+        var merged = Merge(catalog.All, packages, queryHits, catalog.Source, catalog.DiscoveryFailed);
         var ranked = Rank(query, merged.All, packages);
         return ranked.Take(limit).ToList();
     }
 
     internal static IReadOnlyList<ActivityRecommendation> Rank(
-        string query, IReadOnlyList<ActivitySchema> schemas, IReadOnlyDictionary<string, string> projectPackages)
-    {
-        if (string.IsNullOrWhiteSpace(query))
-        {
+        string query, IReadOnlyList<ActivitySchema> schemas, IReadOnlyDictionary<string, string> projectPackages) {
+        if (string.IsNullOrWhiteSpace(query)) {
             return [];
         }
 
@@ -104,20 +100,17 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
     }
 
     internal static ActivityRecommendation ToRecommendation(
-        ActivitySchema schema, int score, IReadOnlyDictionary<string, string> projectPackages, string source)
-    {
+        ActivitySchema schema, int score, IReadOnlyDictionary<string, string> projectPackages, string source) {
         string? needsPackage = null;
         if (!string.IsNullOrWhiteSpace(schema.PackageId)
             && !projectPackages.ContainsKey(schema.PackageId)
-            && projectPackages.Count > 0)
-        {
+            && projectPackages.Count > 0) {
             needsPackage = string.IsNullOrWhiteSpace(schema.PackageVersion)
                 ? schema.PackageId
                 : $"{schema.PackageId}@{schema.PackageVersion}";
         }
 
-        return new ActivityRecommendation
-        {
+        return new ActivityRecommendation {
             Name = schema.Name,
             FullTypeName = schema.FullTypeName,
             Prefix = schema.Prefix,
@@ -133,39 +126,32 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
         };
     }
 
-    internal static int Score(string query, IReadOnlyList<string> tokens, ActivitySchema schema)
-    {
+    internal static int Score(string query, IReadOnlyList<string> tokens, ActivitySchema schema) {
         var q = query.Trim();
         var name = schema.Name;
         var haystack = $"{schema.Name} {schema.FullTypeName} {schema.PackageId}";
-        if (name.Equals(q, StringComparison.OrdinalIgnoreCase))
-        {
+        if (name.Equals(q, StringComparison.OrdinalIgnoreCase)) {
             return 100;
         }
 
-        if (name.StartsWith(q, StringComparison.OrdinalIgnoreCase))
-        {
+        if (name.StartsWith(q, StringComparison.OrdinalIgnoreCase)) {
             return 80;
         }
 
-        if (name.Contains(q, StringComparison.OrdinalIgnoreCase))
-        {
+        if (name.Contains(q, StringComparison.OrdinalIgnoreCase)) {
             return 60;
         }
 
-        if (schema.FullTypeName is not null && schema.FullTypeName.Contains(q, StringComparison.OrdinalIgnoreCase))
-        {
+        if (schema.FullTypeName is not null && schema.FullTypeName.Contains(q, StringComparison.OrdinalIgnoreCase)) {
             return 50;
         }
 
-        if (schema.PackageId is not null && schema.PackageId.Contains(q, StringComparison.OrdinalIgnoreCase))
-        {
+        if (schema.PackageId is not null && schema.PackageId.Contains(q, StringComparison.OrdinalIgnoreCase)) {
             return 40;
         }
 
         var tokenHits = tokens.Count(t => haystack.Contains(t, StringComparison.OrdinalIgnoreCase));
-        if (tokenHits > 0 && tokens.Count > 0)
-        {
+        if (tokenHits > 0 && tokens.Count > 0) {
             return 20 + (20 * tokenHits / tokens.Count);
         }
 
@@ -176,37 +162,30 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
         IReadOnlyList<ActivitySchema> fallback,
         IReadOnlyDictionary<string, string> projectPackages,
         IReadOnlyList<DiscoveredActivity> discovered,
-        string source)
-    {
+        string source,
+        bool discoveryFailed = false) {
         var byName = new Dictionary<string, ActivitySchema>(StringComparer.OrdinalIgnoreCase);
-        foreach (var schema in fallback)
-        {
+        foreach (var schema in fallback) {
             byName[schema.Name] = StampVersion(schema, projectPackages);
         }
 
-        foreach (var hit in discovered)
-        {
+        foreach (var hit in discovered) {
             var converted = ToSchema(hit, projectPackages);
-            if (byName.TryGetValue(converted.Name, out var existing))
-            {
-                byName[converted.Name] = existing with
-                {
+            if (byName.TryGetValue(converted.Name, out var existing)) {
+                byName[converted.Name] = existing with {
                     PackageId = existing.PackageId ?? converted.PackageId,
                     PackageVersion = converted.PackageVersion ?? existing.PackageVersion,
                     FullTypeName = existing.FullTypeName ?? converted.FullTypeName
                 };
-            }
-            else
-            {
+            } else {
                 byName[converted.Name] = converted;
             }
         }
 
-        return new ListActivityCatalog(byName.Values.ToList(), source);
+        return new ListActivityCatalog(byName.Values.ToList(), source, discoveryFailed);
     }
 
-    internal static ActivitySchema ToSchema(DiscoveredActivity hit, IReadOnlyDictionary<string, string> projectPackages)
-    {
+    internal static ActivitySchema ToSchema(DiscoveredActivity hit, IReadOnlyDictionary<string, string> projectPackages) {
         var (prefix, ns) = ActivityFindParser.InferNamespace(hit.XmlNamespace, hit.FullTypeName ?? hit.Name, hit.Name);
         var properties = hit.Properties is { Count: > 0 }
             ? hit.Properties
@@ -223,20 +202,16 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
         return StampVersion(schema, projectPackages);
     }
 
-    private static ActivitySchema StampVersion(ActivitySchema schema, IReadOnlyDictionary<string, string> projectPackages)
-    {
-        if (schema.PackageId is not null && projectPackages.TryGetValue(schema.PackageId, out var version))
-        {
+    private static ActivitySchema StampVersion(ActivitySchema schema, IReadOnlyDictionary<string, string> projectPackages) {
+        if (schema.PackageId is not null && projectPackages.TryGetValue(schema.PackageId, out var version)) {
             return schema with { PackageVersion = version };
         }
 
         return schema;
     }
 
-    private IReadOnlyDictionary<string, string> ReadProjectPackages(string? projectPath)
-    {
-        if (string.IsNullOrWhiteSpace(projectPath) || _filesystem is null)
-        {
+    private IReadOnlyDictionary<string, string> ReadProjectPackages(string? projectPath) {
+        if (string.IsNullOrWhiteSpace(projectPath) || _filesystem is null) {
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
@@ -246,83 +221,73 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
             : ReadPackages(projectJson);
     }
 
-    private IReadOnlyDictionary<string, string> ReadPackages(string projectJsonPath)
-    {
+    private IReadOnlyDictionary<string, string> ReadPackages(string projectJsonPath) {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (_filesystem is null)
-        {
+        if (_filesystem is null) {
             return map;
         }
 
-        try
-        {
+        try {
             var model = new ProjectJsonParser(_filesystem).Parse(projectJsonPath, Path.GetDirectoryName(projectJsonPath) ?? "");
-            foreach (var package in model.Packages)
-            {
+            foreach (var package in model.Packages) {
                 map[package.Id] = ActivityFindParser.StripVersion(package.Version) ?? package.Version;
             }
-        }
-        catch
-        {
+        } catch {
             // Malformed project.json: keep the fallback catalog without versions.
         }
 
         return map;
     }
 
-    private async Task<IReadOnlyList<DiscoveredActivity>> DiscoverForProjectAsync(
-        string projectPath, IReadOnlyDictionary<string, string> packages, CancellationToken cancellationToken)
-    {
-        if (_discovery is null)
-        {
-            return [];
+    private async Task<(IReadOnlyList<DiscoveredActivity> Hits, bool Failed)> DiscoverForProjectAsync(
+        string projectPath, IReadOnlyDictionary<string, string> packages, CancellationToken cancellationToken) {
+        if (_discovery is null) {
+            return ([], false);
         }
 
         var hits = new List<DiscoveredActivity>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var failed = false;
 
-        foreach (var query in DiscoveryQueries(packages.Keys))
-        {
-            foreach (var hit in await SafeFindAsync(projectPath, query, cancellationToken))
-            {
-                if (seen.Add($"{hit.PackageId}|{hit.Name}|{hit.FullTypeName}"))
-                {
+        foreach (var query in DiscoveryQueries(packages.Keys)) {
+            var found = await SafeFindAsync(projectPath, query, cancellationToken);
+            if (found is null) {
+                failed = true;
+                continue;
+            }
+
+            foreach (var hit in found) {
+                if (seen.Add($"{hit.PackageId}|{hit.Name}|{hit.FullTypeName}")) {
                     hits.Add(hit);
                 }
             }
         }
 
-        return hits;
+        return (hits, failed);
     }
 
-    internal static IEnumerable<string> DiscoveryQueries(IEnumerable<string> packageIds)
-    {
+    internal static IEnumerable<string> DiscoveryQueries(IEnumerable<string> packageIds) {
         yield return "*";
         var activityPackages = packageIds
             .Where(id => id.Contains("Activities", StringComparison.OrdinalIgnoreCase)
                          || id.StartsWith("UiPath.", StringComparison.OrdinalIgnoreCase))
             .Take(MaxPackageQueries);
-        foreach (var id in activityPackages)
-        {
+        foreach (var id in activityPackages) {
             yield return id;
         }
     }
 
-    private async Task<IReadOnlyList<DiscoveredActivity>> SafeFindAsync(
-        string projectPath, string query, CancellationToken cancellationToken)
-    {
-        if (_discovery is null)
-        {
+    private async Task<IReadOnlyList<DiscoveredActivity>?> SafeFindAsync(
+        string projectPath, string query, CancellationToken cancellationToken) {
+        if (_discovery is null) {
             return [];
         }
 
-        try
-        {
+        try {
             return await _discovery.FindAsync(projectPath, query, cancellationToken) ?? [];
-        }
-        catch
-        {
-            return [];
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Activity catalog discovery failed for query {Query}", query);
+            return null;
         }
     }
 

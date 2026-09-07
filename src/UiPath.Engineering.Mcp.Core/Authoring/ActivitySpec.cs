@@ -1,7 +1,6 @@
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
-public sealed class ActivitySpec
-{
+public sealed class ActivitySpec {
     public string Name { get; set; } = string.Empty;
     public Dictionary<string, string>? Properties { get; set; }
     public List<ActivitySpec>? Children { get; set; }
@@ -13,27 +12,23 @@ public sealed class ActivitySpec
     public List<ArgumentMappingSpec>? Arguments { get; set; } // InvokeWorkflowFile only
 }
 
-public sealed class VariableSpec
-{
+public sealed class VariableSpec {
     public string Name { get; set; } = "";
     public string Type { get; set; } = "";
     public string? Default { get; set; }
 }
 
-public sealed class CatchSpec
-{
+public sealed class CatchSpec {
     public string Exception { get; set; } = "System.Exception";
     public List<ActivitySpec>? Children { get; set; }
 }
 
-public sealed class SwitchCaseSpec
-{
+public sealed class SwitchCaseSpec {
     public string Key { get; set; } = "";
     public List<ActivitySpec>? Children { get; set; }
 }
 
-public sealed class ArgumentMappingSpec
-{
+public sealed class ArgumentMappingSpec {
     public string Name { get; set; } = "";
     public string Direction { get; set; } = "In"; // In, Out, InOut / In/Out
     public string Type { get; set; } = "String";

@@ -56,7 +56,7 @@ public sealed class ProjectResources {
         try {
             var result = await _skills.ReadAsync(name, file: null, cancellationToken);
             if (!result.Success) {
-                return result.ErrorMessage ?? "Skill read failed.";
+                return ResourceError(ToolErrorCodes.SkillNotFound, result.ErrorMessage ?? "Skill read failed.", "Call list_skills for the served names.");
             }
 
             var (redacted, _) = SecretRedactor.Redact(result.Content);
@@ -73,7 +73,7 @@ public sealed class ProjectResources {
     public async Task<string> GetProjectModel(string projectPath, CancellationToken cancellationToken = default) {
         try {
             if (!_filesystem.IsPathAllowed(projectPath) || _filesystem.FindProjectJson(projectPath) is null) {
-                return "Invalid UiPath project directory.";
+                return ResourceError(ToolErrorCodes.ProjectJsonNotFound, "Invalid UiPath project directory.", "Pass the folder that contains project.json inside Projects:AllowedRoots.");
             }
 
             var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
@@ -90,16 +90,19 @@ public sealed class ProjectResources {
     public string GetProjectPlan(string projectPath) {
         try {
             if (!_filesystem.IsPathAllowed(projectPath) || _filesystem.FindProjectJson(projectPath) is null) {
-                return "Invalid UiPath project directory.";
+                return ResourceError(ToolErrorCodes.ProjectJsonNotFound, "Invalid UiPath project directory.", "Pass the folder that contains project.json inside Projects:AllowedRoots.");
             }
 
             var relative = $"{ImplementationPlanStore.PlanDirectoryName}/{ImplementationPlanStore.PlanJsonFileName}";
             if (!_pathPolicy.TryResolveWithinProject(projectPath, relative, out var path)) {
-                return "Invalid UiPath project directory.";
+                return ResourceError(ToolErrorCodes.ProjectJsonNotFound, "Invalid UiPath project directory.", "Pass the folder that contains project.json inside Projects:AllowedRoots.");
             }
 
             if (!_filesystem.FileExists(path)) {
-                return "No implementation plan at docs/implementation-plan.json. Create one with create_implementation_plan only if none exists.";
+                return ResourceError(
+                    ToolErrorCodes.InvalidArgument,
+                    "No implementation plan at docs/implementation-plan.json. Create one with create_implementation_plan only if none exists.",
+                    "Call create_implementation_plan, or skip the plan and continue authoring.");
             }
 
             var planSize = _filesystem.GetFileSize(path);
@@ -120,19 +123,19 @@ public sealed class ProjectResources {
     public string GetWorkflow(string projectPath, string relativePath) {
         try {
             if (!_filesystem.IsPathAllowed(projectPath) || _filesystem.FindProjectJson(projectPath) is null) {
-                return "Invalid UiPath project directory.";
+                return ResourceError(ToolErrorCodes.ProjectJsonNotFound, "Invalid UiPath project directory.", "Pass the folder that contains project.json inside Projects:AllowedRoots.");
             }
 
             if (_pathPolicy.IsSecretName(relativePath)) {
-                return PathPolicy.SecretReadRefusal(relativePath);
+                return ResourceError(ToolErrorCodes.SkillPathRejected, PathPolicy.SecretReadRefusal(relativePath), "Keep the mask; never read credential files.");
             }
 
             if (!_pathPolicy.TryResolveWithinProject(projectPath, relativePath, out var targetPath)) {
-                return "relativePath must resolve to a location inside the project directory.";
+                return ResourceError(ToolErrorCodes.PathNotAllowed, "relativePath must resolve to a location inside the project directory.", "Pass a project-relative path.");
             }
 
             if (!_filesystem.FileExists(targetPath)) {
-                return $"File '{relativePath}' does not exist in the project.";
+                return ResourceError(ToolErrorCodes.InvalidArgument, $"File '{relativePath}' does not exist in the project.", "Call search_codebase or analyze_project for existing files.");
             }
 
             var size = _filesystem.GetFileSize(targetPath);
@@ -155,7 +158,7 @@ public sealed class ProjectResources {
     public async Task<string> GetProjectKnowledge(string projectPath, CancellationToken cancellationToken = default) {
         try {
             if (!_filesystem.IsPathAllowed(projectPath) || _filesystem.FindProjectJson(projectPath) is null) {
-                return "Invalid UiPath project directory.";
+                return ResourceError(ToolErrorCodes.ProjectJsonNotFound, "Invalid UiPath project directory.", "Pass the folder that contains project.json inside Projects:AllowedRoots.");
             }
 
             var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
@@ -189,6 +192,11 @@ public sealed class ProjectResources {
 
     private string ResourceFailure(string resource, string clientMessage, Exception ex) {
         _logger.LogWarning(ex, "Resource {Resource} failed with {ErrorCode}", resource, ToolErrorCodes.OperationFailed);
-        return clientMessage;
+        return ResourceError(ToolErrorCodes.OperationFailed, clientMessage, "Retry the resource read or inspect server logs.");
     }
+
+    private static string ResourceError(string errorCode, string message, string fixHint) =>
+        JsonSerializer.Serialize(new {
+            error = new { errorCode, message, fixHint }
+        }, JsonOptions);
 }

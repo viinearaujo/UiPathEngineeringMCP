@@ -14,12 +14,14 @@ public static class ProjectGapAnalyzer {
     public static List<Gap> Analyze(UiPathProjectModel model, ImplementationPlan? plan = null, IReadOnlyList<DocsFinding>? docsFindings = null) {
         var gaps = new List<Gap>();
         var graph = DependencyGraphBuilder.Build(model.Workflows, model.MainWorkflow);
-        var workflowsByName = new Dictionary<string, WorkflowModel>(StringComparer.OrdinalIgnoreCase);
+        var workflowsByIdentity = new Dictionary<string, WorkflowModel>(StringComparer.OrdinalIgnoreCase);
         foreach (var workflow in model.Workflows) {
-            workflowsByName.TryAdd(workflow.FileName, workflow);
+            workflowsByIdentity.TryAdd(WorkflowPath.Identity(workflow), workflow);
         }
 
-        var entry = model.MainWorkflow is null ? null : workflowsByName.GetValueOrDefault(model.MainWorkflow);
+        var entry = model.MainWorkflow is null
+            ? null
+            : WorkflowPath.Find(model.Workflows, model.MainWorkflow) ?? workflowsByIdentity.GetValueOrDefault(WorkflowPath.NormalizeRef(model.MainWorkflow));
 
         // Entry point rules.
         if (string.IsNullOrWhiteSpace(model.MainWorkflow)) {
@@ -45,8 +47,13 @@ public static class ProjectGapAnalyzer {
 
         // Entry points declared in project.json but missing on disk.
         foreach (var entryPoint in model.EntryPoints) {
-            var fileName = Path.GetFileName(entryPoint);
-            if (!workflowsByName.ContainsKey(fileName)) {
+            if (WorkflowPath.Find(model.Workflows, entryPoint) is null
+                && !model.CodedWorkflows.Any(c =>
+                    string.Equals(c.FileName, Path.GetFileName(entryPoint), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(
+                        WorkflowPath.NormalizeRef(c.FilePath),
+                        WorkflowPath.NormalizeRef(entryPoint),
+                        StringComparison.OrdinalIgnoreCase))) {
                 gaps.Add(new Gap {
                     Id = $"declared-entry-point-missing:{entryPoint}",
                     Severity = Gap.Error,
@@ -61,7 +68,7 @@ public static class ProjectGapAnalyzer {
 
         // Orphan workflows: never invoked and not an entry point. Test workflows are
         // standalone by design and exempt.
-        foreach (var orphan in graph.Orphans.Where(o => !IsTestWorkflow(o))) {
+        foreach (var orphan in graph.Orphans.Where(o => !IsTestWorkflow(o, model))) {
             gaps.Add(new Gap {
                 Id = $"orphan-workflow:{orphan}",
                 Severity = Gap.Warning,
@@ -126,7 +133,7 @@ public static class ProjectGapAnalyzer {
         }
 
         // Testing hygiene: XAML files named *Test* or coded files with kind=test.
-        if (!model.Workflows.Any(w => IsTestWorkflow(w.FileName))
+        if (!model.Workflows.Any(w => IsTestWorkflow(WorkflowPath.Identity(w), model))
             && !model.CodedWorkflows.Any(c => XamlCodedInvokeBoundary.EffectiveKind(c) == CodedFileKind.Test)) {
             gaps.Add(new Gap {
                 Id = "no-test-workflows",
@@ -241,7 +248,7 @@ public static class ProjectGapAnalyzer {
     private static bool IsFrameworkOrExemptXaml(WorkflowModel workflow) {
         var name = workflow.FileName ?? string.Empty;
         var path = workflow.FilePath ?? string.Empty;
-        var nameOnly = Path.GetFileNameWithoutExtension(name);
+        var nameOnly = Path.GetFileNameWithoutExtension(name) ?? string.Empty;
         if (nameOnly.Equals("Main", StringComparison.OrdinalIgnoreCase)) {
             return true;
         }
@@ -251,7 +258,9 @@ public static class ProjectGapAnalyzer {
             return true;
         }
 
-        return IsTestWorkflow(name) || IsTestWorkflow(path) || nameOnly.Contains("_Test", StringComparison.OrdinalIgnoreCase);
+        return IsTestWorkflow(WorkflowPath.Identity(workflow), null, workflow.FilePath)
+            || IsTestWorkflow(workflow.FileName ?? string.Empty)
+            || nameOnly.Contains("_Test", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsBusinessLogicActivity(string type) {
@@ -293,8 +302,30 @@ public static class ProjectGapAnalyzer {
         return false;
     }
 
-    private static bool IsTestWorkflow(string fileName) =>
-        fileName.Contains("test", StringComparison.OrdinalIgnoreCase);
+    private static bool IsTestWorkflow(string fileName, UiPathProjectModel? model = null, string? filePath = null) {
+        var normalized = WorkflowPath.NormalizeRef(fileName);
+        var path = WorkflowPath.NormalizeRef(filePath ?? fileName);
+        var stem = Path.GetFileNameWithoutExtension(normalized);
+        if (stem.StartsWith("Test", StringComparison.OrdinalIgnoreCase)
+            || stem.EndsWith("Test", StringComparison.OrdinalIgnoreCase)
+            || stem.EndsWith("Tests", StringComparison.OrdinalIgnoreCase)
+            || normalized.StartsWith("Tests/", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("/Tests/", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("Tests/", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/Tests/", StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        if (model?.FileInfoCollection is { Count: > 0 } collection) {
+            return collection.Any(entry => {
+                var item = WorkflowPath.NormalizeRef(entry);
+                return string.Equals(item, normalized, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(Path.GetFileName(item), Path.GetFileName(normalized), StringComparison.OrdinalIgnoreCase);
+            });
+        }
+
+        return false;
+    }
 
     private static bool FileExists(string projectPath, string relativePath) =>
         File.Exists(Path.Combine(projectPath, relativePath.Replace('/', Path.DirectorySeparatorChar)));

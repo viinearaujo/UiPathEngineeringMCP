@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Core.Planning;
@@ -8,7 +9,7 @@ namespace UiPath.Engineering.Mcp.Core.Planning;
 /// <summary>
 /// Persists an <see cref="ImplementationPlan"/> inside the target UiPath project as
 /// docs/implementation-plan.json (source of truth) plus a Markdown mirror that is
-/// regenerated on every save. Plain BCL filesystem, like the authoring tools.
+/// regenerated on every save.
 /// </summary>
 public sealed class ImplementationPlanStore {
     public const string PlanDirectoryName = "docs";
@@ -17,6 +18,9 @@ public sealed class ImplementationPlanStore {
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _saveLocks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IFilesystemProvider _filesystem;
+
+    public ImplementationPlanStore(IFilesystemProvider filesystem) => _filesystem = filesystem;
 
     public static string GetJsonPath(string projectPath) =>
         Path.Combine(projectPath, PlanDirectoryName, PlanJsonFileName);
@@ -24,15 +28,15 @@ public sealed class ImplementationPlanStore {
     public static string GetMarkdownPath(string projectPath) =>
         Path.Combine(projectPath, PlanDirectoryName, PlanMarkdownFileName);
 
-    public bool Exists(string projectPath) => File.Exists(GetJsonPath(projectPath));
+    public bool Exists(string projectPath) => _filesystem.FileExists(GetJsonPath(projectPath));
 
     public ImplementationPlan? Load(string projectPath) {
         var jsonPath = GetJsonPath(projectPath);
-        if (!File.Exists(jsonPath)) {
+        if (!_filesystem.FileExists(jsonPath)) {
             return null;
         }
 
-        return JsonSerializer.Deserialize<ImplementationPlan>(File.ReadAllText(jsonPath));
+        return JsonSerializer.Deserialize<ImplementationPlan>(_filesystem.ReadAllText(jsonPath));
     }
 
     public void Save(string projectPath, ImplementationPlan plan) {
@@ -42,18 +46,12 @@ public sealed class ImplementationPlanStore {
         var gate = _saveLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         gate.Wait();
         try {
-            Directory.CreateDirectory(Path.Combine(projectPath, PlanDirectoryName));
-            AtomicWrite(GetJsonPath(projectPath), JsonSerializer.Serialize(plan, JsonOptions));
-            AtomicWrite(GetMarkdownPath(projectPath), RenderMarkdown(plan));
+            _filesystem.CreateDirectory(Path.Combine(projectPath, PlanDirectoryName));
+            _filesystem.WriteAllText(GetJsonPath(projectPath), JsonSerializer.Serialize(plan, JsonOptions));
+            _filesystem.WriteAllText(GetMarkdownPath(projectPath), RenderMarkdown(plan));
         } finally {
             gate.Release();
         }
-    }
-
-    private static void AtomicWrite(string path, string contents) {
-        var tempPath = path + ".tmp";
-        File.WriteAllText(tempPath, contents);
-        File.Move(tempPath, path, overwrite: true);
     }
 
     private static string RenderMarkdown(ImplementationPlan plan) {

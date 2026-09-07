@@ -10,11 +10,12 @@ namespace UiPath.Engineering.Mcp.Tools.Tests;
 public class CreateImplementationPlanToolTests : IDisposable {
     private readonly string _projectPath = Path.Combine(Path.GetTempPath(), "mcp-create-plan-" + Guid.NewGuid().ToString("N"));
     private readonly FakeFilesystemProvider _fs;
-    private readonly ImplementationPlanStore _store = new();
+    private readonly ImplementationPlanStore _store;
 
     public CreateImplementationPlanToolTests() {
         Directory.CreateDirectory(_projectPath);
         _fs = new FakeFilesystemProvider { ProjectJson = Path.Combine(_projectPath, "project.json") };
+        _store = new ImplementationPlanStore(_fs);
     }
 
     public void Dispose() {
@@ -72,8 +73,8 @@ public class CreateImplementationPlanToolTests : IDisposable {
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
-        Assert.True(File.Exists(ImplementationPlanStore.GetJsonPath(_projectPath)));
-        Assert.True(File.Exists(ImplementationPlanStore.GetMarkdownPath(_projectPath)));
+        Assert.True(_fs.FileExists(ImplementationPlanStore.GetJsonPath(_projectPath)));
+        Assert.True(_fs.FileExists(ImplementationPlanStore.GetMarkdownPath(_projectPath)));
         Assert.Equal("Build it", data.GetProperty("Goal").GetString());
 
         var tasks = data.GetProperty("Tasks");
@@ -102,11 +103,12 @@ public class CreateImplementationPlanToolTests : IDisposable {
 public class UpdatePlanTaskToolTests : IDisposable {
     private readonly string _projectPath = Path.Combine(Path.GetTempPath(), "mcp-update-task-" + Guid.NewGuid().ToString("N"));
     private readonly FakeFilesystemProvider _fs;
-    private readonly ImplementationPlanStore _store = new();
+    private readonly ImplementationPlanStore _store;
 
     public UpdatePlanTaskToolTests() {
         Directory.CreateDirectory(_projectPath);
         _fs = new FakeFilesystemProvider { ProjectJson = Path.Combine(_projectPath, "project.json") };
+        _store = new ImplementationPlanStore(_fs);
     }
 
     public void Dispose() {
@@ -204,11 +206,12 @@ public class UpdatePlanTaskToolTests : IDisposable {
 public class GetImplementationPlanToolTests : IDisposable {
     private readonly string _projectPath = Path.Combine(Path.GetTempPath(), "mcp-get-plan-" + Guid.NewGuid().ToString("N"));
     private readonly FakeFilesystemProvider _fs;
-    private readonly ImplementationPlanStore _store = new();
+    private readonly ImplementationPlanStore _store;
 
     public GetImplementationPlanToolTests() {
         Directory.CreateDirectory(_projectPath);
         _fs = new FakeFilesystemProvider { ProjectJson = Path.Combine(_projectPath, "project.json") };
+        _store = new ImplementationPlanStore(_fs);
     }
 
     public void Dispose() {

@@ -46,7 +46,14 @@ public static class UiPathCliOutputParser {
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly string[] DiagnosticArrayNames = [
-        "Errors", "Warnings", "Diagnostics", "Issues", "Items", "Results", "Violations", "Messages"
+        "Errors",
+        "Warnings",
+        "Diagnostics",
+        "Issues",
+        "Items",
+        "Results",
+        "Violations",
+        "Messages"
     ];
 
     public static CliParsedOutput Parse(string verb, string? stdOut, string? stdErr) {

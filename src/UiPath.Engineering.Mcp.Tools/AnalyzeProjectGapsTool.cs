@@ -28,7 +28,7 @@ public sealed class AnalyzeProjectGapsTool {
         _docsValidator = docsValidator;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging on XAML entry and coded [Workflow] methods, XAML business-logic that belongs in coded workflows, descriptions/tests, unresolved invocations, coded/XAML invoke boundary that forbids project-defined types), docs errors, and plan cross-checks, and names the MCP tool that fixes each gap.")]
+    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging on XAML entry and coded [Workflow] methods, XAML business-logic that belongs in coded workflows, descriptions/tests, unresolved invocations, coded/XAML invoke boundary that forbids project-defined types), docs errors, and plan cross-checks, and names the MCP tool that fixes each gap. Next: update_plan_task.")]
     public async Task<ToolResult> AnalyzeProjectGaps(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {
@@ -39,28 +39,23 @@ public sealed class AnalyzeProjectGapsTool {
             return guardFailure;
         }
 
-        try {
-            var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
-            var plan = _planStore.Load(projectPath);
-            var docsFindings = _docsValidator.Validate(projectPath, model);
-            var gaps = ProjectGapAnalyzer.Analyze(model, plan, docsFindings);
+        var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
+        var plan = _planStore.Load(projectPath);
+        var docsFindings = _docsValidator.Validate(projectPath, model);
+        var gaps = ProjectGapAnalyzer.Analyze(model, plan, docsFindings);
 
-            return ToolResults.Ok($"{gaps.Count} gap(s) found.", new {
-                gaps,
-                counts = new {
-                    error = gaps.Count(g => g.Severity == Gap.Error),
-                    warning = gaps.Count(g => g.Severity == Gap.Warning),
-                    info = gaps.Count(g => g.Severity == Gap.Info)
-                },
-                plan = new {
-                    exists = plan is not null,
-                    tasksDone = plan?.Tasks.Count(t => t.Status == PlanTask.Done) ?? 0,
-                    tasksTotal = plan?.Tasks.Count ?? 0
-                }
-            }, sw);
-        } catch (Exception ex) {
-            // Never surface a raw exception/stack trace to the MCP client.
-            return ToolResults.FromException(ex, "Gap analysis failed.", sw);
-        }
+        return ToolResults.Ok($"{gaps.Count} gap(s) found.", new {
+            gaps,
+            counts = new {
+                error = gaps.Count(g => g.Severity == Gap.Error),
+                warning = gaps.Count(g => g.Severity == Gap.Warning),
+                info = gaps.Count(g => g.Severity == Gap.Info)
+            },
+            plan = new {
+                exists = plan is not null,
+                tasksDone = plan?.Tasks.Count(t => t.Status == PlanTask.Done) ?? 0,
+                tasksTotal = plan?.Tasks.Count ?? 0
+            }
+        }, sw);
     }
 }

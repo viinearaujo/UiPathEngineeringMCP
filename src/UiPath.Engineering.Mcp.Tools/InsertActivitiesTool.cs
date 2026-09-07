@@ -19,13 +19,13 @@ public sealed class InsertActivitiesTool {
         _catalogResolver = catalogResolver;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Recommended Copilot surgical XAML path: inserts activities from a JSON spec into an existing .xaml workflow, as children of the container targeted by activityId (preferred, from find_activity) or DisplayName. Prefer this over edit_workflow_activity (leave-off fragment hatch). Run validate_activity_spec first to dry-run. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }. A root Sequence without variables inserts its children directly; any other root is inserted as a single node. Strings enclosed in square brackets ([expr]) are interpreted as expressions; all other values are literals.")]
+    [McpServerTool(UseStructuredContent = true), Description("Recommended Copilot surgical XAML path: inserts activities from a JSON spec into an existing .xaml workflow, as children of the container targeted by activityId (preferred, from find_activity; accepts WorkflowViewState.IdRef or a structural path) or DisplayName. Prefer this over edit_workflow_activity (leave-off fragment hatch). Run validate_activity_spec first to dry-run. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }. A root Sequence without variables inserts its children directly; any other root is inserted as a single node. Strings enclosed in square brackets ([expr]) are interpreted as expressions; all other values are literals. Next: validate_project.")]
     public async Task<ToolResult> InsertActivities(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,
         [Description("JSON activity spec describing what to insert, e.g. { \"name\": \"Sequence\", \"children\": [...] }. Run validate_activity_spec on it first.")] string specJson,
         [Description("DisplayName of the container activity that receives the new activities. Optional when activityId is supplied.")] string? displayName = null,
-        [Description("Activity ID of the container, from find_activity — the preferred way to target it.")] string? activityId = null,
+        [Description("Activity ID of the container, from find_activity — a WorkflowViewState.IdRef or a structural path.")] string? activityId = null,
         [Description("Where to add the activities inside the container — first or last (default).")] string position = XamlActivityEditor.Last,
         [Description("Optional activity type (e.g. 'Sequence') to disambiguate when several activities share the DisplayName.")] string? activityType = null,
         CancellationToken cancellationToken = default) {
@@ -48,9 +48,8 @@ public sealed class InsertActivitiesTool {
                 "Run find_activity to list activity IDs."), sw);
         }
 
-        var normalizedPosition = position?.Trim().ToLowerInvariant();
-        if (normalizedPosition is not (XamlActivityEditor.First or XamlActivityEditor.Last)) {
-            return ToolResults.Failure("position must be first or last.", sw);
+        if (ToolArgs.ParseChoice(position, "position", [XamlActivityEditor.First, XamlActivityEditor.Last], sw, out var normalizedPosition) is { } positionError) {
+            return positionError;
         }
 
         if (!ToolResults.TryResolveWithinProject(projectPath, relativePath, out var targetPath)) {
@@ -83,15 +82,22 @@ public sealed class InsertActivitiesTool {
 
         _filesystem.WriteAllText(targetPath, edit.UpdatedContent!);
 
+        var warnings = new List<string> {
+            "Activity IDs are per-parse-snapshot: IDs after the edit point may have shifted. Re-run find_activity before follow-up edits."
+        };
+        if (ActivityCatalogResolver.DiscoveryWarning(catalog) is { } discoveryWarning) {
+            warnings.Add(discoveryWarning);
+        }
+
         return ToolResults.Ok(
-            $"Spec-based activities inserted into '{edit.ResolvedId}' in '{relativePath}'.",
+            $"Spec-based activities inserted into '{edit.ResolvedId}' in '{relativePath}'. Next: validate_project.",
             new {
                 filePath = targetPath,
                 operation = XamlActivityEditor.Insert,
                 activityId = edit.ResolvedId,
                 targetDisplayName = displayName
             }, sw,
-            warnings: ["Activity IDs are per-parse-snapshot: IDs after the edit point may have shifted. Re-run find_activity before follow-up edits."]);
+            warnings: warnings);
     }
 
     // A root Sequence without variables is a convenience wrapper for multiple

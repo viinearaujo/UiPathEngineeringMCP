@@ -182,7 +182,8 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
 
         var run = await ProcessRunner.RunAsync(
             spec.FileName, spec.BuildArgumentList(arguments), workingDirectory,
-            TimeSpan.FromSeconds(_options.DefaultTimeoutSeconds), cancellationToken);
+            TimeSpan.FromSeconds(_options.DefaultTimeoutSeconds), cancellationToken,
+            _options.Environment);
 
         sw.Stop();
 
@@ -249,15 +250,16 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode} exitCode {ExitCode}",
             verb,
             sw.ElapsedMilliseconds,
-            run.ExitCode == 0 ? "success" : "error",
-            run.ExitCode == 0 ? null : "exit",
+            run.ExitCode == 0 && errors.Count == 0 ? "success" : "error",
+            run.ExitCode == 0 && errors.Count == 0 ? null : "exit",
             run.ExitCode);
 
+        var success = run.ExitCode == 0 && errors.Count == 0;
         return new UiPathCliResult {
-            Success = run.ExitCode == 0,
+            Success = success,
             Command = command,
             ExitCode = run.ExitCode,
-            Summary = run.ExitCode == 0 ? $"'{verb}' completed." : $"'{verb}' failed.",
+            Summary = success ? $"'{verb}' completed." : $"'{verb}' failed.",
             Errors = errors,
             Warnings = warnings,
             Diagnostics = parsed.Diagnostics,

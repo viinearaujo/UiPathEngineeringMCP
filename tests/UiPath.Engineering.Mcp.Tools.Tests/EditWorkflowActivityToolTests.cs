@@ -153,6 +153,28 @@ public class XamlActivityEditorTests {
     }
 
     [Fact]
+    public void EditById_IdRef_TargetsTheStudioAddress() {
+        const string workflow = """
+            <Activity x:Class="Main"
+              xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:ui="http://schemas.uipath.com/workflow/activities"
+              xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation">
+              <Sequence DisplayName="Main" sap2010:WorkflowViewState.IdRef="Sequence_1">
+                <ui:LogMessage DisplayName="Start" Message="hi" sap2010:WorkflowViewState.IdRef="LogMessage_1" />
+              </Sequence>
+            </Activity>
+            """;
+
+        var result = XamlActivityEditor.EditById(workflow, XamlActivityEditor.Replace,
+            "LogMessage_1", fragment: "<ui:Comment DisplayName=\"Note\" />");
+
+        Assert.True(result.Success, result.Error);
+        Assert.Contains("<ui:Comment DisplayName=\"Note\"", result.UpdatedContent);
+        Assert.DoesNotContain("Message=\"hi\"", result.UpdatedContent);
+    }
+
+    [Fact]
     public void EditById_Replace_TargetsExactlyTheResolvedActivity() {
         const string workflow = """
             <Activity x:Class="Main"
@@ -289,7 +311,7 @@ public class EditWorkflowActivityToolTests {
         var result = tool.EditWorkflowActivity(ProjectPath, "Main.xaml", "mutate", "Main");
 
         Assert.Equal("error", result.Status);
-        Assert.Contains("insert, replace, or remove", result.Summary);
+        Assert.Contains("one of: 'insert', 'replace', 'remove'", result.Summary);
     }
 
     [Fact]

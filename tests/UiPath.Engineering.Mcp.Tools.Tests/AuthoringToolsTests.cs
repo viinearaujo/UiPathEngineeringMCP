@@ -134,7 +134,7 @@ public class WriteWorkflowFileToolTests {
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
-        Assert.Equal(content.Length, data.GetProperty("bytesWritten").GetInt32());
+        Assert.Equal(System.Text.Encoding.UTF8.GetByteCount(content), data.GetProperty("bytesWritten").GetInt32());
         var expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
         Assert.Equal(expected, data.GetProperty("sha256").GetString());
         Assert.Equal("Main", data.GetProperty("className").GetString());

@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\UiPath.Engineering.Mcp.Core\UiPath.Engineering.Mcp.Core.csproj" />
+    <ProjectReference Include="..\UiPath.Engineering.Mcp.TestUtilities\UiPath.Engineering.Mcp.TestUtilities.csproj" />
   </ItemGroup>
 
 </Project>

@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\UiPath.Engineering.Mcp.Core\UiPath.Engineering.Mcp.Core.csproj" />
     <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Providers.Tests" />
+    <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Tools" />
   </ItemGroup>
 
   <ItemGroup>

@@ -92,28 +92,20 @@ public class GenerateDocumentationToolTests {
     }
 
     [Fact]
-    public async Task GenerateDocumentation_WhenProjectJsonMissing_ReturnsStructuredError() {
+    public async Task GenerateDocumentation_WhenProjectJsonMissing_PropagatesFileNotFound() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder { ToThrow = new FileNotFoundException("project.json not found.") };
         var tool = new GenerateDocumentationTool(fs, builder);
 
-        var result = await tool.GenerateDocumentation("/projects/empty");
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal("project.json not found.", result.Summary);
+        await Assert.ThrowsAsync<FileNotFoundException>(() => tool.GenerateDocumentation("/projects/empty"));
     }
 
     [Fact]
-    public async Task GenerateDocumentation_WhenUnexpectedError_DoesNotThrowAndReturnsError() {
+    public async Task GenerateDocumentation_WhenUnexpectedError_PropagatesToHostExceptionBoundary() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var builder = new FakeProjectModelBuilder { ToThrow = new InvalidOperationException("boom") };
         var tool = new GenerateDocumentationTool(fs, builder);
 
-        var result = await tool.GenerateDocumentation("/projects/testProcess");
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal("Documentation generation failed.", result.Summary);
-        Assert.Equal(ToolErrorCodes.OperationFailed, Assert.Single(result.ErrorDetails).ErrorCode);
-        Assert.DoesNotContain("boom", string.Join(" ", result.Errors));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tool.GenerateDocumentation("/projects/testProcess"));
     }
 }

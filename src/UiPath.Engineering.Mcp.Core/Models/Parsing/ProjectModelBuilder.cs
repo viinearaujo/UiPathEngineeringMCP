@@ -50,6 +50,7 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
             cancellationToken.ThrowIfCancellationRequested();
 
             var fileName = Path.GetFileName(xamlPath) ?? xamlPath;
+            var relativePath = WorkflowPath.ToRelativePath(projectPath, xamlPath);
             WorkflowModel workflow;
             try {
                 workflow = _xamlParser.Parse(fileName, xamlPath, _filesystem.ReadAllText(xamlPath));
@@ -62,7 +63,8 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
                 };
             }
 
-            workflow.IsMain = string.Equals(fileName, model.MainWorkflow, StringComparison.OrdinalIgnoreCase);
+            workflow.RelativePath = relativePath;
+            workflow.IsMain = WorkflowPath.IsMain(workflow, model.MainWorkflow);
             model.Workflows.Add(workflow);
             model.Variables.AddRange(workflow.Variables);
             model.Arguments.AddRange(workflow.Arguments);
@@ -102,6 +104,10 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
 
     private static void AppendDependencyGraphRisks(UiPathProjectModel model) {
         var graph = DependencyGraphBuilder.Build(model.Workflows, model.MainWorkflow);
+
+        foreach (var warning in graph.Warnings) {
+            model.Risks.Add(warning);
+        }
 
         foreach (var cycle in graph.Cycles) {
             model.Risks.Add($"Circular workflow dependency detected: {string.Join(" -> ", cycle)}");

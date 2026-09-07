@@ -17,7 +17,7 @@ public sealed class ManageProjectFileTool {
 
     public ManageProjectFileTool(IFilesystemProvider filesystem) => _filesystem = filesystem;
 
-    [McpServerTool(UseStructuredContent = true), Description("Creates, edits, or deletes a .md/.json/.txt file inside a UiPath project. Does not write project.json, implementation-plan files, docs/knowledge, docs/adr, or secret-looking names. Prefer patch_project_json for project.json and manage_project_docs for knowledge/ADRs.")]
+    [McpServerTool(UseStructuredContent = true), Description("Creates, edits, or deletes a .md/.json/.txt file inside a UiPath project. Does not write project.json, implementation-plan files, docs/knowledge, docs/adr, or secret-looking names. Prefer patch_project_json for project.json and manage_project_docs for knowledge/ADRs. Next: validate_project.")]
     public ToolResult ManageProjectFile(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Operation: write, edit, or delete.")] string action,
@@ -32,9 +32,8 @@ public sealed class ManageProjectFileTool {
             return guardFailure;
         }
 
-        var normalized = action?.Trim().ToLowerInvariant();
-        if (normalized is not (Write or Edit or Delete)) {
-            return ToolResults.Failure("action must be write, edit, or delete.", sw);
+        if (ToolArgs.ParseChoice(action, "action", [Write, Edit, Delete], sw, out var normalized) is { } actionError) {
+            return actionError;
         }
 
         if (string.IsNullOrWhiteSpace(relativePath)) {

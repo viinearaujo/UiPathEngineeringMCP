@@ -31,7 +31,7 @@ public sealed class VerifyWorkTool {
         _docsValidator = docsValidator;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Leave-off bundled check (not on the Copilot default connector). Prefer validate_project(build:false, pack:false) then update_plan_task. Rebuilds the project model, runs CLI validate (optional build), checks expected files, and can mark plan tasks done or blocked. Not the agent done gate.")]
+    [McpServerTool(UseStructuredContent = true), Description("Leave-off bundled check (not on the Copilot default connector). Prefer validate_project(build:false, pack:false) then update_plan_task. Rebuilds the project model, runs CLI validate (optional build), checks expected files, and can mark plan tasks done or blocked. Not the agent done gate. Next: update_plan_task.")]
     public async Task<ToolResult> VerifyWork(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Implementation-plan task IDs to verify and update (e.g. ['task-1']).")] List<string>? taskIds = null,
@@ -65,21 +65,9 @@ public sealed class VerifyWorkTool {
         }
 
         // Fresh model so the checks below see the post-edit state of the project.
-        UiPathProjectModel model;
-        try {
-            model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
-        } catch (Exception ex) {
-            // Never surface a raw exception/stack trace to the MCP client.
-            return ToolResults.FromException(ex, "Project analysis failed.", sw);
-        }
+        var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
 
-        UiPathCliResult cliResult;
-        try {
-            cliResult = await _cliProvider.ValidateAsync(projectPath, validate: true, build: build, pack: false, cancellationToken);
-        } catch (Exception ex) {
-            // CLI unavailable: report the error and leave plan task statuses unchanged.
-            return ToolResults.Failure("Validation could not run.", ex.Message, sw);
-        }
+        var cliResult = await _cliProvider.ValidateAsync(projectPath, validate: true, build: build, pack: false, cancellationToken);
 
         var expected = new List<string>();
         if (expectedFiles is not null) {

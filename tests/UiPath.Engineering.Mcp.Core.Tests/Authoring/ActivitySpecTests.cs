@@ -3,11 +3,9 @@ using UiPath.Engineering.Mcp.Core.Authoring;
 
 namespace UiPath.Engineering.Mcp.Core.Tests.Authoring;
 
-public class ActivitySpecTests
-{
+public class ActivitySpecTests {
     [Fact]
-    public void Deserialize_DesignDocExample_MapsAllNodes()
-    {
+    public void Deserialize_DesignDocExample_MapsAllNodes() {
         const string json = """
         { "name": "Sequence",
           "variables": [{ "name": "rowCount", "type": "Int32", "default": "0" }],
@@ -28,8 +26,7 @@ public class ActivitySpecTests
     }
 
     [Fact]
-    public void Deserialize_IfElseSwitchAndInvokeArguments()
-    {
+    public void Deserialize_IfElseSwitchAndInvokeArguments() {
         const string json = """
         {
           "name": "Sequence",

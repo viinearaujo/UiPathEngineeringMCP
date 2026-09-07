@@ -10,13 +10,14 @@ public class ProjectResourcesTests : IDisposable {
     private readonly FakeFilesystemProvider _fs = new();
     private readonly FakeProjectModelBuilder _models = new();
     private readonly FakeSkillsProvider _skills = new();
-    private readonly ImplementationPlanStore _plans = new();
+    private readonly ImplementationPlanStore _plans;
 
     public ProjectResourcesTests() {
         Directory.CreateDirectory(_projectPath);
         _fs.ProjectJson = Path.Combine(_projectPath, "project.json");
         File.WriteAllText(_fs.ProjectJson, "{}");
         _fs.Allowed = true;
+        _plans = new ImplementationPlanStore(_fs);
     }
 
     public void Dispose() {
@@ -60,13 +61,10 @@ public class ProjectResourcesTests : IDisposable {
     [Fact]
     public void Plan_ReadsFixedJsonPathOnly() {
         _plans.Save(_projectPath, new ImplementationPlan { Goal = "g", Tasks = [] });
-        var diskPath = ImplementationPlanStore.GetJsonPath(_projectPath);
-        Assert.True(PathPolicy.TryResolveProjectRelative(_projectPath, "docs/implementation-plan.json", out var path));
-        _fs.FileContents[path] = File.ReadAllText(diskPath);
 
         var json = Create().GetProjectPlan(_projectPath);
         Assert.Contains("\"Goal\": \"g\"", json);
-        Assert.True(File.Exists(Path.Combine(_projectPath, "docs", "implementation-plan.json")));
+        Assert.True(_fs.FileExists(ImplementationPlanStore.GetJsonPath(_projectPath)));
     }
 
     [Fact]

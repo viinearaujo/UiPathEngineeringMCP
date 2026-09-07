@@ -17,7 +17,7 @@ public sealed class CreateProjectTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Scaffolds a new UiPath project using 'uip rpa init'. Requires the UiPath CLI RPA tool installed on the host (uip tools install).")]
+    [McpServerTool(UseStructuredContent = true), Description("Scaffolds a new UiPath project using 'uip rpa init'. Requires the UiPath CLI RPA tool installed on the host (uip tools install). Next: analyze_project.")]
     public async Task<ToolResult> CreateProject(
         [Description("Name of the new UiPath project (also becomes the project folder name).")] string name,
         [Description("Absolute path to the parent directory where the project folder is created. Must be inside the allowed roots.")] string parentDirectory,
@@ -31,12 +31,12 @@ public sealed class CreateProjectTool {
             return ToolResults.Failure("Project name is required.", sw);
         }
 
-        if (expressionLanguage is not ("CSharp" or "VisualBasic")) {
-            return ToolResults.Failure("expressionLanguage must be 'CSharp' or 'VisualBasic'.", sw);
+        if (ToolArgs.ParseChoice(expressionLanguage, "expressionLanguage", ["CSharp", "VisualBasic"], sw, out var parsedLanguage) is { } languageError) {
+            return languageError;
         }
 
-        if (targetFramework is not ("Windows" or "Portable")) {
-            return ToolResults.Failure("targetFramework must be 'Windows' or 'Portable'.", sw);
+        if (ToolArgs.ParseChoice(targetFramework, "targetFramework", ["Windows", "Portable"], sw, out var parsedFramework) is { } frameworkError) {
+            return frameworkError;
         }
 
         if (ToolResults.GuardAllowedPath(_filesystem, parentDirectory, sw) is { } guardFailure) {
@@ -51,7 +51,7 @@ public sealed class CreateProjectTool {
         }
 
         var arguments = $"init --name \"{name}\" --location \"{Path.GetFullPath(parentDirectory)}\" " +
-            $"--expression-language {expressionLanguage} --target-framework {targetFramework} " +
+            $"--expression-language {parsedLanguage} --target-framework {parsedFramework} " +
             $"--description \"{description}\" --output json";
 
         var cliResult = await _cliProvider.RunAsync("rpa", arguments);

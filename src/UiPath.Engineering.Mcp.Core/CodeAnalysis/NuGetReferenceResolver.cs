@@ -16,6 +16,31 @@ public class NuGetReferenceResolver {
         _packagesFolderOverride = packagesFolderOverride;
     }
 
+    public virtual DateTime GetLastWriteTimeUtc(string path) {
+        if (Directory.Exists(path)) {
+            return Directory.GetLastWriteTimeUtc(path);
+        }
+
+        if (File.Exists(path)) {
+            return File.GetLastWriteTimeUtc(path);
+        }
+
+        throw new DirectoryNotFoundException(path);
+    }
+
+    public virtual long SafeGetWriteTicks(string path) {
+        try {
+            return GetLastWriteTimeUtc(path).Ticks;
+        } catch (Exception ex) when (
+            ex is IOException
+            or UnauthorizedAccessException
+            or FileNotFoundException
+            or DirectoryNotFoundException
+            or ArgumentException) {
+            return 0;
+        }
+    }
+
     public virtual string? GetPackagesFolder() {
         var folder = _packagesFolderOverride
             ?? Environment.GetEnvironmentVariable("NUGET_PACKAGES")

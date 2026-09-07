@@ -18,7 +18,7 @@ public sealed class RecommendActivitiesTool {
         _catalogResolver = catalogResolver;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Recommends up to 5 version-aware activity schemas for a natural-language step against the project's installed packages (uip activities find when available; otherwise the built-in fallback catalog). Call this before validate_activity_spec / build_workflow when the activity type is unknown.")]
+    [McpServerTool(UseStructuredContent = true), Description("Recommends up to 5 version-aware activity schemas for a natural-language step against the project's installed packages (uip activities find when available; otherwise the built-in fallback catalog). Call this before validate_activity_spec / build_workflow when the activity type is unknown. Next: validate_activity_spec.")]
     public async Task<ToolResult> RecommendActivities(
         [Description("Natural-language step or activity name, e.g. 'read excel range' or 'Click'.")] string query,
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
@@ -38,19 +38,15 @@ public sealed class RecommendActivitiesTool {
                 sw);
         }
 
-        try {
-            var hits = await _catalogResolver.RecommendAsync(query, projectPath, ActivityCatalogResolver.MaxRecommendations, cancellationToken);
-            var catalog = await _catalogResolver.ResolveAsync(projectPath, cancellationToken);
-            var summary = hits.Count == 0
-                ? $"No catalog activities matched '{query}' (source: {catalog.Source})."
-                : $"Recommended {hits.Count} activity schema(s) for '{query}' (source: {catalog.Source}).";
-            return ToolResults.Ok(summary, new {
-                query,
-                source = catalog.Source,
-                activities = hits
-            }, sw);
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Activity recommendation failed.", sw);
-        }
+        var hits = await _catalogResolver.RecommendAsync(query, projectPath, ActivityCatalogResolver.MaxRecommendations, cancellationToken);
+        var catalog = await _catalogResolver.ResolveAsync(projectPath, cancellationToken);
+        var summary = hits.Count == 0
+            ? $"No catalog activities matched '{query}' (source: {catalog.Source})."
+            : $"Recommended {hits.Count} activity schema(s) for '{query}' (source: {catalog.Source}).";
+        return ToolResults.Ok(summary, new {
+            query,
+            source = catalog.Source,
+            activities = hits
+        }, sw);
     }
 }

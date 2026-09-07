@@ -31,16 +31,12 @@ public static class ProjectAnalysisView {
         var resultPage = pageNumber;
 
         if (!string.IsNullOrWhiteSpace(workflowFile)) {
-            var requestedName = Path.GetFileName(workflowFile);
-            if (!requestedName.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)) {
-                requestedName += ".xaml";
-            }
-
-            var match = model.Workflows.FirstOrDefault(w =>
-                string.Equals(w.FileName, requestedName, StringComparison.OrdinalIgnoreCase));
+            var match = WorkflowPath.Find(model.Workflows, workflowFile, warnings);
             if (match is null) {
                 workflows = [];
-                warnings.Add($"Workflow '{requestedName}' was not found. Use WorkflowIndex for names.");
+                if (!warnings.Any(w => w.Contains(workflowFile, StringComparison.OrdinalIgnoreCase))) {
+                    warnings.Add($"Workflow '{workflowFile}' was not found. Use WorkflowIndex for names.");
+                }
             } else {
                 workflows = [match];
             }
@@ -91,6 +87,7 @@ public static class ProjectAnalysisView {
         WorkflowIndex = model.Workflows.Select(w => new WorkflowIndexEntry {
             FileName = w.FileName,
             FilePath = w.FilePath,
+            RelativePath = WorkflowPath.Identity(w),
             IsMain = w.IsMain,
             HasParseError = w.HasParseError,
             ActivityCount = w.Activities.Count,

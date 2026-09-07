@@ -3,14 +3,13 @@ using UiPath.Engineering.Mcp.Core.Planning;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
-public class ImplementationPlanStoreTests : IDisposable {
-    private readonly string _projectPath = Path.Combine(Path.GetTempPath(), "mcp-plan-" + Guid.NewGuid().ToString("N"));
-    private readonly ImplementationPlanStore _store = new();
+public class ImplementationPlanStoreTests {
+    private readonly FakeFilesystemProvider _fs = new();
+    private readonly ImplementationPlanStore _store;
+    private readonly string _projectPath = "/projects/plan";
 
-    public void Dispose() {
-        if (Directory.Exists(_projectPath)) {
-            Directory.Delete(_projectPath, recursive: true);
-        }
+    public ImplementationPlanStoreTests() {
+        _store = new ImplementationPlanStore(_fs);
     }
 
     private static ImplementationPlan SamplePlan() => new() {
@@ -41,10 +40,10 @@ public class ImplementationPlanStoreTests : IDisposable {
     public void Save_WritesJsonAndMarkdownMirror() {
         _store.Save(_projectPath, SamplePlan());
 
-        Assert.True(File.Exists(ImplementationPlanStore.GetJsonPath(_projectPath)));
-        Assert.True(File.Exists(ImplementationPlanStore.GetMarkdownPath(_projectPath)));
+        Assert.True(_fs.FileExists(ImplementationPlanStore.GetJsonPath(_projectPath)));
+        Assert.True(_fs.FileExists(ImplementationPlanStore.GetMarkdownPath(_projectPath)));
 
-        var markdown = File.ReadAllText(ImplementationPlanStore.GetMarkdownPath(_projectPath));
+        var markdown = _fs.ReadAllText(ImplementationPlanStore.GetMarkdownPath(_projectPath));
         Assert.Contains("# Implementation Plan", markdown);
         Assert.Contains("Build the reconciliation flow", markdown);
         Assert.Contains("task-1: Create Main workflow", markdown);
@@ -94,8 +93,8 @@ public class ImplementationPlanStoreTests : IDisposable {
     public void Save_LeavesNoTempFiles() {
         _store.Save(_projectPath, SamplePlan());
 
-        Assert.False(File.Exists(ImplementationPlanStore.GetJsonPath(_projectPath) + ".tmp"));
-        Assert.False(File.Exists(ImplementationPlanStore.GetMarkdownPath(_projectPath) + ".tmp"));
+        Assert.False(_fs.FileExists(ImplementationPlanStore.GetJsonPath(_projectPath) + ".tmp"));
+        Assert.False(_fs.FileExists(ImplementationPlanStore.GetMarkdownPath(_projectPath) + ".tmp"));
     }
 
     [Fact]
@@ -113,10 +112,10 @@ public class ImplementationPlanStoreTests : IDisposable {
         Assert.NotNull(loaded);
         Assert.StartsWith("Concurrent goal ", loaded.Goal);
         Assert.Equal(2, loaded.Tasks.Count);
-        Assert.False(File.Exists(ImplementationPlanStore.GetJsonPath(_projectPath) + ".tmp"));
-        Assert.False(File.Exists(ImplementationPlanStore.GetMarkdownPath(_projectPath) + ".tmp"));
+        Assert.False(_fs.FileExists(ImplementationPlanStore.GetJsonPath(_projectPath) + ".tmp"));
+        Assert.False(_fs.FileExists(ImplementationPlanStore.GetMarkdownPath(_projectPath) + ".tmp"));
 
-        var markdown = File.ReadAllText(ImplementationPlanStore.GetMarkdownPath(_projectPath));
+        var markdown = _fs.ReadAllText(ImplementationPlanStore.GetMarkdownPath(_projectPath));
         Assert.Contains("# Implementation Plan", markdown);
         Assert.Contains(loaded.Goal, markdown);
     }

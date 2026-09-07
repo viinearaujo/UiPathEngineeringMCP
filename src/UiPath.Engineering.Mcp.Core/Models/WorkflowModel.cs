@@ -3,6 +3,8 @@ namespace UiPath.Engineering.Mcp.Core.Models;
 public sealed class WorkflowModel {
     public string FileName { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
+    /// <summary>Project-relative path with <c>/</c> separators (e.g. <c>Framework/InitAllSettings.xaml</c>).</summary>
+    public string RelativePath { get; set; } = string.Empty;
     public bool IsMain { get; set; }
     public string? Description { get; set; }
     public bool HasParseError { get; set; }

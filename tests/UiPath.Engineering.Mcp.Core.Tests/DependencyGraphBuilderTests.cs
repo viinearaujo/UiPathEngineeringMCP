@@ -6,6 +6,7 @@ namespace UiPath.Engineering.Mcp.Core.Tests;
 public class DependencyGraphBuilderTests {
     private static WorkflowModel Wf(string fileName, params string[] targets) => new() {
         FileName = fileName,
+        RelativePath = fileName,
         InvokeWorkflows = targets
             .Select(t => new InvokeWorkflowModel { SourceWorkflow = fileName, TargetWorkflow = t })
             .ToList()
@@ -89,6 +90,68 @@ public class DependencyGraphBuilderTests {
         var mapping = Assert.Single(edge.ArgumentMappings);
         Assert.Equal("in_CustomerId", mapping.TargetArgument);
         Assert.Equal("[customerId]", mapping.Expression);
+    }
+
+    [Fact]
+    public void Build_ResolvesFrameworkRelativeInvokeWithoutOrphan() {
+        var workflows = new[] {
+            new WorkflowModel {
+                FileName = "Main.xaml",
+                RelativePath = "Main.xaml",
+                InvokeWorkflows = [new InvokeWorkflowModel {
+                    SourceWorkflow = "Main.xaml",
+                    TargetWorkflow = @"Framework\InitAllSettings.xaml"
+                }]
+            },
+            new WorkflowModel {
+                FileName = "InitAllSettings.xaml",
+                RelativePath = "Framework/InitAllSettings.xaml"
+            }
+        };
+
+        var result = DependencyGraphBuilder.Build(workflows, "Main.xaml");
+
+        Assert.All(result.Edges, e => Assert.True(e.IsResolved));
+        Assert.Empty(result.Orphans);
+        Assert.Equal("Framework/InitAllSettings.xaml", result.Edges[0].Target);
+    }
+
+    [Fact]
+    public void Build_NormalizesDotSlashInvoke() {
+        var workflows = new[] {
+            Wf("Main.xaml", "./Child.xaml"),
+            Wf("Child.xaml")
+        };
+        workflows[0].RelativePath = "Main.xaml";
+        workflows[1].RelativePath = "Child.xaml";
+
+        var result = DependencyGraphBuilder.Build(workflows, "Main.xaml");
+
+        Assert.All(result.Edges, e => Assert.True(e.IsResolved));
+        Assert.Empty(result.Orphans);
+    }
+
+    [Fact]
+    public void Build_DuplicateBasenames_ResolveByRelativePathAndStayDistinct() {
+        var workflows = new[] {
+            new WorkflowModel {
+                FileName = "Process.xaml",
+                RelativePath = "A/Process.xaml",
+                InvokeWorkflows = [new InvokeWorkflowModel {
+                    SourceWorkflow = "A/Process.xaml",
+                    TargetWorkflow = "B/Process.xaml"
+                }]
+            },
+            new WorkflowModel { FileName = "Process.xaml", RelativePath = "B/Process.xaml" }
+        };
+
+        var result = DependencyGraphBuilder.Build(workflows, "A/Process.xaml");
+
+        var edge = Assert.Single(result.Edges);
+        Assert.True(edge.IsResolved);
+        Assert.Equal("A/Process.xaml", edge.Source);
+        Assert.Equal("B/Process.xaml", edge.Target);
+        Assert.Empty(result.Orphans);
     }
 
     [Fact]

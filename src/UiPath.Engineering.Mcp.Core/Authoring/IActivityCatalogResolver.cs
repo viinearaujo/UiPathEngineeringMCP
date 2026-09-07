@@ -1,15 +1,13 @@
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
-public interface IActivityCatalogResolver
-{
+public interface IActivityCatalogResolver {
     Task<IActivityCatalog> ResolveAsync(string? projectPath, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ActivityRecommendation>> RecommendAsync(
         string query, string? projectPath, int limit = 5, CancellationToken cancellationToken = default);
 }
 
-public sealed class ActivityRecommendation
-{
+public sealed class ActivityRecommendation {
     public string Name { get; init; } = string.Empty;
     public string? FullTypeName { get; init; }
     public string Prefix { get; init; } = string.Empty;

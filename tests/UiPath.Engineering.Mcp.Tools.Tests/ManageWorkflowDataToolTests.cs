@@ -53,7 +53,7 @@ public class ManageWorkflowDataToolTests {
         var result = tool.ManageWorkflowData(ProjectPath, "Main.xaml", "mutate", "variable", "count", type: "Int32");
 
         Assert.Equal("error", result.Status);
-        Assert.Contains("add, remove, or rename", result.Summary);
+        Assert.Contains("one of: 'add', 'remove', 'rename'", result.Summary);
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class ManageWorkflowDataToolTests {
         var result = tool.ManageWorkflowData(ProjectPath, "Main.xaml", "add", "parameter", "count", type: "Int32");
 
         Assert.Equal("error", result.Status);
-        Assert.Contains("variable or argument", result.Summary);
+        Assert.Contains("one of: 'variable', 'argument'", result.Summary);
     }
 
     [Fact]

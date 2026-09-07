@@ -17,7 +17,7 @@ public sealed class GetCodeContextTool {
         _analysis = analysis;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Returns the semantic context of one C# member (a method, class, or property) in a UiPath project: signature, containing type, called methods, referenced types, and the member's source. Locate the member by 'symbol' name or by 'file' + 'line'. Prefer this over reading whole .cs files.")]
+    [McpServerTool(UseStructuredContent = true), Description("Returns the semantic context of one C# member (a method, class, or property) in a UiPath project: signature, containing type, called methods, referenced types, and the member's source. Locate the member by 'symbol' name or by 'file' + 'line'. Prefer this over reading whole .cs files. Next: edit_workflow_file.")]
     public async Task<ToolResult> GetCodeContext(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Symbol name to inspect, e.g. 'ProcessTransaction'.")] string? symbol = null,
@@ -30,14 +30,10 @@ public sealed class GetCodeContextTool {
             return guardFailure;
         }
 
-        try {
-            var result = await _analysis.GetCodeContextAsync(projectPath, symbol, file, line, cancellationToken);
-            var summary = result.Found
-                ? $"Context for '{result.Name}'."
-                : "No matching member found.";
-            return ToolResults.Ok(summary, result, sw, result.Warnings);
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Failed to get code context.", sw);
-        }
+        var result = await _analysis.GetCodeContextAsync(projectPath, symbol, file, line, cancellationToken);
+        var summary = result.Found
+            ? $"Context for '{result.Name}'. Next: edit_workflow_file."
+            : "No matching member found.";
+        return ToolResults.Ok(summary, result, sw, result.Warnings);
     }
 }

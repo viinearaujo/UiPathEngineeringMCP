@@ -38,7 +38,7 @@ public sealed class ManageProjectDocsTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Manages project docs-as-code: list, write, delete, or search knowledge articles and ADRs. kind is memory, adr, context, or all. Search is keyword/excerpt only.")]
+    [McpServerTool(UseStructuredContent = true), Description("Manages project docs-as-code: list, write, delete, or search knowledge articles and ADRs. kind is memory, adr, context, or all. Search is keyword/excerpt only. Next: validate_project_docs.")]
     public async Task<ToolResult> ManageProjectDocs(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Operation: list, write, delete, or search.")] string action,
@@ -58,22 +58,23 @@ public sealed class ManageProjectDocsTool {
             return guardFailure;
         }
 
-        var normalizedAction = action?.Trim().ToLowerInvariant();
-        var normalizedKind = string.IsNullOrWhiteSpace(kind) ? ProjectDocsSearch.KindAll : kind.Trim().ToLowerInvariant();
-
-        try {
-            return normalizedAction switch {
-                List => await ListDocs(projectPath, normalizedKind, sw, cancellationToken),
-                Write => WriteDocs(projectPath, normalizedKind, id, title, content, relatedFiles, status, supersedes, sw),
-                Delete => DeleteDocs(projectPath, normalizedKind, id, sw),
-                Search => SearchDocs(projectPath, normalizedKind, query, sw),
-                _ => ToolResults.Failure("action must be list, write, delete, or search.", sw)
-            };
-        } catch (ArgumentException ex) {
-            return ToolResults.Failure(ex.Message, sw);
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Project docs operation failed.", sw);
+        if (ToolArgs.ParseChoice(action, "action", [List, Write, Delete, Search], sw, out var normalizedAction) is { } actionError) {
+            return actionError;
         }
+
+        var kindChoices = new[] { ProjectKnowledgeStore.Kind, ProjectAdrStore.Kind, "context", ProjectDocsSearch.KindAll };
+        var kindValue = string.IsNullOrWhiteSpace(kind) ? ProjectDocsSearch.KindAll : kind;
+        if (ToolArgs.ParseChoice(kindValue, "kind", kindChoices, sw, out var normalizedKind) is { } kindError) {
+            return kindError;
+        }
+
+        return normalizedAction switch {
+            List => await ListDocs(projectPath, normalizedKind, sw, cancellationToken),
+            Write => WriteDocs(projectPath, normalizedKind, id, title, content, relatedFiles, status, supersedes, sw),
+            Delete => DeleteDocs(projectPath, normalizedKind, id, sw),
+            Search => SearchDocs(projectPath, normalizedKind, query, sw),
+            _ => ToolResults.Failure("action must be list, write, delete, or search.", sw)
+        };
     }
 
     private async Task<ToolResult> ListDocs(string projectPath, string kind, Stopwatch sw, CancellationToken cancellationToken) {

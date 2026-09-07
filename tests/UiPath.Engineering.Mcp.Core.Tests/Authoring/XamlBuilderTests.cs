@@ -4,13 +4,13 @@ using UiPath.Engineering.Mcp.Core.Authoring;
 
 namespace UiPath.Engineering.Mcp.Core.Tests.Authoring;
 
-public class XamlBuilderTests
-{
+public class XamlBuilderTests {
     [Fact]
-    public void RenderFragment_Assign_RendersExpressionAttributes()
-    {
-        var spec = new ActivitySpec { Name = "Assign",
-            Properties = new() { ["to"] = "[counter]", ["value"] = "[counter + 1]" } };
+    public void RenderFragment_Assign_RendersExpressionAttributes() {
+        var spec = new ActivitySpec {
+            Name = "Assign",
+            Properties = new() { ["to"] = "[counter]", ["value"] = "[counter + 1]" }
+        };
         var result = XamlBuilder.RenderFragment(spec);
         Assert.True(result.Success);
         Assert.Contains("<Assign", result.Xaml);
@@ -19,11 +19,12 @@ public class XamlBuilderTests
     }
 
     [Fact]
-    public void RenderFragment_ForEach_RendersActivityActionShape()
-    {
-        var spec = new ActivitySpec { Name = "ForEach",
+    public void RenderFragment_ForEach_RendersActivityActionShape() {
+        var spec = new ActivitySpec {
+            Name = "ForEach",
             Properties = new() { ["values"] = "[rows]", ["typeArgument"] = "DataRow", ["itemName"] = "row" },
-            Children = [new ActivitySpec { Name = "LogMessage", Properties = new() { ["message"] = "[row(0).ToString()]" } }] };
+            Children = [new ActivitySpec { Name = "LogMessage", Properties = new() { ["message"] = "[row(0).ToString()]" } }]
+        };
         var result = XamlBuilder.RenderFragment(spec);
         Assert.Contains("<ForEach x:TypeArguments=\"DataRow\"", result.Xaml);
         Assert.Contains("<DelegateInArgument x:TypeArguments=\"DataRow\" Name=\"row\" />", result.Xaml);
@@ -31,8 +32,7 @@ public class XamlBuilderTests
     }
 
     [Fact]
-    public void RenderWorkflowFile_DesignDocExample_RoundTripsThroughParser()
-    {
+    public void RenderWorkflowFile_DesignDocExample_RoundTripsThroughParser() {
         // deserialize the design-doc example JSON (same literal as Task 2 test)
         const string json = """
         { "name": "Sequence",
@@ -56,11 +56,12 @@ public class XamlBuilderTests
     }
 
     [Fact]
-    public void RenderWorkflowFile_VariableBareNonPrimitiveType_PassesThroughWithoutXPrefix()
-    {
-        var spec = new ActivitySpec { Name = "Sequence",
+    public void RenderWorkflowFile_VariableBareNonPrimitiveType_PassesThroughWithoutXPrefix() {
+        var spec = new ActivitySpec {
+            Name = "Sequence",
             Variables = [new VariableSpec { Name = "row", Type = "DataRow" },
-                         new VariableSpec { Name = "n", Type = "Int32" }] };
+                new VariableSpec { Name = "n", Type = "Int32" }]
+        };
         var result = XamlBuilder.RenderWorkflowFile(spec, "TestWorkflow");
         Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
         Assert.Contains("<Variable x:TypeArguments=\"DataRow\" Name=\"row\" />", result.Xaml);
@@ -68,10 +69,11 @@ public class XamlBuilderTests
     }
 
     [Fact]
-    public void RenderWorkflowFile_InvalidSpec_ShortCircuitsWithValidatorErrors()
-    {
-        var spec = new ActivitySpec { Name = "Assign",
-            Properties = new() { ["to"] = "[x]" } }; // missing required "value"
+    public void RenderWorkflowFile_InvalidSpec_ShortCircuitsWithValidatorErrors() {
+        var spec = new ActivitySpec {
+            Name = "Assign",
+            Properties = new() { ["to"] = "[x]" }
+        }; // missing required "value"
         var result = XamlBuilder.RenderWorkflowFile(spec, "TestWorkflow");
         Assert.False(result.Success);
         Assert.Null(result.Xaml);
@@ -79,11 +81,12 @@ public class XamlBuilderTests
     }
 
     [Fact]
-    public void RenderFragment_If_RendersThenBranchShape()
-    {
-        var spec = new ActivitySpec { Name = "If",
+    public void RenderFragment_If_RendersThenBranchShape() {
+        var spec = new ActivitySpec {
+            Name = "If",
             Properties = new() { ["condition"] = "[counter > 0]" },
-            Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"positive\"" } }] };
+            Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"positive\"" } }]
+        };
         var result = XamlBuilder.RenderFragment(spec);
         Assert.True(result.Success);
         Assert.Contains("<If Condition=\"[counter &gt; 0]\"", result.Xaml);
@@ -93,10 +96,8 @@ public class XamlBuilderTests
     }
 
     [Fact]
-    public void RenderFragment_If_RendersElseBranch()
-    {
-        var spec = new ActivitySpec
-        {
+    public void RenderFragment_If_RendersElseBranch() {
+        var spec = new ActivitySpec {
             Name = "If",
             Properties = new() { ["condition"] = "[counter > 0]" },
             Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"positive\"" } }],
@@ -111,10 +112,8 @@ public class XamlBuilderTests
     }
 
     [Fact]
-    public void RenderFragment_Switch_RendersCasesAndDefault()
-    {
-        var spec = new ActivitySpec
-        {
+    public void RenderFragment_Switch_RendersCasesAndDefault() {
+        var spec = new ActivitySpec {
             Name = "Switch",
             Properties = new() { ["expression"] = "[status]", ["typeArgument"] = "Int32" },
             Cases =
@@ -136,10 +135,8 @@ public class XamlBuilderTests
     }
 
     [Fact]
-    public void RenderFragment_InvokeWorkflowFile_RendersArgumentMappings()
-    {
-        var spec = new ActivitySpec
-        {
+    public void RenderFragment_InvokeWorkflowFile_RendersArgumentMappings() {
+        var spec = new ActivitySpec {
             Name = "InvokeWorkflowFile",
             Properties = new() { ["workflowFileName"] = "Child.xaml" },
             Arguments =
@@ -159,11 +156,12 @@ public class XamlBuilderTests
     }
 
     [Fact]
-    public void RenderWorkflowFile_VariablesOnNonSequenceRoot_WrapsInOuterSequence()
-    {
-        var spec = new ActivitySpec { Name = "LogMessage",
+    public void RenderWorkflowFile_VariablesOnNonSequenceRoot_WrapsInOuterSequence() {
+        var spec = new ActivitySpec {
+            Name = "LogMessage",
             Properties = new() { ["message"] = "\"hi\"" },
-            Variables = [new VariableSpec { Name = "n", Type = "Int32" }] };
+            Variables = [new VariableSpec { Name = "n", Type = "Int32" }]
+        };
         var result = XamlBuilder.RenderWorkflowFile(spec, "TestWorkflow");
         Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
         Assert.Contains("<Sequence.Variables>", result.Xaml);

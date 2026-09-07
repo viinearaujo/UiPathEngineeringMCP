@@ -17,7 +17,7 @@ public sealed class CompileProjectTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Leave-off CLI build (not on the Copilot default connector). Prefer validate_project(build:true), which already runs uip rpa build. Slower than get_compile_errors (in-memory Roslyn). Do not use as the agent-loop green gate — that is validate_project(build:false, pack:false).")]
+    [McpServerTool(UseStructuredContent = true), Description("Leave-off CLI build (not on the Copilot default connector). Prefer validate_project(build:true), which already runs uip rpa build. Slower than get_compile_errors (in-memory Roslyn). Do not use as the agent-loop green gate — that is validate_project(build:false, pack:false). Next: validate_project.")]
     public async Task<ToolResult> CompileProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {
@@ -27,29 +27,25 @@ public sealed class CompileProjectTool {
             return guardFailure;
         }
 
-        try {
-            var cliResult = await _cliProvider.ValidateAsync(projectPath, validate: false, build: true, pack: false, cancellationToken);
+        var cliResult = await _cliProvider.ValidateAsync(projectPath, validate: false, build: true, pack: false, cancellationToken);
 
-            return new ToolResult {
-                Status = cliResult.Success ? "success" : "error",
-                Summary = cliResult.Summary,
-                Data = new {
-                    success = cliResult.Success,
-                    build = new {
-                        executed = cliResult.Build.Executed,
-                        success = cliResult.Build.Executed && cliResult.Build.Success,
-                        errors = cliResult.Build.Errors,
-                        warnings = cliResult.Build.Warnings
-                    },
-                    errors = cliResult.Errors,
-                    warnings = cliResult.Warnings
+        return new ToolResult {
+            Status = cliResult.Success ? "success" : "error",
+            Summary = cliResult.Summary,
+            Data = new {
+                success = cliResult.Success,
+                build = new {
+                    executed = cliResult.Build.Executed,
+                    success = cliResult.Build.Executed && cliResult.Build.Success,
+                    errors = cliResult.Build.Errors,
+                    warnings = cliResult.Build.Warnings
                 },
-                Errors = cliResult.Errors,
-                Warnings = cliResult.Warnings,
-                DurationMs = sw.ElapsedMilliseconds
-            };
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Project compilation failed.", sw);
-        }
+                errors = cliResult.Errors,
+                warnings = cliResult.Warnings
+            },
+            Errors = cliResult.Errors,
+            Warnings = cliResult.Warnings,
+            DurationMs = sw.ElapsedMilliseconds
+        };
     }
 }

@@ -5,17 +5,12 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
-public static class XamlCatalogGuard
-{
-    public static List<ToolError> FindUnknownActivities(string xaml, IActivityCatalog catalog)
-    {
+public static class XamlCatalogGuard {
+    public static List<ToolError> FindUnknownActivities(string xaml, IActivityCatalog catalog) {
         XDocument doc;
-        try
-        {
+        try {
             doc = XDocument.Parse(xaml);
-        }
-        catch (Exception ex) when (ex is XmlException or InvalidOperationException)
-        {
+        } catch (Exception ex) when (ex is XmlException or InvalidOperationException) {
             return
             [
                 new ToolError(
@@ -26,19 +21,16 @@ public static class XamlCatalogGuard
         }
 
         var unknown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var located in XamlActivityLocator.Locate(doc))
-        {
+        foreach (var located in XamlActivityLocator.Locate(doc)) {
             var name = located.Element.Name.LocalName;
-            if (!catalog.TryGet(name, out _))
-            {
+            if (!catalog.TryGet(name, out _)) {
                 unknown.Add(name);
             }
         }
 
         return unknown
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-            .Select(name =>
-            {
+            .Select(name => {
                 var suggestion = catalog.Suggest(name);
                 var hint = suggestion is null
                     ? "Call recommend_activities for a catalog name, then author with validate_activity_spec / build_workflow."

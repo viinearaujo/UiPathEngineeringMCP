@@ -5,10 +5,10 @@ using UiPath.Engineering.Mcp.Core.CodeSearch;
 using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
-using UiPath.Engineering.Mcp.Providers.Git;
 using UiPath.Engineering.Mcp.Providers.GitLab;
 using UiPath.Engineering.Mcp.Providers.Skills;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
+using UiPath.Engineering.Mcp.TestUtilities;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
@@ -126,17 +126,6 @@ internal sealed class FakeUiPathCliProvider : IUiPathCliProvider {
         LastArguments = arguments;
         return Task.FromResult(RunResult);
     }
-}
-
-internal sealed class FakeGitProvider : IGitProvider {
-    public GitStatusResult StatusResult { get; set; } = new() { IsRepository = true, Branch = "main" };
-    public GitLogResult LogResult { get; set; } = new() { IsRepository = true };
-
-    public Task<GitStatusResult> GetStatusAsync(string repoPath, CancellationToken cancellationToken = default)
-        => Task.FromResult(StatusResult);
-
-    public Task<GitLogResult> GetRecentCommitsAsync(string repoPath, int count, CancellationToken cancellationToken = default)
-        => Task.FromResult(LogResult);
 }
 
 internal sealed class FakeGitLabProvider : IGitLabProvider {

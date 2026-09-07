@@ -74,9 +74,9 @@ if ($TunnelName) {
 
     if ($PSCmdlet.ShouldProcess($TunnelName, "Delete Dev Tunnel")) {
         devtunnel delete $TunnelName --force
+        Write-Host "Tunnel '$TunnelName' deleted." -ForegroundColor Green
     }
 
-    Write-Host "Tunnel '$TunnelName' deleted." -ForegroundColor Green
     return
 }
 
@@ -86,8 +86,8 @@ if ($All) {
 
     if ($PSCmdlet.ShouldProcess("all dev tunnels", "Delete all Dev Tunnels")) {
         devtunnel delete-all --force
+        Write-Host "All dev tunnels deleted." -ForegroundColor Green
     }
 
-    Write-Host "All dev tunnels deleted." -ForegroundColor Green
     return
 }

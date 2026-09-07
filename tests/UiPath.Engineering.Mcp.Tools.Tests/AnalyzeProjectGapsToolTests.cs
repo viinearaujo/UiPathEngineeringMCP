@@ -7,11 +7,12 @@ namespace UiPath.Engineering.Mcp.Tools.Tests;
 public class AnalyzeProjectGapsToolTests : IDisposable {
     private readonly string _projectPath = Path.Combine(Path.GetTempPath(), "mcp-gaps-tool-" + Guid.NewGuid().ToString("N"));
     private readonly FakeFilesystemProvider _fs;
-    private readonly ImplementationPlanStore _store = new();
+    private readonly ImplementationPlanStore _store;
 
     public AnalyzeProjectGapsToolTests() {
         Directory.CreateDirectory(_projectPath);
         _fs = new FakeFilesystemProvider { ProjectJson = Path.Combine(_projectPath, "project.json") };
+        _store = new ImplementationPlanStore(_fs);
     }
 
     public void Dispose() {
@@ -66,14 +67,10 @@ public class AnalyzeProjectGapsToolTests : IDisposable {
     }
 
     [Fact]
-    public async Task AnalyzeProjectGaps_WhenModelBuilderThrows_ReturnsStructuredError() {
+    public async Task AnalyzeProjectGaps_WhenModelBuilderThrows_PropagatesToHostExceptionBoundary() {
         var tool = CreateTool(new FakeProjectModelBuilder { ToThrow = new FileNotFoundException("project.json not found in the specified directory.") });
 
-        var result = await tool.AnalyzeProjectGaps(_projectPath);
-
-        Assert.Equal("error", result.Status);
-        Assert.Equal("project.json not found.", result.Summary);
-        Assert.Null(result.Data);
+        await Assert.ThrowsAsync<FileNotFoundException>(() => tool.AnalyzeProjectGaps(_projectPath));
     }
 
     [Fact]

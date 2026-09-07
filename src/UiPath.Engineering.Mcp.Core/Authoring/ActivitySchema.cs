@@ -1,7 +1,6 @@
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
-public enum PropertyKind
-{
+public enum PropertyKind {
     Expression,
     Literal,
     TypeArgument

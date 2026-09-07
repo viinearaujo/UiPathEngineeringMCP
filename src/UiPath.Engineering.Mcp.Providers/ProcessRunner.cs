@@ -17,9 +17,10 @@ internal static class ProcessRunner {
         IReadOnlyList<string> arguments,
         string? workingDirectory,
         TimeSpan timeout,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? environment = null) {
 
-        var psi = CreateStartInfo(fileName, arguments, workingDirectory);
+        var psi = CreateStartInfo(fileName, arguments, workingDirectory, environment);
 
         Process? process;
         try {
@@ -66,15 +67,23 @@ internal static class ProcessRunner {
     internal static ProcessStartInfo CreateStartInfo(
         string fileName,
         IReadOnlyList<string> arguments,
-        string? workingDirectory) {
+        string? workingDirectory,
+        IReadOnlyDictionary<string, string>? environment = null) {
         var psi = new ProcessStartInfo {
             FileName = fileName,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             WorkingDirectory = workingDirectory ?? string.Empty
         };
+        if (environment is not null) {
+            foreach (var (key, value) in environment) {
+                psi.Environment[key] = value;
+            }
+        }
         foreach (var argument in arguments) {
             psi.ArgumentList.Add(argument);
         }

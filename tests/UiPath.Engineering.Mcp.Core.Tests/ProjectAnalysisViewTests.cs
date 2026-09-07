@@ -78,7 +78,7 @@ public class ProjectAnalysisViewTests {
         Assert.Equal(1, result.PageSize);
         Assert.Equal(3, result.TotalWorkflows);
         Assert.True(result.Truncated);
-        Assert.Equal(1, result.Workflows[0].Activities.Count);
+        Assert.Single(result.Workflows[0].Activities);
     }
 
     [Fact]

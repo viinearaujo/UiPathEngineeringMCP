@@ -18,7 +18,7 @@ public sealed class SearchCodebaseTool {
         _search = search;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Substring search across a UiPath project's .xaml and .cs files. Modes: 'text' (matching lines), 'symbol' (C# name contains query), 'activity' (XAML display name/type), 'workflow' (file name/description). Do not use for exact C# definition or usage lookup — that is find_code_symbol / find_code_references.")]
+    [McpServerTool(UseStructuredContent = true), Description("Substring search across a UiPath project's .xaml and .cs files. Modes: 'text' (matching lines), 'symbol' (C# name contains query), 'activity' (XAML display name/type), 'workflow' (file name/description). Do not use for exact C# definition or usage lookup — that is find_code_symbol / find_code_references. Next: read_workflow_file or find_activity.")]
     public async Task<ToolResult> SearchCodebase(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Case-insensitive substring to search for, e.g. 'queue'.")] string query,
@@ -38,37 +38,31 @@ public sealed class SearchCodebaseTool {
                 sw);
         }
 
-        try {
-            switch (mode?.ToLowerInvariant()) {
-                case "text": {
+        if (ToolArgs.ParseChoice(mode, "mode", ["text", "symbol", "activity", "workflow"], sw, out var parsedMode) is { } modeError) {
+            return modeError;
+        }
+
+        switch (parsedMode) {
+            case "text": {
                     var result = await _search.SearchTextAsync(projectPath, query, cancellationToken);
-                    var summary = $"Found {result.Matches.Count} text match(es) for '{query}' across {result.FilesSearched} file(s).";
+                    var summary = $"Found {result.Matches.Count} text match(es) for '{query}' across {result.FilesSearched} file(s). Next: read_workflow_file.";
                     return ToolResults.Ok(summary, result, sw, result.Warnings);
                 }
-                case "symbol": {
+            case "symbol": {
                     var result = await _search.SearchSymbolsAsync(projectPath, query, kind, cancellationToken);
-                    var summary = $"Found {result.Matches.Count} symbol(s) matching '{query}'.";
+                    var summary = $"Found {result.Matches.Count} symbol(s) matching '{query}'. Next: get_code_context.";
                     return ToolResults.Ok(summary, result, sw, result.Warnings);
                 }
-                case "activity": {
+            case "activity": {
                     var result = await _search.SearchActivitiesAsync(projectPath, query, cancellationToken);
-                    var summary = $"Found {result.Matches.Count} activity match(es) for '{query}' across {result.WorkflowsSearched} workflow(s).";
+                    var summary = $"Found {result.Matches.Count} activity match(es) for '{query}' across {result.WorkflowsSearched} workflow(s). Next: find_activity.";
                     return ToolResults.Ok(summary, result, sw, result.Warnings);
                 }
-                case "workflow": {
+            default: {
                     var result = await _search.SearchWorkflowsAsync(projectPath, query, cancellationToken);
-                    var summary = $"Found {result.Matches.Count} workflow(s) matching '{query}'.";
+                    var summary = $"Found {result.Matches.Count} workflow(s) matching '{query}'. Next: read_workflow_file.";
                     return ToolResults.Ok(summary, result, sw, result.Warnings);
                 }
-                default:
-                    return ToolResults.Failure($"Unknown search mode '{mode}'.",
-                        [new ToolError(ToolErrorCodes.InvalidArgument,
-                            $"Unknown search mode '{mode}'. Valid modes: text, symbol, activity, workflow.",
-                            "Re-run with mode set to one of: text, symbol, activity, workflow.")],
-                        sw);
-            }
-        } catch (Exception ex) {
-            return ToolResults.FromException(ex, "Codebase search failed.", sw);
         }
     }
 }

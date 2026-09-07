@@ -180,4 +180,25 @@ public class UiPathCliProviderTests {
         Assert.DoesNotContain(lines, l => l.Contains("hunter2"));
         Assert.All(lines, l => Assert.Contains("***REDACTED***", l));
     }
+
+    [Fact]
+    public async Task RunAsync_ExitZeroWithEnvelopeErrors_IsFailure() {
+        var cmd = Path.Combine(Path.GetTempPath(), "mcp-fake-uip-" + Guid.NewGuid().ToString("N") + ".cmd");
+        await File.WriteAllTextAsync(cmd, """
+            @echo off
+            echo {"Result":"Error","Message":"envelope failed"}
+            exit /b 0
+            """);
+        try {
+            var sut = CreateSut(cmd);
+
+            var result = await sut.RunAsync("rpa", "validate --output json");
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.False(result.Success);
+            Assert.Contains(result.Errors, e => e.Contains("envelope failed", StringComparison.OrdinalIgnoreCase));
+        } finally {
+            File.Delete(cmd);
+        }
+    }
 }

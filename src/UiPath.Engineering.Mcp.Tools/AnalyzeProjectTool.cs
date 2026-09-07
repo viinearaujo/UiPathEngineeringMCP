@@ -17,7 +17,7 @@ public sealed class AnalyzeProjectTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project and returns structured metadata. Default detail is 'summary' (counts + workflow index, coded-file kind workflow/test/source, no activity trees). Pass detail='full' to page complete workflow models; pass workflowFile to load one workflow fully.")]
+    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project and returns structured metadata. Default detail is 'summary' (counts + workflow index, coded-file kind workflow/test/source, no activity trees). Pass detail='full' to page complete workflow models; pass workflowFile to load one workflow fully. Next: get_implementation_plan.")]
     public async Task<ToolResult> AnalyzeProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("summary (default) or full.")] string detail = "summary",
@@ -31,15 +31,12 @@ public sealed class AnalyzeProjectTool {
             return guardFailure;
         }
 
-        try {
-            var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
-            var view = ProjectAnalysisView.ToResult(model, detail, page, pageSize, workflowFile);
-            return ToolResults.Ok("Project analyzed successfully.", view, sw, view.Warnings);
-        } catch (ArgumentException ex) {
-            return ToolResults.Failure(ex.Message, sw);
-        } catch (Exception ex) {
-            // Never surface a raw exception/stack trace to the MCP client.
-            return ToolResults.FromException(ex, "Project analysis failed.", sw);
+        if (ToolArgs.ParseChoice(detail, "detail", [ProjectAnalysisView.DetailSummary, ProjectAnalysisView.DetailFull], sw, out var parsedDetail) is { } detailError) {
+            return detailError;
         }
+
+        var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
+        var view = ProjectAnalysisView.ToResult(model, parsedDetail, page, pageSize, workflowFile);
+        return ToolResults.Ok("Project analyzed successfully. Next: get_implementation_plan.", view, sw, view.Warnings);
     }
 }

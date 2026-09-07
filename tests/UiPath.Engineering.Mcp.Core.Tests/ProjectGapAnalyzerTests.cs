@@ -16,16 +16,16 @@ public class ProjectGapAnalyzerTests : IDisposable {
 
     private static WorkflowModel Wf(string fileName, bool isMain = false, string? description = "A workflow.",
         int exceptionHandlers = 0, int logMessages = 0, params string[] invokes) => new() {
-        FileName = fileName,
-        IsMain = isMain,
-        Description = description,
-        ExceptionHandlers = Enumerable.Range(0, exceptionHandlers)
+            FileName = fileName,
+            IsMain = isMain,
+            Description = description,
+            ExceptionHandlers = Enumerable.Range(0, exceptionHandlers)
             .Select(_ => new ExceptionHandlerModel { WorkflowName = fileName }).ToList(),
-        LogMessages = Enumerable.Range(0, logMessages)
+            LogMessages = Enumerable.Range(0, logMessages)
             .Select(_ => new LogMessageModel()).ToList(),
-        InvokeWorkflows = invokes
+            InvokeWorkflows = invokes
             .Select(t => new InvokeWorkflowModel { SourceWorkflow = fileName, TargetWorkflow = t }).ToList()
-    };
+        };
 
     // A model that trips no rule: entry point with handling/logging/description,
     // one invoked child, and a (standalone) test workflow.
