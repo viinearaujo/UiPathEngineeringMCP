@@ -26,7 +26,9 @@ public class CopilotToolSurfaceTests {
         Assert.Null(CopilotToolSurface.RejectIfHidden("validate_project"));
         Assert.Null(CopilotToolSurface.RejectIfHidden("add_coded_workflow"));
         Assert.Null(CopilotToolSurface.RejectIfHidden("get_compile_errors"));
-        var rejected = CopilotToolSurface.RejectIfHidden("recommend_activities");
+        Assert.Null(CopilotToolSurface.RejectIfHidden("recommend_activities"));
+        Assert.Null(CopilotToolSurface.RejectIfHidden("manage_project_docs"));
+        var rejected = CopilotToolSurface.RejectIfHidden("write_workflow_file");
         Assert.NotNull(rejected);
         Assert.True(rejected.IsError);
     }

@@ -5,7 +5,7 @@ public sealed class McpServerOptions {
     public string Description { get; init; } = string.Empty;
 
     /// <summary>
-    /// HTTP Copilot surface. CopilotDefault (default) advertises ≤12 tools.
+    /// HTTP Copilot surface. CopilotDefault (default) advertises CopilotConnectorTools.DefaultNames.
     /// All exposes every registered tool (Inspector). GitLab tools are never deleted.
     /// </summary>
     public string ToolSurface { get; set; } = CopilotConnectorTools.SurfaceCopilotDefault;

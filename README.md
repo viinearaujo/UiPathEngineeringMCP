@@ -43,8 +43,8 @@ The skills feed under `.agents/skills` is **RPA-only** — do not reinstall the 
 A workshop for agents that work on **UiPath RPA** (`.xaml` / `.cs`) — not a full UiPath product catalog.
 
 - HTTP on `http://localhost:5000` (`/health`, `/sse`) **or** local stdio (`--stdio`) — one process, one transport
-- Default HTTP (`McpServer:ToolSurface=CopilotDefault`) advertises **12** tool names in `CopilotConnectorTools.DefaultNames`
-- Inspector / `McpServer:ToolSurface=All` advertises the full live catalog of every registered `[McpServerTool]` (same tools the grouped Toolkit already describes). `LeaveOffNames` is the set hidden on the Copilot default connector, not the runtime source for All
+- Default HTTP (`McpServer:ToolSurface=CopilotDefault`) advertises `CopilotConnectorTools.DefaultNames`
+- Inspector / `McpServer:ToolSurface=All` advertises the full live catalog of every registered `[McpServerTool]` (same tools the grouped Toolkit already describes). `LeaveOffNames` is hatches and aliases hidden on the Copilot default connector, not the runtime source for All
 - New work is **coded-first** unless the task is REFramework or orchestration XAML
 
 <a id="quick-start"></a>
@@ -67,7 +67,7 @@ Point MCP Inspector at `http://localhost:5000/sse` (transport: **Streamable HTTP
 npx @modelcontextprotocol/inspector
 ```
 
-> 💡 **Tip:** On the default HTTP surface you should see the Copilot 12 (`analyze_project`, `search_codebase`, `read_workflow_file`, and friends). Set `McpServer:ToolSurface` to `All` for the full Inspector catalog. Local stdio recipes live in [docs/agent-connection.md](docs/agent-connection.md).
+> 💡 **Tip:** On the default HTTP surface you should see the Copilot default catalog (`analyze_project`, `search_codebase`, `read_workflow_file`, skills, spec, docs, and friends). Set `McpServer:ToolSurface` to `All` for Inspector hatches. Local stdio recipes live in [docs/agent-connection.md](docs/agent-connection.md).
 
 <a id="prerequisites"></a>
 ## 🧰 Prerequisites
@@ -129,7 +129,7 @@ dotnet run --project src/UiPath.Engineering.Mcp.Server
 dotnet run --project src/UiPath.Engineering.Mcp.Server -- --stdio
 ```
 
-HTTP listens on `http://localhost:5000`. MCP (Streamable HTTP) is at `/sse`. `--stdio` is already shipped as a separate process: logs on stderr, does not bind port 5000, unauthenticated, full tool surface (not the Copilot 12). One process, one transport — do not run HTTP and `--stdio` together.
+HTTP listens on `http://localhost:5000`. MCP (Streamable HTTP) is at `/sse`. `--stdio` is already shipped as a separate process: logs on stderr, does not bind port 5000, unauthenticated, full tool surface (including `LeaveOffNames` hatches). One process, one transport — do not run HTTP and `--stdio` together.
 
 <a id="open-with-dev-tunnel"></a>
 ## 🌐 Open with Dev Tunnel
@@ -174,10 +174,10 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop). New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with primitives only; never custom types or source-file methods from XAML.
-- **Recommended tools (default connector, ≤12):** `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`, `analyze_project_gaps`
-- **Leave off the default connector:** `CopilotConnectorTools.LeaveOffNames`. Notable overlaps: `compile_project` (use `validate_project(build:true)`), `verify_work` (use `validate_project` then `update_plan_task`), `edit_workflow_activity` (prefer `insert_activities`; fragment hatch on `All`), `write_workflow_file` (full-file overwrite on `ToolSurface=All` only). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only `CopilotConnectorTools.DefaultNames`; set `All` for Inspector. GitLab tools stay registered on the server.
-- **Full tool surface** (Inspector / `ToolSurface=All`): the live catalog of every registered `[McpServerTool]` — the same tools the grouped Toolkit already describes. `LeaveOffNames` is not the runtime source for All; it is the set hidden on the Copilot default connector.
+- **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop). Uploaded Copilot Studio skills plus this catalog are the Copilot path. New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with primitives only; never custom types or source-file methods from XAML.
+- **Recommended tools (default connector):** `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`, `analyze_project_gaps`, `read_skill`, `explain_workflow`, `get_workflow_dependencies`, `generate_documentation`, `find_code_symbol`, `find_code_references`, `get_code_context`, `validate_activity_spec`, `recommend_activities`, `build_workflow`, `manage_workflow_data`, `add_xaml_workflow`, `create_implementation_plan`, `create_project`, `patch_project_json`, `manage_project_docs`, `manage_project_file`, `sync_project_context`, `validate_project_docs`
+- **Leave off the default connector:** `CopilotConnectorTools.LeaveOffNames` (hatches and aliases only). Notable overlaps: `compile_project` (use `validate_project(build:true)`), `verify_work` (use `validate_project` then `update_plan_task`), `edit_workflow_activity` (prefer `insert_activities`; fragment hatch on `All`), `write_workflow_file` (full-file overwrite on `ToolSurface=All` only), `list_skills` (uploaded skills already name the playbooks). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only `CopilotConnectorTools.DefaultNames`. Keep work Copilot on `CopilotDefault`. Set `All` for Inspector. GitLab tools stay registered on the server.
+- **Full tool surface** (Inspector / `ToolSurface=All`): the live catalog of every registered `[McpServerTool]` — the same tools the grouped Toolkit already describes. `LeaveOffNames` is not the runtime source for All; it is the hatch/alias set hidden on the Copilot default connector.
 
 > ✅ **Green gate:** `validate_project(build:false, pack:false)` → `analyze_project_gaps` → `update_plan_task`. Do not use `verify_work` as the done gate.
 
@@ -200,7 +200,7 @@ XAML is a thin shell: `find_activity` + `insert_activities` for REFramework and
 never custom types or source-file methods from XAML.
 
 Spec-based XAML authoring (`validate_activity_spec`, `build_workflow`, `manage_workflow_data`)
-remains available on the full tool surface for that shell. Spec shape:
+is on the Copilot default connector for that shell. Spec shape:
 `{ name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }`.
 
 Example spec (Invoke of a coded workflow with primitive args):
@@ -253,10 +253,10 @@ blocked on docs or ADR freshness. Do not use `verify_work` as the done gate. It 
 <a id="toolkit"></a>
 ## 🛠️ Toolkit
 
-Grouped by job. Copilot's default 12 are listed first; Inspector / `ToolSurface=All` is the
-full live catalog of every registered `[McpServerTool]` (the same tools grouped below).
+Grouped by job. Copilot's default catalog is listed first; Inspector / `ToolSurface=All`
+adds hatches and aliases (`LeaveOffNames`).
 
-### ⭐ Copilot default (12)
+### ⭐ Copilot default
 
 - `analyze_project` — Parses `project.json` + workflows/coded files into a cached model; default response is a summary (counts, workflow index, coded-file kind, packages, risks, folder tree). Pass `detail='full'` to page complete workflow models, or `workflowFile` for one workflow.
 - `search_codebase` — Substring search across `.xaml` and `.cs` in `text`, `symbol`, `activity`, or `workflow` mode. Exact-case first; capped at 200 matches with a `truncated` flag.
@@ -270,40 +270,59 @@ full live catalog of every registered `[McpServerTool]` (the same tools grouped 
 - `insert_activities` — Recommended Copilot surgical XAML path: inserts a JSON spec as children of the activity located by `activityId` or `DisplayName`.
 - `get_compile_errors` — Structured Roslyn diagnostics (file/line/column/code/severity/message) without a build; responses include `analysisMode` (`full` / `partial` / `syntaxOnly`).
 - `analyze_project_gaps` — Deterministic hygiene gaps (entry point, orphans, exception handling, logging, descriptions, tests, unresolved invokes, coded/XAML primitive-only invoke boundary) plus plan cross-checks; each gap names the MCP tool that fixes it.
+- `read_skill` — Reads one RPA skill (`SKILL.md` or an auxiliary file).
+- `explain_workflow` — Structured breakdown of one workflow: arguments, variables, activity outline, handlers, invokes, log messages. Coded (`.cs`) files return `kind` (`workflow` / `test` / `source`), class, namespace, entry methods, and public methods.
+- `get_workflow_dependencies` — `InvokeWorkflowFile` graph: project-wide edges, cycles, orphans, unresolved targets; or, with `workflowFile`, that workflow's callers/callees with argument mappings.
+- `generate_documentation` — Deterministic structured docs for the whole project: metadata, per-workflow summaries, dependency graph (edges, cycles, orphans), risks.
+- `find_code_symbol` — Finds C# symbols (methods, classes, properties, fields, interfaces) by exact name via Roslyn; returns kind, file, line, containing type, signature.
+- `find_code_references` — All usage sites of a C# symbol across the project's `.cs` files (semantic matching, identifier fallback for external symbols).
+- `get_code_context` — Semantic context of one C# member (by symbol name or file+line): signature, containing type, called methods, referenced types, and source.
+- `validate_activity_spec` — Dry-run validation of a JSON activity spec against the catalog — no files read or written. Returns structured errors (`errorCode`/`message`/`fixHint`) or the catalog activities used.
+- `recommend_activities` — Up to 5 version-aware activity schemas for a natural-language query (`uip rpa activities find` when available; otherwise the built-in fallback). Call before `validate_activity_spec` when the type is unknown.
+- `build_workflow` — Creates a real `.xaml` from a JSON spec (run `validate_activity_spec` first). Never overwrites unless `overwrite: true`.
+- `manage_workflow_data` — Add, remove, or rename arguments (`x:Property`) and variables (`Sequence.Variables`) on an existing `.xaml`.
+- `add_xaml_workflow` — Adds a blank `.xaml` with the correct `x:Class` naming (relative path, separators → underscores).
+- `create_implementation_plan` — Creates a plan from a goal + ordered tasks; writes `docs/implementation-plan.json` plus a Markdown mirror. Refuses to overwrite unless `overwrite: true`.
+- `create_project` — Scaffolds a new UiPath project via `uip rpa init` (requires the UiPath CLI RPA tool). Detects the documented partial-success case by checking the created files.
+- `patch_project_json` — One structured `project.json` operation (entry points, dependencies, fileInfoCollection, exception handler, runtimeOptions). Never changes `expressionLanguage`, `targetFramework`, or `schemaVersion`.
+- `manage_project_docs` — Lists, writes, deletes, or keyword-searches knowledge articles and ADRs (`kind`: memory / adr / context / all).
+- `manage_project_file` — Creates, edits, or deletes a `.md` / `.json` / `.txt` file. Refuses `project.json`, plan files, `docs/knowledge`, `docs/adr`, secret names, and `***REDACTED***` bodies.
+- `sync_project_context` — Regenerates `AGENTS.md` (marker block) and `.claude/rules/project-context.md` from the project model.
+- `validate_project_docs` — Inspects docs without changing plan state. Wiki hygiene only — does not block `update_plan_task(done)`. `verify_work` still refuses auto-done on docs errors.
 
 ### 🔍 Understand
 
 - `analyze_project` — See Copilot default.
-- `explain_workflow` — Structured breakdown of one workflow: arguments, variables, activity outline, handlers, invokes, log messages. Coded (`.cs`) files return `kind` (`workflow` / `test` / `source`), class, namespace, entry methods, and public methods.
+- `explain_workflow` — See Copilot default.
 - `search_codebase` — See Copilot default.
 - `read_workflow_file` — See Copilot default.
-- `get_workflow_dependencies` — `InvokeWorkflowFile` graph: project-wide edges, cycles, orphans, unresolved targets; or, with `workflowFile`, that workflow's callers/callees with argument mappings.
-- `generate_documentation` — Deterministic structured docs for the whole project: metadata, per-workflow summaries, dependency graph (edges, cycles, orphans), risks.
+- `get_workflow_dependencies` — See Copilot default.
+- `generate_documentation` — See Copilot default.
 
 ### 💻 Author (coded)
 
 - `add_coded_workflow` — See Copilot default.
 - `edit_workflow_file` — See Copilot default.
 - `get_compile_errors` — See Copilot default.
-- `find_code_symbol` — Finds C# symbols (methods, classes, properties, fields, interfaces) by exact name via Roslyn; returns kind, file, line, containing type, signature.
-- `find_code_references` — All usage sites of a C# symbol across the project's `.cs` files (semantic matching, identifier fallback for external symbols).
-- `get_code_context` — Semantic context of one C# member (by symbol name or file+line): signature, containing type, called methods, referenced types, and source.
+- `find_code_symbol` — See Copilot default.
+- `find_code_references` — See Copilot default.
+- `get_code_context` — See Copilot default.
 
 ### 🧩 Author (XAML shell)
 
 - `find_activity` — See Copilot default.
 - `insert_activities` — See Copilot default.
-- `validate_activity_spec` — Dry-run validation of a JSON activity spec against the catalog — no files read or written. Returns structured errors (`errorCode`/`message`/`fixHint`) or the catalog activities used.
-- `recommend_activities` — Up to 5 version-aware activity schemas for a natural-language query (`uip rpa activities find` when available; otherwise the built-in fallback). Call before `validate_activity_spec` when the type is unknown.
-- `build_workflow` — Creates a real `.xaml` from a JSON spec (run `validate_activity_spec` first). Never overwrites unless `overwrite: true`.
-- `manage_workflow_data` — Add, remove, or rename arguments (`x:Property`) and variables (`Sequence.Variables`) on an existing `.xaml`.
-- `add_xaml_workflow` — Adds a blank `.xaml` with the correct `x:Class` naming (relative path, separators → underscores).
+- `validate_activity_spec` — See Copilot default.
+- `recommend_activities` — See Copilot default.
+- `build_workflow` — See Copilot default.
+- `manage_workflow_data` — See Copilot default.
+- `add_xaml_workflow` — See Copilot default.
 - `write_workflow_file` — Leave-off full-file overwrite (`ToolSurface=All` only). Prefer `edit_workflow_file` for small edits and `insert_activities` for spec inserts. For `.xaml`, activity types must be in the project catalog unless `allowUnknownActivities` is true.
 - `edit_workflow_activity` — Leave-off XAML fragment hatch (`ToolSurface=All` only). Prefer `insert_activities`. Inserts a raw fragment, or replaces/removes one activity, by `activityId` or `DisplayName`.
 
 ### ✅ Plan and close
 
-- `create_implementation_plan` — Creates a plan from a goal + ordered tasks; writes `docs/implementation-plan.json` plus a Markdown mirror. Refuses to overwrite unless `overwrite: true`.
+- `create_implementation_plan` — See Copilot default.
 - `get_implementation_plan` — See Copilot default.
 - `update_plan_task` — See Copilot default.
 - `analyze_project_gaps` — See Copilot default.
@@ -313,20 +332,20 @@ full live catalog of every registered `[McpServerTool]` (the same tools grouped 
 
 ### 📝 Project files and docs
 
-- `manage_project_file` — Creates, edits, or deletes a `.md` / `.json` / `.txt` file. Refuses `project.json`, plan files, `docs/knowledge`, `docs/adr`, secret names, and `***REDACTED***` bodies.
-- `patch_project_json` — One structured `project.json` operation (entry points, dependencies, fileInfoCollection, exception handler, runtimeOptions). Never changes `expressionLanguage`, `targetFramework`, or `schemaVersion`.
-- `manage_project_docs` — Lists, writes, deletes, or keyword-searches knowledge articles and ADRs (`kind`: memory / adr / context / all).
-- `sync_project_context` — Regenerates `AGENTS.md` (marker block) and `.claude/rules/project-context.md` from the project model.
-- `validate_project_docs` — Inspects docs without changing plan state. Wiki hygiene only — does not block `update_plan_task(done)`. `verify_work` still refuses auto-done on docs errors.
+- `manage_project_file` — See Copilot default.
+- `patch_project_json` — See Copilot default.
+- `manage_project_docs` — See Copilot default.
+- `sync_project_context` — See Copilot default.
+- `validate_project_docs` — See Copilot default.
 
 ### 🦊 GitLab, CLI, skills
 
-- `search_repository` — Searches GitLab issues for the configured project (requires the `GitLab` config section; token is never returned).
-- `create_work_items` — Creates GitLab issues/work items from `{ title, description, labels? }`, returning created IDs/URLs and per-item failures.
-- `create_project` — Scaffolds a new UiPath project via `uip rpa init` (requires the UiPath CLI RPA tool). Detects the documented partial-success case by checking the created files.
-- `run_ui_path_cli` — Runs an allowlisted `uip` command (default verbs: `rpa`, `solution`); mutating subcommands are blocked unless enabled in config, shell metacharacters are rejected, and stdout/stderr are redacted and capped.
-- `list_skills` — Lists RPA playbooks only (`uipath-rpa`, `guided-implementation-loop`). Not a full UiPath product catalog.
-- `read_skill` — Reads one RPA skill (`SKILL.md` or an auxiliary file).
+- `search_repository` — Leave-off GitLab hatch (`ToolSurface=All` only). Searches GitLab issues for the configured project (requires the `GitLab` config section; token is never returned).
+- `create_work_items` — Leave-off GitLab hatch (`ToolSurface=All` only). Creates GitLab issues/work items from `{ title, description, labels? }`, returning created IDs/URLs and per-item failures.
+- `create_project` — See Copilot default.
+- `run_ui_path_cli` — Leave-off unbounded CLI hatch (`ToolSurface=All` only). Runs an allowlisted `uip` command (default verbs: `rpa`, `solution`); mutating subcommands are blocked unless enabled in config, shell metacharacters are rejected, and stdout/stderr are redacted and capped.
+- `list_skills` — Leave-off (`ToolSurface=All` only). Lists RPA playbooks only (`uipath-rpa`, `guided-implementation-loop`). Not a full UiPath product catalog. Uploaded Copilot Studio skills already name the playbooks; use `read_skill` on the default connector for package-local refs.
+- `read_skill` — See Copilot default.
 
 <a id="tests"></a>
 ## 🧪 Tests

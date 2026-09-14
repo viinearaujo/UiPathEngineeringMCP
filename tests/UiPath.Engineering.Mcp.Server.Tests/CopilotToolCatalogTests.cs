@@ -56,6 +56,11 @@ public class CopilotToolCatalogTests {
         Assert.Contains("update_plan_task", CopilotConnectorTools.DefaultNames);
         Assert.Contains("insert_activities", CopilotConnectorTools.DefaultNames);
         Assert.Contains("analyze_project_gaps", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("read_skill", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("create_implementation_plan", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("recommend_activities", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("manage_project_docs", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("list_skills", CopilotConnectorTools.LeaveOffNames);
     }
 
     internal static IReadOnlyList<string> ListMcpToolNames(Assembly assembly) {

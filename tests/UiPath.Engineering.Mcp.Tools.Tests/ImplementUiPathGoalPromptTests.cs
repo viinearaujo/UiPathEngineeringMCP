@@ -19,19 +19,22 @@ public class ImplementUiPathGoalPromptTests {
         Assert.Contains("relativeFolder", text);
         Assert.Contains("edit_workflow_file", text);
         Assert.Contains("get_compile_errors", text);
-        Assert.DoesNotContain("recommend_activities", text);
+        Assert.Contains("recommend_activities", text);
         Assert.Contains("validate_project", text);
         Assert.Contains("build:false", text);
         Assert.Contains("pack:false", text);
         Assert.Contains("update_plan_task", text);
         Assert.Contains("docs/implementation-plan.json", text);
         Assert.Contains("get_implementation_plan", text);
+        Assert.Contains("If none exists, create_implementation_plan", text);
+        Assert.DoesNotContain("not on the default connector", text);
         Assert.Contains("Do not call verify_work", text);
         Assert.Contains("not blocked on docs/ADR freshness", text);
         Assert.Contains("analyze_project_gaps", text);
         Assert.Contains("IDIOM", text);
-        Assert.DoesNotContain("manage_project_docs", text);
-        Assert.DoesNotContain("sync_project_context", text);
+        Assert.Contains("manage_project_docs", text);
+        Assert.Contains("sync_project_context", text);
         Assert.DoesNotContain("done requires current docs", text);
+        Assert.DoesNotContain("write_workflow_file", text);
     }
 }

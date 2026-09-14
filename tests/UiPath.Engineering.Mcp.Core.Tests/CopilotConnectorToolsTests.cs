@@ -4,7 +4,7 @@ namespace UiPath.Engineering.Mcp.Core.Tests;
 
 public class CopilotConnectorToolsTests {
     [Fact]
-    public void DefaultNames_IsAtMostTwelveAndIsCodedFirst() {
+    public void DefaultNames_FitsMaxDefaultCountAndIsCodedFirst() {
         Assert.True(CopilotConnectorTools.DefaultNames.Length <= CopilotConnectorTools.MaxDefaultCount);
         Assert.Equal(new[] {
             "analyze_project",
@@ -19,8 +19,30 @@ public class CopilotConnectorToolsTests {
             "insert_activities",
             "get_compile_errors",
             "analyze_project_gaps",
+            "read_skill",
+            "explain_workflow",
+            "get_workflow_dependencies",
+            "generate_documentation",
+            "find_code_symbol",
+            "find_code_references",
+            "get_code_context",
+            "validate_activity_spec",
+            "recommend_activities",
+            "build_workflow",
+            "manage_workflow_data",
+            "add_xaml_workflow",
+            "create_implementation_plan",
+            "create_project",
+            "patch_project_json",
+            "manage_project_docs",
+            "manage_project_file",
+            "sync_project_context",
+            "validate_project_docs",
         }, CopilotConnectorTools.DefaultNames);
-        Assert.DoesNotContain("recommend_activities", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("recommend_activities", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("find_activity", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("insert_activities", CopilotConnectorTools.DefaultNames);
+        Assert.DoesNotContain("list_skills", CopilotConnectorTools.DefaultNames);
         Assert.DoesNotContain("write_workflow_file", CopilotConnectorTools.DefaultNames);
         Assert.DoesNotContain("edit_workflow_activity", CopilotConnectorTools.DefaultNames);
         Assert.DoesNotContain("compile_project", CopilotConnectorTools.DefaultNames);
@@ -37,7 +59,17 @@ public class CopilotConnectorToolsTests {
     }
 
     [Fact]
-    public void LeaveOffNames_AreNotOnTheDefaultConnector() {
+    public void LeaveOffNames_AreHatchesAndAliasesOnly() {
+        Assert.Equal(new[] {
+            "write_workflow_file",
+            "edit_workflow_activity",
+            "compile_project",
+            "verify_work",
+            "run_ui_path_cli",
+            "list_skills",
+            "search_repository",
+            "create_work_items",
+        }, CopilotConnectorTools.LeaveOffNames);
         foreach (var name in CopilotConnectorTools.LeaveOffNames) {
             Assert.False(CopilotConnectorTools.IsDefault(name), name);
         }

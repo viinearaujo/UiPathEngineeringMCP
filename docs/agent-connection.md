@@ -24,13 +24,13 @@ Tools resolve **only** `docs/implementation-plan.json` inside the target UiPath 
 
 ## Copilot Studio (RPA default tool set)
 
-This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions (source of truth for the loop): [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt).
+This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions (source of truth for the loop): [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt). Uploaded Copilot Studio skills plus `CopilotConnectorTools.DefaultNames` are the Copilot path.
 
-Enable only `CopilotConnectorTools.DefaultNames` on the default Copilot connector (≤12, including `analyze_project_gaps`). Canonical list: README recommended-tools line and the DEFAULT CONNECTOR line in [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt) — both must match the C# array. The agent green gate is `validate_project` (`build` defaults to false, `pack: false`), then `analyze_project_gaps`. XAML shell: `find_activity` + `insert_activities` (REFramework / InvokeWorkflowFile only); `edit_workflow_activity` is a leave-off fragment hatch.
+Enable `CopilotConnectorTools.DefaultNames` on the default Copilot connector (skills, coded intelligence, XAML spec path, plan/scaffold, and project docs — including `analyze_project_gaps`). Canonical list: README recommended-tools line and the DEFAULT CONNECTOR line in [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt) — both must match the C# array. The agent green gate is `validate_project` (`build` defaults to false, `pack: false`), then `analyze_project_gaps`, then `update_plan_task`. XAML shell: `find_activity` + `insert_activities` (REFramework / InvokeWorkflowFile only), or `recommend_activities` → `validate_activity_spec` → `build_workflow` / `insert_activities` + `manage_workflow_data`. `edit_workflow_activity` is a leave-off fragment hatch.
 
-HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only those names. Set `All` for Inspector. GitLab tools stay registered on the server.
+HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only those names. Keep work Copilot on `CopilotDefault`. Set `All` for Inspector hatches only. GitLab tools stay registered on the server.
 
-Leave-off names live in `CopilotConnectorTools.LeaveOffNames`. Notable: `compile_project` → `validate_project(build:true)`; `verify_work` → `validate_project` then `update_plan_task`; `write_workflow_file` is a full-file overwrite hatch on `ToolSurface=All` only. Do not leave `analyze_project_gaps` off the default connector.
+Leave-off names live in `CopilotConnectorTools.LeaveOffNames` (hatches and aliases only): `write_workflow_file` (full-file overwrite on `ToolSurface=All` only), `edit_workflow_activity` (prefer `insert_activities`), `compile_project` → `validate_project(build:true)`, `verify_work` → `validate_project` then `update_plan_task`, `run_ui_path_cli`, `list_skills` (uploaded skills already name the playbooks), GitLab (`search_repository`, `create_work_items`). Do not leave `analyze_project_gaps` off the default connector.
 
 Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
 
@@ -38,7 +38,7 @@ Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
 
 ```text
 analyze_project (detail=summary)
-  → get_implementation_plan (continue if none exists)
+  → get_implementation_plan (create_implementation_plan if none exists)
   → add_coded_workflow / edit_workflow_file  (or find_activity + insert_activities for REFramework/Invoke)
   → search_codebase / read_workflow_file to confirm the write
   → validate_project(build:false, pack:false)

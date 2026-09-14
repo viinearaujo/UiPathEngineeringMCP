@@ -8,7 +8,7 @@ public class CopilotConnectorDocumentationTests {
         var readme = File.ReadAllText(ResolveDoc("README.md"));
         var instructions = File.ReadAllText(ResolveDoc(Path.Combine("docs", "copilot-studio-agent-instructions.txt")));
 
-        var recommendedLine = "**Recommended tools (default connector, ≤12):** "
+        var recommendedLine = "**Recommended tools (default connector):** "
             + CopilotConnectorTools.JoinDefaultNamesMarkdown();
         Assert.Contains(recommendedLine, readme);
 
@@ -16,6 +16,10 @@ public class CopilotConnectorDocumentationTests {
 
         foreach (var name in CopilotConnectorTools.DefaultNames) {
             Assert.Contains(name, readme);
+            Assert.Contains(name, instructions);
+        }
+
+        foreach (var name in CopilotConnectorTools.LeaveOffNames) {
             Assert.Contains(name, instructions);
         }
 
@@ -33,6 +37,8 @@ public class CopilotConnectorDocumentationTests {
             "Finish dispatcher retries");
 
         Assert.Contains(CopilotConnectorTools.JoinDefaultNames(), text);
+        Assert.Contains("If none exists, create_implementation_plan", text);
+        Assert.DoesNotContain("not on the default connector", text);
     }
 
     private static IReadOnlyList<string> SplitLines(string text) =>
