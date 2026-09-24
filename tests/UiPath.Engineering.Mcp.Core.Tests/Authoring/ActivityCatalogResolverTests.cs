@@ -118,9 +118,154 @@ public class ActivityCatalogResolverTests {
         Assert.Contains(ranked, r => r.Name == "ReadRange");
     }
 
+    [Fact]
+    public async Task ResolveAsync_EnrichesDiscoveredActivityWithItsPackageStarter() {
+        var fs = new MemoryFilesystem {
+            ProjectJsonPath = "/p/project.json",
+            ProjectJson = """{ "name": "P", "dependencies": { "UiPath.UIAutomation.Activities": "[25.10.0]" } }"""
+        };
+        var discovery = new StubDiscovery {
+            Hits = [new DiscoveredActivity("Click", "UiPath.UIAutomationNext.Activities.NClick",
+                "UiPath.UIAutomation.Activities", "25.10.0")]
+        };
+        discovery.DefaultXaml["UiPath.UIAutomationNext.Activities.NClick"] = """
+            <uix:NClick ClickType="Single" HealingAgentBehavior="SameAsCard"
+                        xmlns:uix="http://schemas.uipath.com/workflow/activities/uix" />
+            """;
+        var resolver = new ActivityCatalogResolver(fs, discovery);
+
+        var catalog = await resolver.ResolveAsync("/p");
+
+        Assert.True(catalog.TryGet("Click", out var click));
+        Assert.Contains(click!.Properties, p => p.Name == "ClickType");
+        Assert.Contains(click.Properties, p => p.Name == "HealingAgentBehavior");
+        Assert.Equal("http://schemas.uipath.com/workflow/activities/uix", click.XmlNamespace);
+        Assert.Equal("uix", click.Prefix);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_DoesNotQueryStarterForCardActivities() {
+        var fs = new MemoryFilesystem {
+            ProjectJsonPath = "/p/project.json",
+            ProjectJson = """{ "name": "P", "dependencies": { "UiPath.System.Activities": "[26.4.0]" } }"""
+        };
+        var discovery = new StubDiscovery {
+            Hits = [new DiscoveredActivity("LogMessage", "UiPath.Core.Activities.LogMessage",
+                "UiPath.System.Activities", "26.4.0")]
+        };
+        var resolver = new ActivityCatalogResolver(fs, discovery);
+
+        await resolver.ResolveAsync("/p");
+
+        Assert.Empty(discovery.DefaultXamlQueries);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_DiscoveryFailure_SkipsStarterLookups() {
+        var fs = new MemoryFilesystem {
+            ProjectJsonPath = "/p/project.json",
+            ProjectJson = """{ "name": "P", "dependencies": { "UiPath.System.Activities": "26.4.0" } }"""
+        };
+        var discovery = new StubDiscovery { ToThrow = new InvalidOperationException("cli missing") };
+        var resolver = new ActivityCatalogResolver(fs, discovery);
+
+        await resolver.ResolveAsync("/p");
+
+        Assert.Empty(discovery.DefaultXamlQueries);
+    }
+
+    [Fact]
+    public void TruncatedPackages_ReportsPackagesBeyondTheBudget() {
+        var packages = Enumerable.Range(0, ActivityCatalogResolver.MaxPackageQueries + 3)
+            .Select(i => $"UiPath.Package{i}.Activities")
+            .ToList();
+
+        var truncated = ActivityCatalogResolver.TruncatedPackages(packages);
+        var queried = ActivityCatalogResolver.DiscoveryQueries(packages).Skip(1).ToList();
+        Assert.Equal(3, truncated.Count);
+        Assert.Equal(ActivityCatalogResolver.MaxPackageQueries, queried.Count);
+        Assert.DoesNotContain(truncated[0], queried);
+    }
+
+    [Fact]
+    public void DiscoveryWarning_SurfacesTruncatedPackages() {
+        var catalog = ActivityCatalogResolver.Merge(
+            ActivityCatalog.All,
+            new Dictionary<string, string>(),
+            [],
+            "cli",
+            discoveryFailed: false,
+            truncatedPackages: ["UiPath.Extra.Activities"]);
+
+        var warning = ActivityCatalogResolver.DiscoveryWarning(catalog);
+        Assert.NotNull(warning);
+        Assert.Contains("UiPath.Extra.Activities", warning);
+    }
+
+    [Fact]
+    public void DefaultXamlParser_ReadsPropertiesNamespaceAndBodySlot() {
+        const string starter = """
+            <ui:ForEachRow DataTable="{x:Null}" DisplayName="For Each Row"
+                xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <ui:ForEachRow.Body>
+                <ActivityAction x:TypeArguments="sd:DataRow">
+                  <Sequence />
+                </ActivityAction>
+              </ui:ForEachRow.Body>
+            </ui:ForEachRow>
+            """;
+
+        var surface = DefaultXamlParser.Parse(starter);
+
+        Assert.NotNull(surface);
+        Assert.Equal("ForEachRow", surface!.ElementName);
+        Assert.Equal("http://schemas.uipath.com/workflow/activities", surface.XmlNamespace);
+        Assert.True(surface.IsContainer);
+        Assert.Contains(surface.Properties, p => p.Name == "DataTable");
+        Assert.Contains(surface.Properties, p => p.Name == "DisplayName");
+        // The body slot is a container descriptor, never a settable property.
+        Assert.DoesNotContain(surface.Properties, p => p.Name == "Body");
+    }
+
+    [Fact]
+    public void DefaultXamlParser_ContentPropertyChild_MarksContainer() {
+        const string starter = """
+            <ui:ForEach x:TypeArguments="x:String" DisplayName="For Each"
+                xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <ActivityAction x:TypeArguments="x:String" />
+            </ui:ForEach>
+            """;
+
+        var surface = DefaultXamlParser.Parse(starter);
+
+        Assert.NotNull(surface);
+        Assert.True(surface!.IsContainer);
+        Assert.Contains(surface.Properties, p => p.Name == "TypeArgument");
+    }
+
+    [Fact]
+    public void DefaultXamlParser_ExtractsFromEnvelope() {
+        const string envelope = """
+            {"Result":"Success","Data":{"defaultXaml":"<uix:NClick ClickType=\"Single\" xmlns:uix=\"http://schemas.uipath.com/workflow/activities/uix\" />"}}
+            """;
+
+        var xaml = DefaultXamlParser.ExtractXaml(envelope);
+
+        Assert.NotNull(xaml);
+        Assert.Contains("NClick", xaml);
+    }
+
+    [Fact]
+    public void DefaultXamlParser_InvalidXaml_ReturnsNull() =>
+        Assert.Null(DefaultXamlParser.Parse("<not"));
+
     private sealed class StubDiscovery : IActivityDiscovery {
         public IReadOnlyList<DiscoveredActivity> Hits { get; set; } = [];
         public Exception? ToThrow { get; set; }
+        public Dictionary<string, string> DefaultXaml { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<string> DefaultXamlQueries { get; } = [];
 
         public Task<IReadOnlyList<DiscoveredActivity>> FindAsync(string projectPath, string query, CancellationToken cancellationToken = default) {
             if (ToThrow is not null) {
@@ -128,6 +273,11 @@ public class ActivityCatalogResolverTests {
             }
 
             return Task.FromResult(Hits);
+        }
+
+        public Task<string?> GetDefaultXamlAsync(string projectPath, string activityClassName, CancellationToken cancellationToken = default) {
+            DefaultXamlQueries.Add(activityClassName);
+            return Task.FromResult(DefaultXaml.TryGetValue(activityClassName, out var xaml) ? xaml : null);
         }
     }
 

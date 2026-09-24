@@ -20,6 +20,13 @@ public sealed class ListActivityCatalog : IActivityCatalog {
     public string Source { get; }
     public bool DiscoveryFailed { get; }
 
+    /// <summary>
+    /// Packages whose activities were dropped from the discovery query fan-out
+    /// because the per-project query budget ran out. Empty when nothing was
+    /// truncated — the caller surfaces the rest as a warning.
+    /// </summary>
+    public IReadOnlyList<string> TruncatedPackages { get; init; } = [];
+
     public bool TryGet(string name, [NotNullWhen(true)] out ActivitySchema? schema) =>
         _byName.TryGetValue(name, out schema);
 

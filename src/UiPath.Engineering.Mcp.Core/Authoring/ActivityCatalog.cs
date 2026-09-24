@@ -78,6 +78,15 @@ public static class ActivityCatalog {
         "TryCatch", "WriteLine", "Delay", "Throw", "Rethrow"
     };
 
+    // Rule 21a's fast-path card: the 13 built-in activities whose surface the
+    // hand-written catalog owns. A discovery hit on this list keeps the curated
+    // schema and skips the package starter query; anything else asks the package.
+    public static readonly IReadOnlySet<string> CommonActivityCard = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "Sequence", "If", "Switch", "TryCatch", "While", "DoWhile", "ForEach",
+        "Assign", "LogMessage", "WriteLine", "Delay", "Throw", "Rethrow"
+    };
+
     // Activities whose parameters arrive as an <Arguments> scg:Dictionary of
     // In/Out/InOut bindings rather than as an activity body.
     internal static readonly HashSet<string> ArgumentDictionaryActivities = new(StringComparer.OrdinalIgnoreCase)
