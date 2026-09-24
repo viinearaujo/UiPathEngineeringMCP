@@ -22,7 +22,9 @@ public static class ActivityCatalog {
     public static IReadOnlyList<ActivitySchema> All { get; } =
     [
         S("Sequence", Wf, true, L("DisplayName")),
-        S("Assign", Wf, false, L("DisplayName"), E("To"), E("Value")),
+        // TypeArgument selects the preferred generic Assign<T> form; omitting it
+        // renders the non-generic object/object Assign.
+        S("Assign", Wf, false, L("DisplayName"), T("TypeArgument", required: false), E("To"), E("Value")),
         S("If", Wf, true, L("DisplayName"), E("Condition")),
         S("Switch", Wf, true, L("DisplayName"), E("Expression"), T("TypeArgument")),
         S("ForEach", Wf, true, L("DisplayName"), E("Values"), T("TypeArgument"), L("ItemName")),
@@ -41,7 +43,9 @@ public static class ActivityCatalog {
         S("AddDataRow", Ui, false, L("DisplayName"), E("DataTable"), E("ArrayRow")),
         S("ReadRange", Ui, false, L("DisplayName"), L("Range"), L("SheetName"), E("DataTable")),
         S("WriteRange", Ui, false, L("DisplayName"), L("Range"), L("SheetName"), E("DataTable")),
-        S("InvokeCode", Ui, true, L("DisplayName"), L("Code", required: true), L("Language")),
+        // InvokeCode binds its parameters through the .Arguments dictionary and
+        // takes no activity body, so it is not a container.
+        S("InvokeCode", Ui, false, L("DisplayName"), L("Code", required: true), L("Language")),
     ];
 
     public static IActivityCatalog Fallback { get; } = new ListActivityCatalog(All, "fallback");
@@ -73,6 +77,49 @@ public static class ActivityCatalog {
         "Sequence", "Assign", "If", "Switch", "ForEach", "While", "DoWhile",
         "TryCatch", "WriteLine", "Delay", "Throw", "Rethrow"
     };
+
+    // Activities whose parameters arrive as an <Arguments> scg:Dictionary of
+    // In/Out/InOut bindings rather than as an activity body.
+    internal static readonly HashSet<string> ArgumentDictionaryActivities = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "InvokeWorkflowFile", "InvokeCode"
+    };
+
+    // Element type per catalog expression property, as an x:TypeArguments token,
+    // plus the argument direction. Only properties whose argument type is fixed
+    // by the activity are listed; a type that varies with the spec's own
+    // TypeArgument property (Assign, Switch, ForEach) is resolved by the builder.
+    private static readonly IReadOnlyDictionary<string, (string Token, ArgumentDirection Direction)> ExpressionArguments =
+        new Dictionary<string, (string, ArgumentDirection)>(StringComparer.OrdinalIgnoreCase) {
+            ["If.Condition"] = ("x:Boolean", ArgumentDirection.In),
+            ["While.Condition"] = ("x:Boolean", ArgumentDirection.In),
+            ["DoWhile.Condition"] = ("x:Boolean", ArgumentDirection.In),
+            ["LogMessage.Message"] = ("x:Object", ArgumentDirection.In),
+            ["WriteLine.Text"] = ("x:String", ArgumentDirection.In),
+            ["Delay.Duration"] = ("x:TimeSpan", ArgumentDirection.In),
+            ["Throw.Exception"] = ("s:Exception", ArgumentDirection.In),
+            ["Assign.To"] = (string.Empty, ArgumentDirection.Out),
+            ["Assign.Value"] = (string.Empty, ArgumentDirection.In),
+            ["Switch.Expression"] = (string.Empty, ArgumentDirection.In),
+            ["ForEach.Values"] = (string.Empty, ArgumentDirection.In),
+            ["ForEachRow.DataTable"] = ("sd:DataTable", ArgumentDirection.In),
+            ["BuildDataTable.DataTable"] = ("sd:DataTable", ArgumentDirection.Out),
+            ["AddDataRow.DataTable"] = ("sd:DataTable", ArgumentDirection.InOut),
+            ["AddDataRow.ArrayRow"] = ("x:Object[]", ArgumentDirection.In),
+            ["ReadRange.DataTable"] = ("sd:DataTable", ArgumentDirection.Out),
+            ["WriteRange.DataTable"] = ("sd:DataTable", ArgumentDirection.In),
+        };
+
+    internal static bool AcceptsArgumentDictionary(string activityName) =>
+        ArgumentDictionaryActivities.Contains(activityName);
+
+    /// <summary>
+    /// The fixed argument type and direction for an expression property, or null
+    /// when the property is not a known expression argument. An empty token means
+    /// the type comes from the spec's own <c>TypeArgument</c> property.
+    /// </summary>
+    internal static (string Token, ArgumentDirection Direction)? ExpressionArgument(string activityName, string propertyName) =>
+        ExpressionArguments.TryGetValue($"{activityName}.{propertyName}", out var known) ? known : null;
 
     private static int Levenshtein(string a, string b) {
         a = a.ToLowerInvariant();

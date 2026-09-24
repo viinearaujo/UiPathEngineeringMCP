@@ -9,7 +9,8 @@ public sealed class ActivitySpec {
     public List<ActivitySpec>? Else { get; set; }        // If only — Else branch; Children is Then
     public List<SwitchCaseSpec>? Cases { get; set; }     // Switch only
     public List<ActivitySpec>? Default { get; set; }     // Switch only — default branch
-    public List<ArgumentMappingSpec>? Arguments { get; set; } // InvokeWorkflowFile only
+    public List<ArgumentMappingSpec>? Arguments { get; set; } // InvokeWorkflowFile and InvokeCode only
+    public List<string>? Imports { get; set; }           // root spec only — expression namespaces
 }
 
 public sealed class VariableSpec {

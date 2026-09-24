@@ -13,13 +13,18 @@ namespace UiPath.Engineering.Mcp.Tools;
 public sealed class InsertActivitiesTool {
     private readonly IFilesystemProvider _filesystem;
     private readonly IActivityCatalogResolver _catalogResolver;
+    private readonly IProjectModelBuilder? _projectModelBuilder;
 
-    public InsertActivitiesTool(IFilesystemProvider filesystem, IActivityCatalogResolver catalogResolver) {
+    public InsertActivitiesTool(
+        IFilesystemProvider filesystem,
+        IActivityCatalogResolver catalogResolver,
+        IProjectModelBuilder? projectModelBuilder = null) {
         _filesystem = filesystem;
         _catalogResolver = catalogResolver;
+        _projectModelBuilder = projectModelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Recommended Copilot surgical XAML path: inserts activities from a JSON spec into an existing .xaml workflow, as children of the container targeted by activityId (preferred, from find_activity; accepts WorkflowViewState.IdRef or a structural path) or DisplayName. Prefer this over edit_workflow_activity (leave-off fragment hatch). Run validate_activity_spec first to dry-run. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }. A root Sequence without variables inserts its children directly; any other root is inserted as a single node. Strings enclosed in square brackets ([expr]) are interpreted as expressions; all other values are literals. Next: validate_project.")]
+    [McpServerTool(UseStructuredContent = true), Description("Recommended Copilot surgical XAML path: inserts activities from a JSON spec into an existing .xaml workflow, as children of the container targeted by activityId (preferred, from find_activity; accepts WorkflowViewState.IdRef or a structural path) or DisplayName. Prefer this over edit_workflow_activity (leave-off fragment hatch). Run validate_activity_spec first to dry-run. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile and InvokeCode) }. A root Sequence without variables inserts its children directly; any other root is inserted as a single node. Expression form follows the target project's expressionLanguage: in a VisualBasic project pass [expr] bracket shorthand and any other value is a literal; in a CSharp project pass a raw C# expression with no brackets. Next: validate_project.")]
     public async Task<ToolResult> InsertActivities(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,
@@ -65,7 +70,8 @@ public sealed class InsertActivitiesTool {
         }
 
         var catalog = await _catalogResolver.ResolveAsync(projectPath, cancellationToken);
-        if (!TryRenderFragment(spec!, catalog, out var fragment, out var renderErrors)) {
+        var settings = await ProjectXamlSettings.ResolveAsync(_projectModelBuilder, projectPath, cancellationToken);
+        if (!TryRenderFragment(spec!, catalog, settings, out var fragment, out var renderErrors, out var renderWarnings)) {
             return ToolResults.Failure($"The activity spec has {renderErrors.Count} violation(s).", renderErrors, sw);
         }
 
@@ -85,6 +91,7 @@ public sealed class InsertActivitiesTool {
         var warnings = new List<string> {
             "Activity IDs are per-parse-snapshot: IDs after the edit point may have shifted. Re-run find_activity before follow-up edits."
         };
+        warnings.AddRange(renderWarnings);
         if (ActivityCatalogResolver.DiscoveryWarning(catalog) is { } discoveryWarning) {
             warnings.Add(discoveryWarning);
         }
@@ -95,7 +102,8 @@ public sealed class InsertActivitiesTool {
                 filePath = targetPath,
                 operation = XamlActivityEditor.Insert,
                 activityId = edit.ResolvedId,
-                targetDisplayName = displayName
+                targetDisplayName = displayName,
+                expressionLanguage = settings.ExpressionLanguage.ToString()
             }, sw,
             warnings: warnings);
     }
@@ -103,25 +111,33 @@ public sealed class InsertActivitiesTool {
     // A root Sequence without variables is a convenience wrapper for multiple
     // siblings: render each child separately and concatenate. Anything else
     // (including a Sequence with variables) is rendered as one node.
-    private static bool TryRenderFragment(ActivitySpec spec, IActivityCatalog catalog, out string fragment, out List<ToolError> errors) {
+    private static bool TryRenderFragment(
+        ActivitySpec spec,
+        IActivityCatalog catalog,
+        ProjectXamlSettings settings,
+        out string fragment,
+        out List<ToolError> errors,
+        out List<string> warnings) {
+        warnings = [];
         if (string.Equals(spec.Name, "Sequence", StringComparison.OrdinalIgnoreCase)
             && spec.Variables is not { Count: > 0 }) {
             var parts = new List<string>();
             errors = [];
             foreach (var child in spec.Children ?? []) {
-                var build = XamlBuilder.RenderFragment(child, catalog);
+                var build = XamlBuilder.RenderFragment(child, catalog, settings);
                 if (!build.Success) {
                     errors = build.Errors;
                     fragment = string.Empty;
                     return false;
                 }
                 parts.Add(build.Xaml!);
+                warnings.AddRange(build.Warnings);
             }
             fragment = string.Concat(parts);
             return true;
         }
 
-        var rootBuild = XamlBuilder.RenderFragment(spec, catalog);
+        var rootBuild = XamlBuilder.RenderFragment(spec, catalog, settings);
         if (!rootBuild.Success) {
             fragment = string.Empty;
             errors = rootBuild.Errors;
@@ -129,6 +145,7 @@ public sealed class InsertActivitiesTool {
         }
         fragment = rootBuild.Xaml!;
         errors = [];
+        warnings.AddRange(rootBuild.Warnings);
         return true;
     }
 }

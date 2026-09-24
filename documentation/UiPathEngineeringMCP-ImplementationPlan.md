@@ -1,5 +1,12 @@
 # UiPath Engineering MCP — Implementation Handoff
 
+> **Historical document.** This is the original MVP build plan, kept for provenance. It does not describe the current server:
+> - The referenced source-of-truth file `UiPath_Engineering_MCP_MVP_Implementation_Plan.md` is not in the repository.
+> - The CLI surface described here (`uip restore` / `analyze` / `pack`) is obsolete. The server maps three verbs — `uip rpa validate` / `build` / `pack` — via `UiPathCliProvider`.
+> - The `Providers/PowerShell/*` and `Providers/Git/*` layers below were never implemented. The providers that ship are `Filesystem`, `UiPathCli`, `Skills`, and `GitLab`.
+>
+> For the current design, see [README.md](../README.md) and [docs/agent-connection.md](../docs/agent-connection.md).
+
 ## 1. Purpose
 
 This document is the execution handoff plan for building a custom Model Context Protocol server for UiPath engineering tasks.

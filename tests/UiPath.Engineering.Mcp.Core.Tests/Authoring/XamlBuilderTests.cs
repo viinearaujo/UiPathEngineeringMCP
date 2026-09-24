@@ -26,9 +26,11 @@ public class XamlBuilderTests {
             Children = [new ActivitySpec { Name = "LogMessage", Properties = new() { ["message"] = "[row(0).ToString()]" } }]
         };
         var result = XamlBuilder.RenderFragment(spec);
-        Assert.Contains("<ForEach x:TypeArguments=\"DataRow\"", result.Xaml);
-        Assert.Contains("<DelegateInArgument x:TypeArguments=\"DataRow\" Name=\"row\" />", result.Xaml);
+        Assert.Contains("<ForEach x:TypeArguments=\"sd:DataRow\"", result.Xaml);
+        Assert.Contains("<DelegateInArgument x:TypeArguments=\"sd:DataRow\" Name=\"row\" />", result.Xaml);
         Assert.Contains("<ui:LogMessage", result.Xaml);
+        // The declared alias must resolve: System.Data types are not in the x: schema.
+        Assert.Contains("xmlns:sd=\"clr-namespace:System.Data;assembly=System.Data\"", result.Xaml);
     }
 
     [Fact]
@@ -56,16 +58,23 @@ public class XamlBuilderTests {
     }
 
     [Fact]
-    public void RenderWorkflowFile_VariableBareNonPrimitiveType_PassesThroughWithoutXPrefix() {
+    public void RenderWorkflowFile_VariableTypes_ResolveToValidPrefixes() {
         var spec = new ActivitySpec {
             Name = "Sequence",
             Variables = [new VariableSpec { Name = "row", Type = "DataRow" },
-                new VariableSpec { Name = "n", Type = "Int32" }]
+                new VariableSpec { Name = "n", Type = "Int32" },
+                new VariableSpec { Name = "when", Type = "DateTime" }]
         };
         var result = XamlBuilder.RenderWorkflowFile(spec, "TestWorkflow");
         Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
-        Assert.Contains("<Variable x:TypeArguments=\"DataRow\" Name=\"row\" />", result.Xaml);
+        // DataRow is not an x: schema primitive; it must resolve through sd:, never x:DataRow.
+        Assert.Contains("<Variable x:TypeArguments=\"sd:DataRow\" Name=\"row\" />", result.Xaml);
         Assert.Contains("<Variable x:TypeArguments=\"x:Int32\" Name=\"n\" />", result.Xaml);
+        Assert.Contains("<Variable x:TypeArguments=\"s:DateTime\" Name=\"when\" />", result.Xaml);
+        Assert.Contains("xmlns:sd=\"clr-namespace:System.Data;assembly=System.Data\"", result.Xaml);
+        Assert.Contains("xmlns:s=\"clr-namespace:System;assembly=System.Private.CoreLib\"", result.Xaml);
+        Assert.DoesNotContain("x:DataRow", result.Xaml);
+        Assert.DoesNotContain("x:DateTime", result.Xaml);
     }
 
     [Fact]
@@ -125,7 +134,7 @@ public class XamlBuilderTests {
         };
         var result = XamlBuilder.RenderFragment(spec);
         Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
-        Assert.Contains("<Switch x:TypeArguments=\"Int32\"", result.Xaml);
+        Assert.Contains("<Switch x:TypeArguments=\"x:Int32\"", result.Xaml);
         Assert.Contains("Expression=\"[status]\"", result.Xaml);
         Assert.Contains("x:Key=\"1\"", result.Xaml);
         Assert.Contains("x:Key=\"2\"", result.Xaml);

@@ -33,11 +33,12 @@ public class XamlCodedInvokeBoundaryTests {
         IsCodedWorkflow = true
     };
 
-    private static CodedWorkflowModel SourceClass(string className, string ns = "") => new() {
+    private static CodedWorkflowModel SourceClass(string className, string ns = "", params string[] publicMethods) => new() {
         FileName = className + ".cs",
         ClassName = className,
         Namespace = ns,
-        Kind = CodedFileKind.Source
+        Kind = CodedFileKind.Source,
+        PublicMethods = [.. publicMethods]
     };
 
     [Theory]
@@ -123,17 +124,109 @@ public class XamlCodedInvokeBoundaryTests {
                 Direction = "In", TargetArgument = "in_Name", Type = "x:String", Expression = "[Helpers.Format(id)]"
             }),
             CodedWorkflow(),
-            new CodedWorkflowModel {
-                FileName = "Helpers.cs",
-                ClassName = "Helpers",
-                Kind = CodedFileKind.Source,
-                PublicMethods = ["Format"]
-            });
+            SourceClass("Helpers", publicMethods: ["Format"]));
 
         var gap = Assert.Single(XamlCodedInvokeBoundary.Lint(model));
         Assert.StartsWith(XamlCodedInvokeBoundary.SourceMethodIdPrefix, gap.Id);
+        Assert.Equal(Gap.Error, gap.Severity);
+        // An argument binding is always expression text, so a call token there is a call site.
+        Assert.Equal(Gap.ConfidenceHigh, gap.Confidence);
         Assert.Contains("Helpers.Format", gap.Message);
         Assert.Equal("add_coded_workflow", gap.SuggestedTool);
+    }
+
+    [Fact]
+    public void Lint_LogMessageProseMentioningSourceMethod_DoesNotReportBoundaryViolation() {
+        // The message is free text. "Call Helpers.Format" is prose, not a call, and used to
+        // raise an error-severity violation the Copilot loop had to remediate.
+        var main = MainInvoking("InvoiceFlow.cs");
+        main.LogMessages.Add(new LogMessageModel {
+            DisplayName = "Log hint",
+            Level = "Info",
+            Message = "Call Helpers.Format on the invoice id before posting."
+        });
+        var model = Project(main, CodedWorkflow(), SourceClass("Helpers", publicMethods: ["Format"]));
+
+        var gaps = XamlCodedInvokeBoundary.Lint(model);
+
+        Assert.DoesNotContain(gaps, g => g.Id.StartsWith(XamlCodedInvokeBoundary.SourceMethodIdPrefix, StringComparison.Ordinal));
+        Assert.DoesNotContain(ProjectGapAnalyzer.Analyze(model),
+            g => g.Category == "boundary" && g.Severity == Gap.Error);
+    }
+
+    [Fact]
+    public void Lint_LogMessageWithCallShapedToken_ReportsLowConfidenceHint() {
+        var main = MainInvoking("InvoiceFlow.cs");
+        main.LogMessages.Add(new LogMessageModel {
+            DisplayName = "Log hint",
+            Level = "Info",
+            Message = "Failed at Helpers.Format(id) for invoice 42."
+        });
+        var model = Project(main, CodedWorkflow(), SourceClass("Helpers", publicMethods: ["Format"]));
+
+        var gap = Assert.Single(XamlCodedInvokeBoundary.Lint(model),
+            g => g.Id.StartsWith(XamlCodedInvokeBoundary.SourceMethodIdPrefix, StringComparison.Ordinal));
+
+        // Downgraded from error: raw attribute text cannot distinguish a call from prose.
+        Assert.Equal(Gap.Info, gap.Severity);
+        Assert.Equal(Gap.ConfidenceLow, gap.Confidence);
+        Assert.Contains("Hint", gap.Message, StringComparison.Ordinal);
+        Assert.Contains("verify", gap.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("edit_workflow_file", gap.SuggestedTool);
+    }
+
+    [Fact]
+    public void Lint_ExpressionFindingIsNotDowngradedByProseMention() {
+        // Same member found in an argument binding (a real call) and in prose: the
+        // error-severity finding must win, because both share one gap id.
+        var main = MainInvoking("InvoiceFlow.cs", new ArgumentMappingModel {
+            Direction = "In", TargetArgument = "in_Name", Type = "x:String", Expression = "[Helpers.Format(id)]"
+        });
+        main.LogMessages.Add(new LogMessageModel {
+            DisplayName = "Log hint",
+            Level = "Info",
+            Message = "Failed at Helpers.Format(id)."
+        });
+        var model = Project(main, CodedWorkflow(), SourceClass("Helpers", publicMethods: ["Format"]));
+
+        var gaps = XamlCodedInvokeBoundary.Lint(model);
+
+        var gap = Assert.Single(gaps,
+            g => g.Id.StartsWith(XamlCodedInvokeBoundary.SourceMethodIdPrefix, StringComparison.Ordinal));
+        Assert.Equal(Gap.Error, gap.Severity);
+        Assert.Equal(Gap.ConfidenceHigh, gap.Confidence);
+    }
+
+    [Fact]
+    public void Lint_ExplicitLocalPrefixArgument_IsHighConfidence() {
+        var model = Project(
+            MainInvoking("InvoiceFlow.cs", new ArgumentMappingModel {
+                Direction = "In", TargetArgument = "in_Customer", Type = "local:CustomerRecord", Expression = "[customer]"
+            }),
+            CodedWorkflow(),
+            SourceClass("CustomerRecord"));
+
+        var gap = Assert.Single(XamlCodedInvokeBoundary.Lint(model));
+        Assert.StartsWith(XamlCodedInvokeBoundary.NonPrimitiveIdPrefix, gap.Id);
+        Assert.Equal(Gap.Error, gap.Severity);
+        // An explicit local: prefix is certain, unlike a bare simple name.
+        Assert.Equal(Gap.ConfidenceHigh, gap.Confidence);
+    }
+
+    [Fact]
+    public void Lint_BareSimpleNameArgument_IsMediumConfidence() {
+        // Namespace-blind matching: a NuGet type sharing the project class's simple name
+        // is indistinguishable, so this stays a medium-confidence finding.
+        var model = Project(
+            MainInvoking("InvoiceFlow.cs", new ArgumentMappingModel {
+                Direction = "In", TargetArgument = "in_Customer", Type = "CustomerRecord", Expression = "[customer]"
+            }),
+            CodedWorkflow(),
+            SourceClass("CustomerRecord"));
+
+        var gap = Assert.Single(XamlCodedInvokeBoundary.Lint(model));
+        Assert.Equal(Gap.Error, gap.Severity);
+        Assert.Equal(Gap.ConfidenceMedium, gap.Confidence);
     }
 
     [Fact]

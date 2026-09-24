@@ -7,6 +7,13 @@ namespace UiPath.Engineering.Mcp.Core.GapAnalysis;
 /// BCL / framework types, and must never pass types defined in this automation
 /// or call coded-source methods.
 /// </summary>
+/// <remarks>
+/// Every rule here reads text the XAML parser produced by matching local names only, so
+/// none of them can see the XML namespace behind a type or element. Gaps carry a
+/// <see cref="Gap.Confidence"/> next to their severity: type-shape analysis is graded
+/// medium (a NuGet type sharing a project class's simple name is indistinguishable), and
+/// the coded-source-method scan is graded low because it can only ever be a textual match.
+/// </remarks>
 public static class XamlCodedInvokeBoundary {
     public const string NonPrimitiveIdPrefix = "coded-invoke-non-primitive";
     public const string SourceInvokeIdPrefix = "xaml-invokes-coded-source";
@@ -23,7 +30,8 @@ public static class XamlCodedInvokeBoundary {
         foreach (var workflow in model.Workflows) {
             foreach (var invoke in workflow.InvokeWorkflows) {
                 foreach (var mapping in invoke.ArgumentMappings) {
-                    AddSourceMethodGaps(workflow.FileName, mapping.Expression, model.CodedWorkflows, gaps);
+                    AddSourceMethodGaps(workflow.FileName, mapping.Expression, model.CodedWorkflows, gaps,
+                        SourceMethodContext.Expression);
                 }
 
                 var targetName = Path.GetFileName(invoke.TargetWorkflow.Trim().Trim('"'));
@@ -52,7 +60,8 @@ public static class XamlCodedInvokeBoundary {
             }
 
             foreach (var log in workflow.LogMessages) {
-                AddSourceMethodGaps(workflow.FileName, log.Message, model.CodedWorkflows, gaps);
+                AddSourceMethodGaps(workflow.FileName, log.Message, model.CodedWorkflows, gaps,
+                    SourceMethodContext.Prose);
             }
         }
 
@@ -115,6 +124,10 @@ public static class XamlCodedInvokeBoundary {
     private static Gap NonPrimitiveGap(string sourceFile, string targetName, string argument, string type) => new() {
         Id = $"{NonPrimitiveIdPrefix}:{sourceFile}->{targetName}:{argument}",
         Severity = Gap.Error,
+        // An explicit local: prefix or a project namespace is certain. A bare simple name
+        // cannot be told apart from a NuGet type with the same name, because the XAML
+        // parse is namespace-blind.
+        Confidence = TypeEvidence(type),
         Category = "boundary",
         Message = $"'{sourceFile}' invokes coded workflow '{targetName}' with project-defined argument '{argument}' of type '{type}'.",
         TargetFile = sourceFile,
@@ -122,11 +135,15 @@ public static class XamlCodedInvokeBoundary {
         SuggestedAction = "Pass BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays) across InvokeWorkflowFile into a coded workflow. Keep types defined in this automation inside .cs."
     };
 
+    private static string TypeEvidence(string type) =>
+        type.Contains("local:", StringComparison.OrdinalIgnoreCase) ? Gap.ConfidenceHigh : Gap.ConfidenceMedium;
+
     private static void AddSourceMethodGaps(
         string sourceFile,
         string? text,
         IEnumerable<CodedWorkflowModel> codedFiles,
-        List<Gap> gaps) {
+        List<Gap> gaps,
+        SourceMethodContext context) {
         if (string.IsNullOrWhiteSpace(text)) {
             return;
         }
@@ -138,27 +155,76 @@ public static class XamlCodedInvokeBoundary {
 
             foreach (var method in coded.PublicMethods) {
                 var token = coded.ClassName + "." + method;
-                if (!text.Contains(token, StringComparison.Ordinal)) {
+                if (!MatchesToken(text, token, context)) {
                     continue;
                 }
 
                 var id = $"{SourceMethodIdPrefix}:{sourceFile}:{coded.ClassName}.{method}";
+                // Expression-context findings are recorded first, so the stronger one wins
+                // and a prose mention of the same member never downgrades it.
                 if (gaps.Any(g => g.Id == id)) {
                     continue;
                 }
 
-                gaps.Add(new Gap {
-                    Id = id,
-                    Severity = Gap.Error,
-                    Category = "boundary",
-                    Message = $"'{sourceFile}' calls coded source method '{token}'. XAML must never call methods on coded source types.",
-                    TargetFile = sourceFile,
-                    SuggestedTool = "add_coded_workflow",
-                    SuggestedAction = "Do not invoke coded source files or their methods from XAML. Call a coded workflow that uses those helpers in C#."
-                });
+                gaps.Add(SourceMethodGap(id, sourceFile, token, context));
             }
         }
     }
+
+    // A LogMessage message is free text: "Call InvoiceValidator.Validate when the total is
+    // negative" is prose, not a call. Only a call-shaped token — followed by an open paren —
+    // is reported there, and even then as a hint. An argument binding is always expression
+    // text, so a bare token there is a real call site.
+    private static bool MatchesToken(string text, string token, SourceMethodContext context) {
+        if (context == SourceMethodContext.Expression) {
+            return text.Contains(token, StringComparison.Ordinal);
+        }
+
+        var search = 0;
+        while (search < text.Length) {
+            var index = text.IndexOf(token, search, StringComparison.Ordinal);
+            if (index < 0) {
+                return false;
+            }
+
+            var after = index + token.Length;
+            if (after < text.Length && text[after] == '(') {
+                return true;
+            }
+
+            search = index + 1;
+        }
+
+        return false;
+    }
+
+    private static Gap SourceMethodGap(string id, string sourceFile, string token, SourceMethodContext context) =>
+        context == SourceMethodContext.Expression
+            ? new Gap {
+                Id = id,
+                Severity = Gap.Error,
+                Category = "boundary",
+                Message = $"'{sourceFile}' calls coded source method '{token}' in an argument binding. "
+                    + "XAML must never call methods on coded source types.",
+                TargetFile = sourceFile,
+                SuggestedTool = "add_coded_workflow",
+                SuggestedAction = "Do not invoke coded source files or their methods from XAML. "
+                    + "Call a coded workflow that uses those helpers in C#."
+            }
+            : new Gap {
+                Id = id,
+                Severity = Gap.Info,
+                // Raw attribute text: the parser cannot tell a call from prose that names one.
+                Confidence = Gap.ConfidenceLow,
+                Category = "boundary",
+                Message = $"'{sourceFile}' has a LogMessage whose text mentions coded source method '{token}'. "
+                    + "Hint: XAML must never call methods on coded source types — verify whether this is a real "
+                    + "call or just wording before changing anything.",
+                TargetFile = sourceFile,
+                SuggestedTool = "edit_workflow_file",
+                SuggestedAction = "If the message text is a real expression, move the call into a coded workflow "
+                    + "and log the result instead."
+            };
 
     private static bool ContainsProjectDefinedType(string? type, ProjectDefinedTypes projectTypes) {
         if (string.IsNullOrWhiteSpace(type)) {
@@ -444,5 +510,14 @@ public static class XamlCodedInvokeBoundary {
 
             return false;
         }
+    }
+
+    /// <summary>Where a coded-source-method token was found, which decides how much it proves.</summary>
+    private enum SourceMethodContext {
+        /// <summary>An <c>InvokeWorkflowFile</c> argument binding: always expression text.</summary>
+        Expression,
+
+        /// <summary>A <c>LogMessage</c> message: free text that may merely name a member.</summary>
+        Prose
     }
 }

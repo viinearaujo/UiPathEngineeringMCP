@@ -17,3 +17,6 @@ appsettings.Local.json
 
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+
+# Agent tool scratch (Qwen tmp working files)
+.qwen/tmp/

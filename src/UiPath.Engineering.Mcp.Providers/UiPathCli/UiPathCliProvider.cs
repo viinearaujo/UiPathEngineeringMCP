@@ -11,6 +11,7 @@ namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 public sealed class UiPathCliProvider : IUiPathCliProvider {
     private readonly UiPathCliOptions _options;
     private readonly ILogger<UiPathCliProvider> _logger;
+    private readonly CliCommandPolicy _policy;
 
     // Resolved once (the provider is a singleton); Lazy<> is thread-safe by default.
     private readonly Lazy<CliExecutableResolver.LaunchSpec?> _launchSpec;
@@ -18,6 +19,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
     public UiPathCliProvider(IOptions<UiPathCliOptions> options, ILogger<UiPathCliProvider>? logger = null) {
         _options = options.Value;
         _logger = logger ?? NullLogger<UiPathCliProvider>.Instance;
+        _policy = new CliCommandPolicy(_options);
         _launchSpec = new Lazy<CliExecutableResolver.LaunchSpec?>(
             () => CliExecutableResolver.Resolve(_options.ExecutablePath));
     }
@@ -69,7 +71,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
                 continue;
             }
 
-            var stepResult = await RunTokensAsync(verb, BuildVerbArguments(verb, projectPath), null, cancellationToken);
+            var (stepResult, _) = await RunTokensAsync(verb, BuildVerbArguments(verb, projectPath), null, cancellationToken);
 
             stepResults[verb] = new CliStepResult {
                 Executed = true,
@@ -135,36 +137,170 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
     private static string Cap(string s, int maxChars) =>
         s.Length <= maxChars ? s : s[..maxChars] + "\n...[truncated]";
 
-    public Task<UiPathCliResult> RunAsync(
+    public async Task<UiPathCliResult> RunAsync(
         string verb,
         string arguments,
         string? workingDirectory = null,
         CancellationToken cancellationToken = default) {
         if (CliCommandPolicy.ContainsRejectedChars(arguments)) {
-            return Task.FromResult(new UiPathCliResult {
+            return new UiPathCliResult {
                 Success = false,
                 Command = $"{_options.ExecutablePath} {arguments}",
                 ExitCode = -1,
                 Summary = "Arguments rejected.",
                 Errors = ["The arguments contain control characters that cannot be passed as process arguments."]
-            });
+            };
         }
 
-        return RunTokensAsync(verb, ProcessRunner.SplitQuotedArguments(arguments), workingDirectory, cancellationToken);
+        var (result, _) = await RunTokensAsync(
+            verb, ProcessRunner.SplitQuotedArguments(arguments), workingDirectory, cancellationToken);
+        return result;
     }
 
-    private async Task<UiPathCliResult> RunTokensAsync(
+    /// <summary>
+    /// Refuses an execution verb (rpa run / debug / execution) unless
+    /// <see cref="UiPathCliOptions.EnableExecution"/> is set. Applied on every entry point that
+    /// starts a process, so no caller — including the run_ui_path_cli hatch — can execute
+    /// automation on this machine through a path that skips the gate.
+    /// </summary>
+    internal UiPathCliResult? ExecutionRefusal(string verb, string arguments) {
+        if (!_policy.IsExecutionCommand(verb, arguments)) {
+            return null;
+        }
+
+        _logger.LogInformation(
+            "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
+            verb, 0, "error", "execution_disabled");
+
+        return new UiPathCliResult {
+            Success = false,
+            Command = $"{_options.ExecutablePath} {arguments}",
+            ExitCode = -1,
+            Summary = "Workflow execution is disabled on this server.",
+            Errors =
+            [
+                "Running or debugging a workflow executes arbitrary automation on this machine, so it is disabled by default.",
+                "Set UiPathCli:EnableExecution to true in appsettings.json and restart the server."
+            ]
+        };
+    }
+
+    /// <summary>
+    /// Token-faithful structured invocation: no re-tokenizing (so a value containing spaces or
+    /// quotes stays one ArgumentList entry), the response envelope parsed from the UNCAPPED
+    /// stdout, and an execution gate on the rpa run / debug / execution verbs.
+    /// </summary>
+    public async Task<UiPathCliRunResult> RunStructuredAsync(
+        string verb,
+        IReadOnlyList<string> tokens,
+        string? workingDirectory = null,
+        int? timeoutSeconds = null,
+        CancellationToken cancellationToken = default) {
+        if (tokens.Count == 0) {
+            return new UiPathCliRunResult {
+                Refused = true,
+                Cli = new UiPathCliResult {
+                    Success = false,
+                    ExitCode = -1,
+                    Summary = "No CLI command tokens supplied.",
+                    Errors = ["At least one command token is required."]
+                }
+            };
+        }
+
+        if (tokens.Any(CliCommandPolicy.ContainsRejectedChars)) {
+            return new UiPathCliRunResult {
+                Refused = true,
+                Cli = new UiPathCliResult {
+                    Success = false,
+                    ExitCode = -1,
+                    Summary = "Arguments rejected.",
+                    Errors = ["The command contains control characters that cannot be passed as process arguments."]
+                }
+            };
+        }
+
+        // Running a workflow executes arbitrary automation on this machine, so it is gated by a
+        // dedicated fail-closed switch rather than EnableMutatingCommands.
+        if (IsExecutionRefused(verb, tokens)) {
+            _logger.LogInformation(
+                "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
+                verb, 0, "error", "execution_disabled");
+            return new UiPathCliRunResult {
+                Refused = true,
+                Cli = new UiPathCliResult {
+                    Success = false,
+                    Command = FormatExecutedCommand(_options.ExecutablePath, tokens),
+                    ExitCode = -1,
+                    Summary = "Workflow execution is disabled on this server.",
+                    Errors =
+                    [
+                        "Running or debugging a workflow executes arbitrary automation on this machine, so it is disabled by default.",
+                        "Set UiPathCli:EnableExecution to true in appsettings.json and restart the server."
+                    ]
+                }
+            };
+        }
+
+        var (cli, fullStdOut) = await RunTokensAsync(
+            verb, tokens, workingDirectory, cancellationToken, timeoutSeconds, captureFullStdOut: true);
+
+        // The envelope is parsed from the UNCAPPED stdout so a long run response is never
+        // truncated into unparseable JSON. It is deliberately parsed un-redacted: SecretRedactor's
+        // key=value rule rewrites to end-of-line, which would corrupt a JSON payload and lose the
+        // verdict. Redaction happens where the text is rendered for display — Cli.StdOut/StdErr
+        // here, and the individual message fields in the tool payload.
+        var parseSource = string.IsNullOrWhiteSpace(fullStdOut) ? cli.StdOut : fullStdOut;
+
+        return new UiPathCliRunResult {
+            Cli = cli,
+            Envelope = CliEnvelopeParser.TryParse(parseSource, out var envelope) ? envelope : null
+        };
+    }
+
+    private bool IsExecutionRefused(string verb, IReadOnlyList<string> tokens) =>
+        !_policy.ExecutionEnabled
+        && _policy.IsExecutionCommand(verb, CliVerbArguments.ToArgumentString(tokens));
+
+    private Task<(UiPathCliResult Cli, string FullStdOut)> RunTokensAsync(
         string verb,
         IReadOnlyList<string> arguments,
         string? workingDirectory,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken) =>
+        RunTokensCoreAsync(verb, arguments, workingDirectory, timeoutSeconds: null, cancellationToken, captureFullStdOut: false);
+
+    private Task<(UiPathCliResult Cli, string FullStdOut)> RunTokensAsync(
+        string verb,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory,
+        CancellationToken cancellationToken,
+        int? timeoutSeconds,
+        bool captureFullStdOut) =>
+        RunTokensCoreAsync(verb, arguments, workingDirectory, timeoutSeconds, cancellationToken, captureFullStdOut);
+
+    private async Task<(UiPathCliResult Cli, string FullStdOut)> RunTokensCoreAsync(
+        string verb,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory,
+        int? timeoutSeconds,
+        CancellationToken cancellationToken,
+        bool captureFullStdOut) {
+        // Execution backstop at the single process-start choke point. The verb tools gate before
+        // they build their command, but this keeps the guarantee provider-wide: no path through
+        // RunAsync / RunStructuredAsync can start `rpa run`, `rpa debug`, or `rpa execution`
+        // unless EnableExecution is set.
+        if (!_policy.ExecutionEnabled
+            && ExecutionRefusal(verb, CliVerbArguments.ToArgumentString(arguments)) is { } refusal) {
+            return (refusal, string.Empty);
+        }
+
         var spec = _launchSpec.Value;
         if (spec is null) {
             var baseName = Path.GetFileNameWithoutExtension(_options.ExecutablePath);
             _logger.LogInformation(
                 "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
                 verb, 0, "error", "cli_not_found");
-            return new UiPathCliResult {
+            return (new UiPathCliResult {
                 Success = false,
                 Command = FormatExecutedCommand(_options.ExecutablePath, arguments),
                 ExitCode = -1,
@@ -174,15 +310,16 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
                     $"The UiPath CLI ('{_options.ExecutablePath}') was not found on PATH (searched for {baseName}.exe, {baseName}.cmd, {baseName}.bat, {baseName}.ps1).",
                     "Install it (npm install -g @uipath/cli) or set UiPathCli:ExecutablePath in appsettings.json."
                 ]
-            };
+            }, string.Empty);
         }
 
         var command = FormatExecutedCommand(spec.ResolvedPath, arguments);
         var sw = Stopwatch.StartNew();
+        var timeout = TimeSpan.FromSeconds(timeoutSeconds ?? _options.DefaultTimeoutSeconds);
 
         var run = await ProcessRunner.RunAsync(
             spec.FileName, spec.BuildArgumentList(arguments), workingDirectory,
-            TimeSpan.FromSeconds(_options.DefaultTimeoutSeconds), cancellationToken,
+            timeout, cancellationToken,
             _options.Environment);
 
         sw.Stop();
@@ -192,7 +329,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             _logger.LogInformation(
                 "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
                 verb, sw.ElapsedMilliseconds, "error", "start_error");
-            return new UiPathCliResult {
+            return (new UiPathCliResult {
                 Success = false,
                 Command = command,
                 ExitCode = -1,
@@ -202,33 +339,33 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
                     $"Could not start the UiPath CLI ('{spec.ResolvedPath}'): {run.StartError}",
                     "Verify that the UiPath CLI ('uip') is installed (npm install -g @uipath/cli) and available on PATH, or set UiPathCli:ExecutablePath in appsettings.json."
                 ]
-            };
+            }, string.Empty);
         }
 
         if (run.Canceled) {
             _logger.LogInformation(
                 "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
                 verb, sw.ElapsedMilliseconds, "canceled", "canceled");
-            return new UiPathCliResult {
+            return (new UiPathCliResult {
                 Success = false,
                 Command = command,
                 ExitCode = -1,
                 Summary = $"CLI '{verb}' was canceled.",
                 Errors = [$"'{verb}' was canceled by the caller."]
-            };
+            }, string.Empty);
         }
 
         if (run.TimedOut) {
             _logger.LogInformation(
                 "UiPath CLI {Verb} duration {DurationMs}ms status {Status} errorCode {ErrorCode}",
                 verb, sw.ElapsedMilliseconds, "error", "timeout");
-            return new UiPathCliResult {
+            return (new UiPathCliResult {
                 Success = false,
                 Command = command,
                 ExitCode = -1,
                 Summary = $"CLI '{verb}' execution timed out.",
-                Errors = [$"'{verb}' exceeded the {_options.DefaultTimeoutSeconds}s timeout."]
-            };
+                Errors = [$"'{verb}' exceeded the {(int)timeout.TotalSeconds}s timeout."]
+            }, string.Empty);
         }
 
         var parsed = UiPathCliOutputParser.Parse(verb, run.StdOut, run.StdErr);
@@ -255,7 +392,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             run.ExitCode);
 
         var success = run.ExitCode == 0 && errors.Count == 0;
-        return new UiPathCliResult {
+        return (new UiPathCliResult {
             Success = success,
             Command = command,
             ExitCode = run.ExitCode,
@@ -266,7 +403,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             RawOutputLines = rawLines,
             StdOut = stdout,
             StdErr = stderr
-        };
+        }, captureFullStdOut ? run.StdOut : string.Empty);
     }
 
     internal static string FormatExecutedCommand(string resolvedPath, IReadOnlyList<string> arguments) {

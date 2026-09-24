@@ -1,6 +1,271 @@
 # XAML Basics and Rules
 
-Core concepts for UiPath workflow XAML files and rules for generating and/or editing XAML content.
+Core concepts for UiPath workflow XAML files, the authoring workflow (Discovery → Generate/Edit → Validate & Fix → Response), and rules for generating and/or editing XAML content.
+
+**Read contract (Rule 22) — mechanical:** Grep `^## Catalogs` on this file for its line number, then Read this file with `limit` set to that line — everything ABOVE the marker is the mandatory full read. The two catalog sections below the marker (§ Common Editing Operations, § XAML Reference Examples) load per-entry only: Grep `^###`, Read the entries matching the operation or activity at hand; unsure → read it. A full-file Read that includes the catalogs means this contract was skipped.
+
+## Critical Rules — XAML (Rules 16–21a, 24)
+
+Mandatory for all XAML authoring and editing. Cited as "Rule N" across this skill. Rule 22 (the read-in-full mandate that brings you to this file) and Rule 23 (`expressionLanguage`/`targetFramework` immutability) live in SKILL.md § XAML-Specific Rules; Common Rules 1–12 are also in SKILL.md.
+
+16. **[XAML] Activity docs are the source of truth** — check `{projectRoot}/.local/docs/packages/{PackageId}/` first. Always.
+17. **[XAML] MUST understand project structure** — read `project.json`, check expression language, scan existing patterns. NEVER generate XAML blind.
+18. **[XAML] Batch-author, single gate** — author the complete workflow in one pass, sourcing each activity card → memory → Rule 21 triple (precedence in [execution-maps-guide.md](../execution-maps-guide.md)). Then per-file `validate` to clean, then one project `build` (Common Rule 3 cadence, 5-attempt caps unchanged); for observable-output workflows the gate ends with one `run` + output check ([execution-maps-guide.md § Gate ≠ runtime proof](../execution-maps-guide.md#gate--runtime-proof)). On failure: fix by error category (Rule 19); card-covered activities stay card-sourced — a gate failure does NOT reopen `activities find`/`get-default-xaml`; >2 errors with ambiguous origin → bisect (stub out half the new activities, re-validate).
+19. **[XAML] Fix errors by category** — Package → Structure → Type → Activity Properties → Logic.
+20. **[XAML] Flowchart node structure + ViewState both decide whether a Flowchart renders.** **Structure first:** every `FlowStep`/`FlowDecision`/`FlowSwitch` MUST be a direct child of `<Flowchart>` (only direct children are added to the `Flowchart.Nodes` collection), wired through `Flowchart.StartNode`/`FlowStep.Next`/branches with `<x:Reference>`+`x:Name`. NEVER build the flow as a nested chain — one `FlowStep` physically nested inside the previous one's `<FlowStep.Next>` — because nested-only steps are absent from `Flowchart.Nodes` and the designer renders almost nothing, regardless of ViewState. **Then ViewState:** when generating new Flowchart/StateMachine/ProcessDiagram workflows, per-node ViewState is MANDATORY — `ShapeLocation`+`ShapeSize` on every node (`ConnectorLocation` optional, Studio auto-routes). Without it Studio stacks every node at (0,0) so they overlap into what looks like a single node, and Studio does NOT auto-arrange on open (see [canvas-layout-guide.md](canvas-layout-guide.md)). When editing existing files, do NOT modify ViewState on nodes you are not changing. For Sequences, ViewState is optional.
+21. **[XAML] Reading `<Activity>.md` from `{PROJECT_DIR}/.local/docs/packages/...` is a precondition for `activities get-default-xaml` — for every activity not on the common-activity card.**
+    - **Card-listed activities and patterns:** consult [common-activity-card.md](../common-activity-card.md) and [common-pattern-card.md](../common-pattern-card.md) first — as a lookup, not a full read: Grep `^### ` on the card to list its entries with line numbers, then Read only the entries matching activities/patterns in the plan (an entry ends at the next `###`). Read a card end-to-end only when the plan needs more than 5 of its entries. On a card hit, author from the card entry alone — skip `activities find`, skip `activities get-default-xaml`, skip the per-activity MD read. Precedence: card → agent memory ([execution-maps-guide.md § Cross-session memory](../execution-maps-guide.md#cross-session-memory)) → full triple. A memory hit substitutes for the triple only; `validate`/`build` still gate.
+    - **All other activities:** (1) `activities find` → class name, (2) **read `<Activity>.md` first** and extract a property checklist (required + use-case-relevant), (3) `activities get-default-xaml` → starter element, (4) **diff your checklist against the starter and add what's missing** — an empty checklist means you skipped step 2, go back.
+    - **Doc lookup order:** primary `{PROJECT_DIR}/.local/docs/packages/<PackageId>/activities/<Activity>.md`; fallback `../activity-docs/<PackageId>/<closest-version>/<Activity>.md` for older package versions where `.local/docs` is empty. **Exception — `UiPath.UIAutomation.Activities` has no bundled fallback:** `.local/docs` (present only after the package is installed) is its sole activity-doc source. If it is absent, do not hunt for a bundled copy — follow Rule 7a (install with consent per [uia-starter-guide.md § UIA Prerequisites](../uia-starter-guide.md), or use the Placeholder-Selector Stub Pattern — [uia-starter-guide.md](../uia-starter-guide.md)).
+    - **Trigger activities are special — read BOTH docs.** When the class name ends in `Trigger`, the namespace contains `.Triggers`, or the description mentions "starts a job" / "Monitor Events" / "Trigger Scope", also read the bundled `../activity-docs/<PackageId>/<closest-version>/activities/<Activity>.md` **and** the package's bundled `overview.md`. The auto-generated `.local/docs` version is sparse for triggers; the bundled hand-written docs carry placement guidance (entry-point vs. `ui:TriggerScope`), deployment context, and cross-cutting namespace/assembly gotchas that the extractor does not capture. See Common Rule 12 (SKILL.md) and [trigger-pattern-guide.md](../trigger-pattern-guide.md).
+    - **Skip-tax — concrete:** `activities get-default-xaml` omits any property whose value equals the type default. For `NGetText` the starter is literally `<uix:NGetText HealingAgentBehavior="SameAsCard" />` with **zero** output properties — authoring from this alone produces `NGetText.Value="..."`, which does not exist; the output member is `TextString`. The whole file then fails to deserialize (`Cannot set unknown member`), which also blocks Object Repository linking against it. For `NTypeInto` that's 2 of 20 properties hidden.
+    - **Self-extending the card — "this activity feels simple, I'll add it to the card mentally" — is the failure mode.** The card is the only allowlist; for non-card activities the MD read is the only check.
+    - Full procedure: § Activity Property Surface in this file.
+21a. **[XAML] Built-in workflow activities: use the card only for this allowlist.** Fast-path card activities are: `Sequence`, `If`, `Switch<T>`, `TryCatch`, `While`, `DoWhile`, `ForEach<T>`, `Assign`, `LogMessage`, `WriteLine`, `Delay`, `Throw`, `Rethrow`. If the activity is on this list, Grep [common-activity-card.md](../common-activity-card.md) for its `^### ` heading, Read that entry, and author from it (Rule 21 lookup procedure). If it is not on this list, check [common-pattern-card.md](../common-pattern-card.md) next (same lookup: Grep `^### `, Read the matching entry) — its patterns cover e.g. text-file read/append/write, file copy, CSV, DataTable→CSV, queue publish, retry wrap, `InvokeWorkflowFile`, InvokeCode rows, HTTP→JSON — and follow full Rule 21 only when BOTH cards miss. `Pick`, `Parallel`, and `ParallelForEach<T>` are intentionally on neither card; use full Rule 21. Studio's "While" / "Do While" / "For Each" toolbox items emit UiPath wraps (`UiPath.Core.Activities.InterruptibleWhile` / `InterruptibleDoWhile` / `UiPath.Core.Activities.ForEach<T>`), not the framework `System.Activities.Statements.While`/`DoWhile`/`ForEach<T>`.
+24. **[XAML] Wrap every container-activity body/branch in `<Sequence>` — even single-activity bodies.** Studio's designer expects the wrap as a drop zone; Studio's emitter produces it. `validate` and `build` accept the bare form, so neither catches missing wrappers. Applies to creation and editing alike. Slots include `If.Then`/`If.Else`, `While`/`DoWhile` body, `ForEach.Body`, `TryCatch.Try`/`Catch`/`Finally`, `Switch.Default` + each case, `PickBranch.Trigger`/`Action`, `NApplicationCard.Body`. Full table with examples: § Container Activity Bodies — Wrap in Sequence in this file.
+
+## XAML Task Navigation & Quick Reference
+
+### Task Navigation — XAML
+
+| I need to... | Read |
+|-------------|------|
+| **Create XAML test case (Given-When-Then)** | [testing-guide.md § XAML Test Case Structure](../testing-guide.md) — remember: register in `fileInfoCollection` (Common Rule 10) |
+| **Use mock testing** | [testing-guide.md § Mock Testing (WIP)](../testing-guide.md) — requires CLI command not yet available |
+| **Use XAML test activities** | [testing-guide.md § XAML Test Activities](../testing-guide.md) |
+| **Use execution templates** | [testing-guide.md § Execution Templates](../testing-guide.md) |
+| **Use a common activity** (`Sequence` / `If` / `Switch<T>` / `TryCatch` / `While` / `DoWhile` / `ForEach<T>` / `Assign` / `LogMessage` / `WriteLine` / `Delay` / `Throw` / `Rethrow`) | [common-activity-card.md](../common-activity-card.md) — Rule 21a lookup |
+| **Author a common multi-activity pattern** (text file read/append/write · file copy · CSV · DataTable→CSV · queue publish · retry wrap · invoke workflow · InvokeCode rows · HTTP→JSON) | [common-pattern-card.md](../common-pattern-card.md) — Rule 21a lookup, alongside the activity card, not instead of it |
+| **Create/edit Flowchart** | [canvas-layout-guide.md](canvas-layout-guide.md) — § Flowchart Structure & Wiring, then § Flowchart Layout |
+| **Create StateMachine** | § State Machine in this file → [canvas-layout-guide.md § State Machine Layout](canvas-layout-guide.md#4-state-machine-layout) |
+| **Create/edit Long Running Workflow (ProcessDiagram)** | [long-running-workflow-guide.md](long-running-workflow-guide.md) → [canvas-layout-guide.md](canvas-layout-guide.md) |
+| **Build multi-screen UIA XAML workflow** | The package's XAML authoring guide § Multi-Screen Authoring (routed from the core guide's § Documentation; Rule 7); default to author-once-after-capture with a single `validate`+`build` gate (Rule 18); per-screen authoring interleave only on long captures (5+ screens). Turn structure: [execution-maps-guide.md § Journey: UIA capture + build](../execution-maps-guide.md#journey-uia-capture--build-xaml) |
+| **Use Data Fabric entities** | [activity-docs overview](../activity-docs/UiPath.DataService.Activities/overview.md) |
+| **Query Data Fabric with filters** | [data-service-filter-builder-guide.md](../activity-docs/UiPath.DataService.Activities/guides/data-service-filter-builder-guide.md) → [QueryEntityRecords](../activity-docs/UiPath.DataService.Activities/activities/QueryEntityRecords.md) |
+| **Call an IS connector (XAML)** | [is-connector-xaml-guide.md](../is-connector-xaml-guide.md) — includes connector discovery + connection lifecycle |
+| **Build an event-triggered workflow** (O365 / Gmail / Salesforce / Jira / Slack / ServiceNow / time / queue / file watcher / UI click) | [trigger-pattern-guide.md](../trigger-pattern-guide.md) → `activity-docs/{PackageId}/{closest}/activities/<TriggerActivity>.md` |
+| **Read or edit an existing `ui:TriggerScope` workflow** | [trigger-pattern-guide.md § Reading and Editing Existing TriggerScope XAML](../trigger-pattern-guide.md) |
+| **Troubleshoot XAML errors** | [common-pitfalls.md](common-pitfalls.md) (Rule 22 lookup procedure) → [cli-reference.md § Validation Iteration Loop](../cli-reference.md#validation-iteration-loop) |
+
+### Expression Language
+
+Check `expressionLanguage` in `project.json`. VB.NET uses `[brackets]` for expressions; C# uses `CSharpValue<T>` / `CSharpReference<T>` — canonical C# binding forms per property: [csharp-activity-binding-guide.md](csharp-activity-binding-guide.md). Default for new XAML projects is VB.NET.
+
+### Key CLI Commands
+
+| Command | Purpose |
+|---------|---------|
+| `activities find --query "<keyword>"` | Discover activities by keyword |
+| `activities get-default-xaml --activity-class-name "<class>"` | Get starter XAML for an activity |
+| `analyzer-rules list --project-dir "<dir>"` | List enabled Workflow Analyzer rules — on demand only (user asks about project rules, or repeated violations of one rule family); `validate`/`build` enforce the rules without it |
+| `validate --file-path "<file>"` | Per-file deep validation (structure, references, analyzer rules, unknown members, invalid enums, expression compilation) |
+| `build "<PROJECT_DIR>"` | Whole-project compile + packaging gate — every workflow, including files `validate` was never pointed at ([cli-reference.md § What each phase covers](../cli-reference.md#what-each-phase-covers)) — run after `validate` is clean |
+
+### Common Activities
+
+| Activity | Package | Purpose |
+|----------|---------|---------|
+| **UI automation** (Use Application/Browser, Click, Type Into, Get Text, Select Item, …) | `UiPath.UIAutomation.Activities` | **Never author from memory or from this row.** Selectors and targets are captured, not hand-written — read the UIA package guide (`{PROJECT_DIR}/.local/docs/packages/UiPath.UIAutomation.Activities/ui-automation-guide.md`) in full first (Rule 7). |
+| If | built-in | Conditional branching |
+| Assign | built-in | Set variable/argument values |
+| For Each | built-in | Iterate over a collection |
+| Invoke Workflow File | built-in | Call another workflow file |
+| Create Entity Record | `UiPath.DataService.Activities` | Create a Data Fabric entity record |
+| Query Entity Records | `UiPath.DataService.Activities` | Query Data Fabric records with filters — see [filter builder guide](../activity-docs/UiPath.DataService.Activities/guides/data-service-filter-builder-guide.md) |
+
+### Related XAML References
+
+- [common-pitfalls.md](common-pitfalls.md) — Activity gotchas, scope requirements, property conflicts (Rule 22 lookup procedure)
+- [csharp-activity-binding-guide.md](csharp-activity-binding-guide.md) — Canonical C# binding forms per common activity property + § C# Expression Pitfalls
+- [canvas-layout-guide.md](canvas-layout-guide.md) — Flowchart node vocabulary, structure & wiring, forbidden nested-chain pattern + Flowchart/State Machine/LRW canvas layout with ViewState
+- [long-running-workflow-guide.md](long-running-workflow-guide.md) — LRW package dependency, node vocabulary, gateway patterns, suspend/resume persistence
+- [jit-custom-types-schema.md](jit-custom-types-schema.md) — JIT custom type discovery
+- [../reframework-guide.md](../reframework-guide.md) — REFramework execution modes, SetTransactionStatus queue-guard fix, Config.xlsx leftover trap
+- [../data-manipulation-guide.md](../data-manipulation-guide.md) — DataTable LINQ, strings, RegEx, DateTime, type conversion, collections, JSON; VB + C# forms
+- [../error-handling-guide.md](../error-handling-guide.md) — exception taxonomy, Try/Catch discipline, Retry Scope, Global Exception Handler, transaction boundaries, retry ownership
+- [../library-authoring-guide.md](../library-authoring-guide.md) — Reusable libraries: public-workflow contract, layout sidecar, error contract, SemVer, pack & publish
+
+## Authoring Workflow
+
+Discovery-first approach with iterative error-driven refinement. Always understand before acting, start simple, validate continuously.
+
+**Core principles:**
+
+1. **Activity Docs Are the Source of Truth** — installed packages ship structured documentation at `{projectRoot}/.local/docs/packages/{PackageId}/` with source-accurate properties, types, defaults, enum values, conditional property groups, and working XAML examples. Always check for them first.
+2. **Know Before You Write** — **NEVER** generate XAML blind. Understand the project structure, packages, expression language, and existing patterns.
+3. **Use What You Know, Skip What You Don't Need** — if you already know the package ID and activity class name, go directly to its doc file. The discovery steps are a priority ladder, not a mandatory checklist.
+4. **Batch-Author, Single Gate, Fix by Category** — one workflow at a time; author each workflow complete in one pass (SKILL.md Rule 18; source activities card → memory → discovery triple), then per-file `validate` to clean and exit only on a clean project-level `build` (§ Phase 3). Fix order: Package → Structure → Type → Activity Properties → Logic.
+
+**Classify the request:**
+
+| Request Type | Trigger Words | Action |
+|--------------|---------------|--------|
+| **CREATE** | "generate", "create", "make", "build", "new" | Discovery → Generate |
+| **EDIT** | "update", "change", "fix", "modify", "add to" | Discovery → Edit |
+
+If unclear which file to edit, **ask the user** rather than guessing.
+
+### Phase 1: Discovery
+
+**Goal:** understand project context, leverage installed activity documentation, study existing patterns, identify reusable components, and discover activities before writing any XAML.
+
+> **Batch discovery across activities.** When the workflow needs several activities, do NOT run the find → read-doc → `get-default-xaml` triple one activity at a time. Emit all `activities find` calls in parallel, then all `<Activity>.md` `Read`s in parallel, then all `get-default-xaml` calls in parallel (SKILL.md § Execution Maps). Authoring batches too — one complete `Write` per workflow (Rule 18), then the Phase 3 gate.
+
+#### Step 1.1: Project Structure
+
+```
+Glob: pattern="**/*.xaml" path="{projectRoot}"       → list all XAML workflow files
+Read: file_path="{projectRoot}/project.json"          → read the project definition
+```
+
+Analyze: where new workflows belong (folder conventions), naming patterns, similar existing workflows, VB or C# (`expressionLanguage`), installed packages, existing connections/credentials/objects to reuse.
+
+#### Step 1.2: Discover Activity Documentation (Primary Source)
+
+**Read `<Activity>.md` BEFORE `activities get-default-xaml`, every time, even for activities that look simple.** The doc is the property surface; the CLI starter is not — see [§ Activity Property Surface](#activity-property-surface-and-starter-xaml) for the skip-tax and the full per-activity procedure.
+
+**Availability:** docs exist only for **installed packages** and typically only for **newer package versions**. When the package is not installed, install it first. When docs are missing, update to the latest version, or fall back to `skills/uipath-rpa/references/activity-docs/<PackageId>/<closest-version>/`.
+
+```
+{projectRoot}/.local/docs/packages/
++-- {PackageId}/
+    +-- overview.md
+    +-- activities/
+    |   +-- {ActivitySimpleClassName}.md
+    +-- coded/                             # Ignore for XAML workflows
+```
+
+Every `activities/{ActivityName}.md` follows: Header → Metadata → Properties (Input, Output, Conditional groups, Common) → Valid Configurations → Enum Reference → XAML Examples → Notes.
+
+| Situation | Action |
+|-----------|--------|
+| **Know package + activity name** | `Read` `{projectRoot}/.local/docs/packages/{PackageId}/activities/{ActivityName}.md` |
+| **Know package, not activity** | `Read` the `overview.md`, then read the identified activity doc |
+| **Don't know package** | `ls {projectRoot}/.local/docs/packages/` via Bash to list installed package doc folders, then `ls` the candidate's `activities/` and `Read` the file by path. NOT `Glob`/`Grep` — both skip gitignored `.local/`; a miss from either proves nothing |
+| **Docs exist but activity undocumented** | Use other docs as structural reference, fall back to `activities get-default-xaml` |
+| **No docs for package** | Update the package first — this often adds docs. **Caution:** major version jumps (e.g., 23.x → 26.x) may deprecate activities — prefer minor/patch updates. If still no docs, fall back to Steps 1.4-1.7 |
+| **Package not installed** | Install it first — both docs and `activities get-default-xaml` require it |
+| **No `.local/docs/` at all** | Use fallback flow starting at Step 1.3 |
+
+#### Step 1.3: Search Current Project
+
+Search existing workflows for reusable patterns and conventions:
+
+```
+Glob: pattern="**/*pattern*.xaml" path="{projectRoot}"
+Grep: pattern="ActivityName|pattern" path="{projectRoot}"
+Read: file_path="{projectRoot}/ExistingWorkflow.xaml"
+```
+
+**Mature project**: prioritize local patterns. **Greenfield project**: skip this step.
+
+#### Step 1.4: Discover Activities (When Needed)
+
+Find which activity implements a user-described action:
+
+```bash
+uip rpa activities find --query "send mail" --limit 10 --output json
+```
+
+Results are **global** — not limited to installed packages. If a useful activity is in an uninstalled package, install it immediately. Tags can narrow results.
+
+#### Step 1.5: Disambiguate Approach and Provider
+
+**Approach-level (API vs UI Automation vs Connector):** auto-select when the user stated the approach or only one is viable; prompt when multiple are viable and no preference was given. **Do NOT install packages until approach is confirmed.**
+
+**Provider-level:** auto-select when the user specified a provider, only one package matches, the project already has the package installed, the project defines a matching connection, or the workflow already uses activities from one package. **Prompt only as last resort** — present top 2-4 choices with recommendations.
+
+#### Step 1.6: Resolve Activity Properties (Fallback)
+
+Use `uip rpa activities get-default-xaml` when activity docs are insufficient:
+
+```bash
+# Non-dynamic activity:
+uip rpa activities get-default-xaml --activity-class-name "<FULLY_QUALIFIED_CLASS>" --output json
+# Dynamic activity (connector-backed):
+uip rpa activities get-default-xaml --activity-type-id "<TYPE_ID>" --connection-id "<CONN_ID>" --output json
+```
+
+For JIT custom types: `Read: file_path="{projectRoot}/.project/JitCustomTypesSchema.json"`. See [jit-custom-types-schema.md](jit-custom-types-schema.md).
+
+#### Step 1.7: Search Examples Repository
+
+Use when activity docs, `activities find`, and `activities get-default-xaml` don't provide enough context:
+
+```bash
+uip rpa workflow-examples list --tags web --limit 10 --output json
+uip rpa workflow-examples get --key "<BLOB_PATH>"
+```
+
+**Complete tag list:** `adobe-sign`, `asana`, `box`, `concur`, `confluence`, `database`, `document-understanding`, `docusign`, `dropbox`, `email-generic`, `excel`, `excel-online`, `freshbooks`, `freshdesk`, `github`, `gmail`, `google-calendar`, `google-docs`, `google-drive`, `google-sheets`, `gsuite`, `hubspot`, `intacct`, `jira`, `mailchimp`, `marketo`, `microsoft-365`, `onedrive`, `outlook`, `outlook-calendar`, `pdf`, `powerpoint`, `productivity`, `quickbooks`, `salesforce`, `servicenow`, `sharepoint`, `shopify`, `slack`, `smartsheet`, `stripe`, `teams`, `testing`, `trello`, `web`, `webex`, `word`, `workday`, `zendesk`, `zoom`
+
+#### Step 1.8: Get Current Context (As Needed)
+
+```
+Read: file_path="{projectRoot}/project.json"
+Glob: pattern="**/*" path="{projectRoot}/.objects/"
+Bash: uip is connections list --output json
+```
+
+#### Step 1.9: Discover Connector Capabilities (For IS/Connector Workflows)
+
+For end-to-end authoring of `ConnectorActivity` XAML (connection + type ID + Configuration blob + FieldObjects) AND the connector/connection discovery commands, see **[../is-connector-xaml-guide.md](../is-connector-xaml-guide.md)** — worked example included.
+
+**Path selection for calling connectors from XAML:**
+
+| Option | When to use |
+|--------|-------------|
+| **IS generic `ConnectorActivity`** with a typed operation typeId (e.g. `37a305b2-...` for Slack "Send Message to Channel") | **Default choice** — schema-driven, hand-authorable with the CLI flow in the guide. Works via `UiPath.IntegrationService.Activities`. |
+| **IS generic `ConnectorActivity`** with `ConnectorHttpActivity` typeId (e.g. `...httpRequest...`) | Fallback for endpoints the connector hasn't modeled as a first-class operation. Field names are still connector-defined — not `method`/`path`/`body`. Read the schema. |
+| **Per-product BAF activity package** (`UiPath.Slack.Activities`, `UiPath.Salesforce.Activities`, etc.) | Avoid for headless authoring. These wrap IS internally but use a more complex BAF XAML shape (`ScopeActivity` + dynamic child activity with `BusinessEntity`, `SelectedFields`, `PopulatedAPIParameters`). Default to the generic `ConnectorActivity` path unless the project already uses the BAF package. |
+
+### Phase 2: Generate or Edit
+
+**UI Automation — Target Configuration Gate (MANDATORY).** Before writing any XAML with UI activities: the UIA package guide (`{PROJECT_DIR}/.local/docs/packages/UiPath.UIAutomation.Activities/ui-automation-guide.md`) MUST be read IN FULL first (SKILL.md Rule 7). Every UI element target MUST be configured through the `uia-configure-target` skill flow — the guide mandates the target-capture orchestration reference to read IN FULL first. **NEVER** manually call low-level `uip rpa uia` CLI commands outside of the skill flow.
+
+**For CREATE requests:** author the workflow complete in one `Write` (SKILL.md Rule 18 — every activity sourced card → memory → discovery triple), then gate in Phase 3. Use the `Write` tool to create the `.xaml` file per [§ XAML File Anatomy](#xaml-file-anatomy). Infer the file path from folder conventions; use descriptive filenames.
+
+**For EDIT requests:** always `Read` current content before editing; use `Edit` with exact, unique `old_string` matches.
+
+### Phase 3: Validate & Fix Loop
+
+**MUST** repeat until 0-error state from **both** `validate` and `build`, or max 5 fix attempts per loop. After 5 attempts, stop and present remaining errors to the user. The canonical two-phase loop (per-file `validate` → project-level `build`), what each phase covers, and the smoke-test procedure: [../cli-reference.md § Validation Iteration Loop](../cli-reference.md#validation-iteration-loop) — read it before your first fix iteration.
+
+```bash
+uip rpa validate --file-path "Workflows/MyWorkflow.xaml" --output json
+uip rpa build "<PROJECT_DIR>" --log-level Warn --output json
+```
+
+`--file-path` must be **relative to the project directory**. Treat `validate` clean as half-done — `build` clean is the signal to exit the loop. A clean gate is still not runtime proof: for observable-output workflows, end with one `uip rpa run` and check the outputs ([execution-maps-guide.md § Gate ≠ runtime proof](../execution-maps-guide.md#gate--runtime-proof)).
+
+**Fix order:** Package → Structure → Type → Activity Properties → Logic.
+
+1. **Package Errors** — install/update the package; activity docs become available after install.
+2. **Structural Errors** — fix XML structure against [§ XAML File Anatomy](#xaml-file-anatomy) and [§ XAML Safety Rules](#xaml-safety-rules).
+3. **Type Errors** — check the activity doc for correct types and enum values. JIT types: [jit-custom-types-schema.md](jit-custom-types-schema.md).
+4. **Activity Properties Errors** — read the activity doc for properties, conditional groups, valid configurations; fallback `activities get-default-xaml`. Watch for OverloadGroup conflicts.
+5. **Logic Errors** — verify expression syntax matches the project language. For UI automation use `debug start`; follow the debug procedure in [../uia-starter-guide.md § Running UI Automation Workflows](../uia-starter-guide.md).
+
+**When stuck:** defer to the user for minor config details. If an activity cannot be resolved, consider InvokeCode as a last resort.
+
+### Phase 4: Response
+
+Report: file path of created/edited workflow · brief description · key activities and logic · packages installed · limitations or notes · suggested next steps (testing, parameterization) · encourage the user to review and customize (fill placeholders, set up connections).
+
+### Anti-Patterns
+
+- **NEVER** design sprawling monolith workflows — break logic into multiple invoked files ([../environment-setup.md § Designing for Reuse](../environment-setup.md#designing-for-reuse)); batch-authoring ONE workflow complete is the rule (Rule 18), monolith design is the anti-pattern
+- **NEVER** manually craft UI selectors outside of the `uia-configure-target` skill flow
+- **NEVER** guess properties, types, or configurations without checking docs
+- **NEVER** use incorrect keys with `uip rpa workflow-examples get` (always from list results)
+- **NEVER** ask the user to choose a provider without checking project signals first
+- **NEVER** retry failing CLI commands in a loop without diagnosing the root cause
+- **NEVER** use connector activities without checking connection existence
+- **NEVER** ignore activity doc conditional property groups (OverloadGroup conflicts cause validation errors)
+- **NEVER** generate full XAML from scratch without a sourced starter per activity — a card/pattern-card entry, a validated memory snippet, or `activities get-default-xaml` (precedence: SKILL.md Rule 21)
+- **NEVER** assume a create/edit succeeded — validate with `uip rpa validate` AND `uip rpa build` after every mutation
+- **NEVER** treat "no diagnostics found" from `validate` as final — `build` catches a further class of errors; run it next
+- **NEVER** skip environment readiness — check the project opens and restores cleanly first ([environment-setup.md](../environment-setup.md))
 
 ## XAML File Anatomy
 
@@ -76,30 +341,8 @@ Branching logic with decision nodes. Best for complex decision flows.
 
 **Key pattern:** All FlowStep/FlowDecision/FlowSwitch nodes are direct children of `<Flowchart>`; wire them via `<x:Reference>` inside property elements (`Flowchart.StartNode`, `FlowStep.Next`, `FlowDecision.True/False`). NEVER nest one `FlowStep` inside another's `<FlowStep.Next>` — nested-only steps are absent from `Flowchart.Nodes` and won't render.
 
-```xml
-<Flowchart DisplayName="My Flowchart" sap2010:WorkflowViewState.IdRef="Flowchart_1">
-  <Flowchart.StartNode>
-    <x:Reference>__ReferenceID0</x:Reference>
-  </Flowchart.StartNode>
-  <FlowStep x:Name="__ReferenceID0">
-    <!-- Activity here -->
-    <FlowStep.Next>
-      <x:Reference>__ReferenceID1</x:Reference>
-    </FlowStep.Next>
-  </FlowStep>
-  <FlowDecision x:Name="__ReferenceID1">
-    <FlowDecision.Condition>
-      <CSharpValue x:TypeArguments="x:Boolean">condition</CSharpValue>
-    </FlowDecision.Condition>
-    <FlowDecision.True>
-      <x:Reference>__ReferenceID0</x:Reference>
-    </FlowDecision.True>
-    <!-- FlowDecision.False omitted = end of flow -->
-  </FlowDecision>
-</Flowchart>
-```
 
-Node vocabulary, structure & wiring rules, the forbidden nested-chain pattern, node registration, condition expressions (VB/C#), and layout: [flowchart-guide.md](flowchart-guide.md). Layout coordinates and ViewState recipes: [canvas-layout-guide.md § Flowchart Layout](canvas-layout-guide.md#3-flowchart-layout).
+Node vocabulary, structure & wiring rules, the forbidden nested-chain pattern, node registration, condition expressions (VB/C#), and layout: [canvas-layout-guide.md § Flowchart Structure & Wiring](canvas-layout-guide.md#flowchart-structure--wiring) and [§ Flowchart Layout](canvas-layout-guide.md#3-flowchart-layout).
 
 ### State Machine
 State-based workflow with transitions. Best for long-running processes with distinct states (e.g., REFramework).
@@ -148,38 +391,6 @@ xmlns:upas="clr-namespace:UiPath.Process.Activities.Shared;assembly=UiPath.Proce
 
 These types ship in the **`UiPath.FlowchartBuilder.Activities`** package (runtime assembly `UiPath.Process.Activities`) — install before authoring (Common Rule 6). Not supported on `targetFramework: "Legacy"`. Package install, full node vocabulary, gateway patterns, suspend/resume: [long-running-workflow-guide.md](long-running-workflow-guide.md).
 
-```xml
-<upa:ProcessDiagram DisplayName="Long Running Workflow" sap2010:WorkflowViewState.IdRef="ProcessDiagram_1">
-  <upa:ProcessDiagram.StartNode>
-    <x:Reference>__ReferenceID0</x:Reference>
-  </upa:ProcessDiagram.StartNode>
-  <upa:EventNode x:Name="__ReferenceID0" DisplayName="Manual Trigger">
-    <upa:EventNode.Behavior>
-      <upa:StartBehavior>
-        <upa:StartBehavior.DesignerMetadata>
-          <upas:DesignerMetadata NodeType="StartEvent.Interrupting.None" />
-        </upa:StartBehavior.DesignerMetadata>
-      </upa:StartBehavior>
-    </upa:EventNode.Behavior>
-    <upa:EventNode.Next>
-      <upa:TaskNode x:Name="__ReferenceID1" DisplayName="Process">
-        <upa:TaskNode.Behavior>
-          <upa:NodeBehavior>
-            <upa:NodeBehavior.DesignerMetadata>
-              <upas:DesignerMetadata NodeType="Task.None" />
-            </upa:NodeBehavior.DesignerMetadata>
-          </upa:NodeBehavior>
-        </upa:TaskNode.Behavior>
-        <Sequence DisplayName="Process Steps">
-          <!-- Activities here -->
-        </Sequence>
-      </upa:TaskNode>
-    </upa:EventNode.Next>
-  </upa:EventNode>
-  <!-- Register inline nodes -->
-  <x:Reference>__ReferenceID1</x:Reference>
-</upa:ProcessDiagram>
-```
 
 **Key patterns:**
 - Flows **left-to-right** (horizontal), not top-to-bottom
@@ -211,7 +422,6 @@ ViewState controls how activities appear in the visual designer. Rules differ by
 - Generate ViewState for every node to produce a usable layout: `ShapeLocation` + `ShapeSize` are required; `ConnectorLocation` is optional (Studio auto-routes connectors from node positions)
 - See [canvas-layout-guide.md](canvas-layout-guide.md) for coordinate systems, standard sizes, and layout recipes
 
-> **Why the distinction?** Sequences stack children vertically on their own, so coordinates are unnecessary. Flowcharts, State Machines, and ProcessDiagrams are 2D canvases with no implicit ordering — Studio cannot place nodes it has no coordinates for, so it leaves them all at (0,0). The result reads as one overlapping node. Generate ViewState for every node so the workflow renders as separate, connected nodes.
 
 ### Preserve xmlns Declarations
 Never remove existing `xmlns` attributes from the root `<Activity>` element. Only add new ones as needed. Removing a namespace declaration that is referenced anywhere in the file will cause validation errors.
@@ -230,13 +440,9 @@ Never construct activity XAML from memory. Two sources, in this order:
 1. **`<Activity>.md`** — authoritative property surface: which properties exist, types, defaults, descriptions, required-scope rules.
 2. **`uip rpa activities get-default-xaml --activity-class-name "<FullClassName>"`** — starter element with correct namespaces, assembly references, and any properties whose values differ from the type default.
 
-**Where `<Activity>.md` lives — try in this order:**
+**Where `<Activity>.md` lives:** primary `{PROJECT_DIR}/.local/docs/packages/<PackageId>/activities/<Activity>.md` (auto-generated on install; Read the exact path directly — a failed Read IS the existence check; `Glob` and `Grep` both skip gitignored `.local/`, so a miss from either proves nothing); fallback `../activity-docs/<PackageId>/<closest-version>/<Activity>.md` (pick the version folder closest to installed) — routing table: [§ Step 1.2](#step-12-discover-activity-documentation-primary-source). **Neither exists:** the package is third-party or unusual — document that, fall back to `activities find` + `activities get-default-xaml` alone, and warn the user the property surface may be incomplete.
 
-1. **Primary:** `{PROJECT_DIR}/.local/docs/packages/<PackageId>/activities/<Activity>.md` — auto-generated when the package is installed; co-versioned with the runtime. Use `Glob` + `Read` (not `Grep` — `.local/` is gitignored).
-2. **Fallback:** `skills/uipath-rpa/references/activity-docs/<PackageId>/<closest-version>/<Activity>.md` — bundled reference set covering the major UiPath packages. Use this when `.local/docs` is empty for that package (older versions don't ship per-activity docs) or when no project directory is in scope yet. Pick the version folder closest to the installed version.
-3. **Neither exists:** the package is third-party or unusual. Document this in your output, fall back to `activities find` + `activities get-default-xaml` alone, and warn the user that the property surface may be incomplete.
-
-> **Skip-tax.** `activities get-default-xaml` omits any property whose value equals the type default (`null`, `0`, `false`, unset). For `NTypeInto`: 2 of 20 properties. For `NClick`: ~3 of ~15. For `NGetText`: every output property — the starter is literally `<uix:NGetText HealingAgentBehavior="SameAsCard" />`, with no output member visible. Authoring from this starter alone is how `NGetText.Value="..."` gets written — `Value` does not exist on that activity, so `validate` accepts it as static-clean and `build` finally rejects it as an unknown member. The starter looks complete; it isn't. The MD read is the only way you learn which properties actually exist (`TextString`, `ClickType`, `KeyModifiers`, `WaitForReady`, `EmptyFieldMode`, etc.). **When authoring a new Get Text, bind the output to `TextString`** (`OutArgument<string>`) — the typed member the current designer surfaces. But `NGetText` declares **two** real output members: `TextString` and a legacy non-generic `Text` `OutArgument` (backwards-compat — the activity writes the scraped text to both at runtime, and the designer hides whichever the installed version does not use). So a `Text="..."` binding in an existing or older workflow is valid and must not be flagged or "corrected" — only `Value` is a genuine unknown member.
+> **Skip-tax.** `activities get-default-xaml` omits any property whose value equals the type default (`null`, `0`, `false`, unset). For `NTypeInto`: 2 of 20 properties. For `NClick`: ~3 of ~15. For `NGetText`: every output property — the starter is literally `<uix:NGetText HealingAgentBehavior="SameAsCard" />`, with no output member visible. Authoring from this starter alone is how `NGetText.Value="..."` gets written — `Value` does not exist on that activity, so the file fails to deserialize with `Cannot set unknown member 'UiPath.UIAutomationNext.Activities.NGetText.Value'`, taking the whole activity tree and any Object Repository linking with it. The starter looks complete; it isn't. The MD read is the only way you learn which properties actually exist (`TextString`, `ClickType`, `KeyModifiers`, `WaitForReady`, `EmptyFieldMode`, etc.). **When authoring a new Get Text, bind the output to `TextString`** (`OutArgument<string>`) — the typed member the current designer surfaces. But `NGetText` declares **two** real output members: `TextString` and a legacy non-generic `Text` `OutArgument` (backwards-compat — the activity writes the scraped text to both at runtime, and the designer hides whichever the installed version does not use). So a `Text="..."` binding in an existing or older workflow is valid and must not be flagged or "corrected" — only `Value` is a genuine unknown member.
 
 **Workflow — each step depends on the previous step's output:**
 
@@ -287,6 +493,50 @@ When editing XAML:
 
 ### Validate After Every Change
 Run `uip rpa validate` after every XAML modification. Do not batch multiple edits without validation — catching errors early is much easier than debugging compound issues.
+
+## Property Binding: Attributes vs Child Elements
+
+XAML properties can be set in two ways: as XML attributes or as child elements. Both are valid XAML, but some properties only work reliably in one form.
+
+### Attribute Syntax (Inline)
+```xml
+<ui:LogMessage Message="[myVar]" Level="Info" />
+```
+
+### Child Element Syntax (Property Element)
+```xml
+<ui:SomeActivity>
+  <ui:SomeActivity.Result>
+    <OutArgument x:TypeArguments="x:String">[outputVar]</OutArgument>
+  </ui:SomeActivity.Result>
+</ui:SomeActivity>
+```
+
+### When to Use Which
+
+**Simple values** (strings, enums, booleans, VB expressions in brackets) almost always work as attributes:
+```xml
+DisplayName="My Activity" Message="[variable]" Level="Info"
+```
+
+**Output properties** (`OutArgument`, `Result`) may require child element syntax. Some activities accept `Result="[var]"` as an attribute; others only work with the expanded child element form. If an attribute-form output binding causes a validation error, try the child element form.
+
+**Complex objects** (BackupSlot, MailboxArgument, ActivityAction, dictionaries) always require child element syntax — they cannot be expressed as a single attribute value.
+
+**Strings containing literal `[` or `]`** (e.g., UIA special-key tokens like `[k(enter)]`, `[d(ctrl)]`, `[u(ctrl)]`) require child element syntax. The attribute form `Foo="[&quot;…[k(enter)]&quot;]"` runs correctly because the runtime VB compiler reads quoted string literals correctly, but the literal brackets inside the string collide with the outer `[ … ]` VB expression markers and the value will not render in Studio. See [common-pitfalls.md § NTypeInto `Text` with literal `[k(...)]` special-key tokens](common-pitfalls.md#ntypeinto-text-with-literal-k-special-key-tokens).
+
+### Version-Sensitive Properties
+
+Properties may exist in one package version but not another. If `validate` reports "Could not find member 'PropertyName'":
+1. The property may not exist in the installed package version — remove it
+2. The property may have been renamed between versions — check examples from the same package version
+3. Use `uip rpa activities get-default-xaml` output as the authoritative set of properties for the installed version
+
+---
+
+## Catalogs — Grep-gated (Rule 22 read contract)
+
+**Do NOT read past this marker in the initial full read.** The two sections below are per-operation / per-activity catalogs. Lookup procedure: Grep `^###` on this file to list their entries with line numbers, then Read ONLY the entries matching the operation or activity at hand. Unsure whether an entry applies → read it.
 
 ## Common Editing Operations
 
@@ -410,7 +660,9 @@ Expressions use explicit `<CSharpValue>` (for read/evaluate) or `<CSharpReferenc
 
 **Important**: Do NOT use `[bracket]` shorthand for expressions. Brackets create `VisualBasicValue` nodes at deserialization time, causing validation failures for C#-only syntax (`null`, `?.`, `??`, `typeof()`, etc.).
 
-**Stronger rule for attribute-form bindings on `InArgument<T>` / `OutArgument<T>`:** in XAML projects with `expressionLanguage: CSharp`, any **non-literal** attribute value (`Message="variableName"`, `Text="&quot;Hello &quot; + name"`) is also deserialized as a `VisualBasicValue<T>` and fails at runtime with `JIT compilation is disabled for non-Legacy projects`. The attribute parser defaults to VB regardless of the project's expression language. Use `<CSharpValue>` / `<CSharpReference>` child elements for anything that isn't a plain literal. See [csharp-expression-pitfalls.md](csharp-expression-pitfalls.md) and [csharp-activity-binding-guide.md](csharp-activity-binding-guide.md).
+**Expression-tree limits**: each C# expression compiles as a lambda expression tree — no statements, no `out var` (`TryParse`), no optional-argument overloads (`CS0854`), and no calls into the project's coded source file types ([common-pitfalls.md § C# XAML Expressions Compile as Expression Trees](common-pitfalls.md)). When a transform outgrows single expressions, escalate per [data-manipulation-guide.md § Exception](../data-manipulation-guide.md) — Invoke Code, or a coded workflow via Invoke Workflow File.
+
+**Stronger rule for attribute-form bindings on `InArgument<T>` / `OutArgument<T>`:** in XAML projects with `expressionLanguage: CSharp`, any **non-literal** attribute value (`Message="variableName"`, `Text="&quot;Hello &quot; + name"`) is not evaluated as an expression. Where the property type accepts a string the text survives as a literal and the workflow validates, builds, and runs with the wrong value and no error; where it does not, the file fails to deserialize. Use `<CSharpValue>` / `<CSharpReference>` child elements for anything that isn't a plain literal. See [csharp-activity-binding-guide.md](csharp-activity-binding-guide.md) (includes § C# Expression Pitfalls).
 
 **Safe attribute-form values** (no expression evaluator involved, type converter handles them directly):
 - Literal strings on `InArgument<String>`: `Text="Book trip"`, `DisplayName="Open file"`
@@ -438,18 +690,7 @@ Some activity properties accept `IResource` or `ILocalResource` types instead of
 | `ILocalResource` | Local file on disk (has `LocalPath` property) | Activities that need a file on the local filesystem |
 | `IRemoteResource` | Remote resource with a URI and a local copy | Cloud/API-sourced files |
 
-**In XAML**, resource-typed properties are typically set via expressions that create the resource:
-```xml
-<!-- LocalResource from a file path (C# expression) -->
-<InArgument x:TypeArguments="upr:ILocalResource">
-  <CSharpValue x:TypeArguments="upr:ILocalResource">LocalResource.FromPath(filePath)</CSharpValue>
-</InArgument>
-```
-
-Required namespace for resource types:
-```xml
-<x:String>UiPath.Platform.ResourceHandling</x:String>
-```
+**In XAML**, resource-typed properties are set via expressions that create the resource — `LocalResource.FromPath(filePath)` or the Path Exists activity. Both approaches, the XAML forms, and the required `UiPath.Platform.ResourceHandling` namespace: [common-pitfalls.md § IResource / ILocalResource](common-pitfalls.md#iresource--ilocalresource--string-path-conversion).
 
 **Activity Storage**: Some activities use a bucket-based storage system (`.storage/` folder in the project). Resources stored at design-time in `.storage/.runtime/<bucket>/` are packed into the published NuPkg and available at runtime. This is managed automatically — you don't need to edit storage resources directly in XAML.
 
@@ -550,12 +791,7 @@ Shows a package-based activity with `ConnectionId` for Integration Service.
 <Activity mc:Ignorable="sap sap2010" x:Class="GetNewestEmail"
   VisualBasic.Settings="{x:Null}"
   sap2010:WorkflowViewState.IdRef="ActivityBuilder_1"
-  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
-  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-  xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
-  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation"
-  xmlns:scg="clr-namespace:System.Collections.Generic;assembly=System.Private.CoreLib"
-  xmlns:sco="clr-namespace:System.Collections.ObjectModel;assembly=System.Private.CoreLib"
+  <!-- standard xmlns omitted — see Example 1 -->
   xmlns:umam="clr-namespace:UiPath.MicrosoftOffice365.Activities.Mail;assembly=UiPath.MicrosoftOffice365.Activities"
   xmlns:umame="clr-namespace:UiPath.MicrosoftOffice365.Activities.Mail.Enums;assembly=UiPath.MicrosoftOffice365.Activities"
   xmlns:umamm="clr-namespace:UiPath.MicrosoftOffice365.Activities.Mail.Models;assembly=UiPath.MicrosoftOffice365.Activities"
@@ -615,18 +851,8 @@ Shows a package-based activity with `ConnectionId` for Integration Service.
           </umamm:MailFolderArgument.Backup>
         </umamm:MailFolderArgument>
       </umam:GetNewestEmail.MailFolderArgument>
-      <umam:GetNewestEmail.MailboxArg>
-        <umamm:MailboxArgument SharedMailbox="{x:Null}" UseSharedMailbox="False">
-          <umamm:MailboxArgument.Backup>
-            <usau:BackupSlot x:TypeArguments="umame:MailboxSelectionMode"
-              x:Name="__ReferenceID1" StoredValue="NoMailbox">
-              <usau:BackupSlot.BackupValues>
-                <scg:Dictionary x:TypeArguments="umame:MailboxSelectionMode, scg:List(x:Object)" />
-              </usau:BackupSlot.BackupValues>
-            </usau:BackupSlot>
-          </umamm:MailboxArgument.Backup>
-        </umamm:MailboxArgument>
-      </umam:GetNewestEmail.MailboxArg>
+      <!-- GetNewestEmail.MailboxArg: analogous MailboxArgument with its own BackupSlot
+           (x:Name="__ReferenceID1", x:TypeArguments="umame:MailboxSelectionMode") -->
     </umam:GetNewestEmail>
   </Sequence>
 </Activity>
@@ -639,177 +865,7 @@ Shows a package-based activity with `ConnectionId` for Integration Service.
 - `x:Reference` / `x:Name` for cross-referencing objects within the XAML
 - Multiple package-specific xmlns prefixes (`umam`, `umame`, `umamm`, `usau`)
 
-### Example 3: Integration Service Connector Activity (GitHub Search Repositories)
+### Example 3: Integration Service `ConnectorActivity`
 
-Shows the generic `ConnectorActivity` pattern used for Integration Service connectors.
+The generic IS `ConnectorActivity` pattern — activity shape, worked example, editing rules, JIT-generated assemblies: [../is-connector-xaml-guide.md](../is-connector-xaml-guide.md).
 
-```xml
-<Activity mc:Ignorable="sap sap2010" x:Class="Sequence"
-  VisualBasic.Settings="{x:Null}"
-  sap2010:WorkflowViewState.IdRef="ActivityBuilder_1"
-  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
-  xmlns:isactr="http://schemas.uipath.com/workflow/integration-service-activities/isactr"
-  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-  xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
-  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation"
-  xmlns:scg="clr-namespace:System.Collections.Generic;assembly=System.Private.CoreLib"
-  xmlns:sco="clr-namespace:System.Collections.ObjectModel;assembly=System.Private.CoreLib"
-  xmlns:uiascb="clr-namespace:UiPath.IntegrationService.Activities.SWEntities.CDF573A04A6_search_repositories.Bundle;assembly=CDF573A04A6_search_r.VeKd1XI2qK1X56UO2Br3Ui3"
-  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <!-- Namespaces include Integration Service runtime + connector-specific -->
-  <TextExpression.NamespacesForImplementation>
-    <sco:Collection x:TypeArguments="x:String">
-      <!-- Standard imports + IS-specific -->
-      <x:String>UiPath.IntegrationService.Activities.Runtime.Models.FilterBuilder</x:String>
-      <x:String>UiPath.IntegrationService.Activities.Runtime.Models</x:String>
-      <x:String>UiPath.IntegrationService.Activities.Runtime.Helpers.TypeDetailsCustomization</x:String>
-      <x:String>UiPath.IntegrationService.Activities.Runtime.Activities</x:String>
-      <x:String>UiPath.Platform.Activities</x:String>
-      <x:String>UiPath.IntegrationService.Activities.SWEntities.CDF573A04A6_search_repositories.Bundle</x:String>
-      <!-- ... -->
-    </sco:Collection>
-  </TextExpression.NamespacesForImplementation>
-  <TextExpression.ReferencesForImplementation>
-    <sco:Collection x:TypeArguments="AssemblyReference">
-      <!-- Standard refs + IS-specific -->
-      <AssemblyReference>UiPath.IntegrationService.Activities.Runtime</AssemblyReference>
-      <AssemblyReference>UiPath.Platform</AssemblyReference>
-      <AssemblyReference>CDF573A04A6_search_r.VeKd1XI2qK1X56UO2Br3Ui3</AssemblyReference>
-      <!-- ... -->
-    </sco:Collection>
-  </TextExpression.ReferencesForImplementation>
-  <Sequence DisplayName="Sequence" sap2010:WorkflowViewState.IdRef="Sequence_1">
-    <!-- Generic ConnectorActivity for Integration Service -->
-    <isactr:ConnectorActivity
-      Configuration="H4sIAAAAAAAACr1W70/bSBD9V1b+dCcFXwgtPSHx..."
-      ConnectionId="93c89540-f260-4150-afbd-43df573a04a6"
-      DisplayName="Search Repositories"
-      sap2010:WorkflowViewState.IdRef="ConnectorActivity_2"
-      UiPathActivityTypeId="f340077e-3684-33c4-b956-b9aa7eb0ea7c">
-      <isactr:ConnectorActivity.FieldObjects>
-        <!-- Input field -->
-        <isactr:FieldObject Name="query" Type="FieldArgument">
-          <isactr:FieldObject.Value>
-            <InArgument x:TypeArguments="x:String">in:name (a* OR b* OR c*)</InArgument>
-          </isactr:FieldObject.Value>
-        </isactr:FieldObject>
-        <!-- Output field (typed array from generated assembly) -->
-        <isactr:FieldObject Name="Jit_search_repositories" Type="FieldArgument">
-          <isactr:FieldObject.Value>
-            <OutArgument x:TypeArguments="uiascb:search_repositories[]" />
-          </isactr:FieldObject.Value>
-        </isactr:FieldObject>
-        <!-- Optional fields (no value set) -->
-        <isactr:FieldObject Name="sort" Type="FieldArgument" />
-        <isactr:FieldObject Name="order" Type="FieldArgument" />
-      </isactr:ConnectorActivity.FieldObjects>
-    </isactr:ConnectorActivity>
-  </Sequence>
-</Activity>
-```
-
-**Key patterns:**
-- `isactr:ConnectorActivity` is the generic IS activity type (`xmlns:isactr="http://schemas.uipath.com/workflow/integration-service-activities/isactr"`)
-- `Configuration` holds a base64-encoded GZip-compressed blob — **never construct this manually**, it comes from `uip rpa activities get-default-xaml`
-- `ConnectionId` is the Integration Service connection GUID
-- `UiPathActivityTypeId` identifies the specific connector operation
-- `FieldObjects` define input/output fields with `isactr:FieldObject` elements
-- Output types reference a JIT-generated assembly (e.g., `CDF573A04A6_search_r.VeKd1XI2qK1X56UO2Br3Ui3`)
-- The generated assembly name and namespace imports are connector-specific — always use `uip rpa activities get-default-xaml` output
-
-## Property Binding: Attributes vs Child Elements
-
-XAML properties can be set in two ways: as XML attributes or as child elements. Both are valid XAML, but some properties only work reliably in one form.
-
-### Attribute Syntax (Inline)
-```xml
-<ui:LogMessage Message="[myVar]" Level="Info" />
-```
-
-### Child Element Syntax (Property Element)
-```xml
-<ui:SomeActivity>
-  <ui:SomeActivity.Result>
-    <OutArgument x:TypeArguments="x:String">[outputVar]</OutArgument>
-  </ui:SomeActivity.Result>
-</ui:SomeActivity>
-```
-
-### When to Use Which
-
-**Simple values** (strings, enums, booleans, VB expressions in brackets) almost always work as attributes:
-```xml
-DisplayName="My Activity" Message="[variable]" Level="Info"
-```
-
-**Output properties** (`OutArgument`, `Result`) may require child element syntax. Some activities accept `Result="[var]"` as an attribute; others only work with the expanded child element form. If an attribute-form output binding causes a validation error, try the child element form.
-
-**Complex objects** (BackupSlot, MailboxArgument, ActivityAction, dictionaries) always require child element syntax — they cannot be expressed as a single attribute value.
-
-**Strings containing literal `[` or `]`** (e.g., UIA special-key tokens like `[k(enter)]`, `[d(ctrl)]`, `[u(ctrl)]`) require child element syntax. The attribute form `Foo="[&quot;…[k(enter)]&quot;]"` runs correctly because the runtime VB compiler reads quoted string literals correctly, but the literal brackets inside the string collide with the outer `[ … ]` VB expression markers and the value will not render in Studio. See [common-pitfalls.md § NTypeInto `Text` with literal `[k(...)]` special-key tokens](common-pitfalls.md#ntypeinto-text-with-literal-k-special-key-tokens).
-
-### Version-Sensitive Properties
-
-Properties may exist in one package version but not another. If `validate` reports "Could not find member 'PropertyName'":
-1. The property may not exist in the installed package version — remove it
-2. The property may have been renamed between versions — check examples from the same package version
-3. Use `uip rpa activities get-default-xaml` output as the authoritative set of properties for the installed version
-
-## ConnectorActivity Internals
-
-Understanding the structure of `isactr:ConnectorActivity` so you know what you can and cannot edit.
-
-### Properties (What They Are)
-
-| Property | Editable? | Description |
-|----------|-----------|-------------|
-| `Configuration` | **NEVER** | ZIP-compressed, Base64-encoded JSON blob containing the full activity schema (fields, types, connector metadata). This is obtained and computed for you using the `uip rpa activities get-default-xaml` command. Do not parse, modify, or construct manually. |
-| `ConnectionId` | Yes (replace GUID) | Integration Service connection GUID. Use `uip is connections list [connector-key]` to discover available connections and their IDs. |
-| `UiPathActivityTypeId` | **NEVER** | Identifies the specific connector operation. Obtain using `uip rpa activities get-default-xaml` or `uip rpa activities find`. |
-| `DisplayName` | Yes | Human-readable activity name for the designer. |
-
-### FieldObjects (Input/Output Interface)
-
-`FieldObjects` is the collection of input and output fields. Each `isactr:FieldObject` has:
-
-| Attribute | Description |
-|-----------|-------------|
-| `Name` | Field identifier (maps to the connector API parameter). Must match exactly what `uip rpa activities get-default-xaml` returns. |
-| `Type` | One of: `FieldArgument` (contains an Activity Argument), `FieldLiteral` (contains a literal value), `FilterTreeValue` (filter builder criteria), `None` (empty). |
-
-**What you CAN edit in FieldObjects:**
-- **Input field values**: Change the `InArgument` value inside a `FieldObject.Value` to set different input data (e.g., change a search query string).
-- **Bind to variables**: Replace a literal value with a variable reference using `<CSharpValue>` (e.g., `<CSharpValue x:TypeArguments="x:String">myVariable</CSharpValue>`).
-
-**What you CANNOT edit:**
-- Field `Name` values — these must match the connector API schema exactly.
-- Field `Type` values — these are determined by the connector metadata.
-- Output field structure — the `OutArgument` types reference JIT-generated assemblies.
-- Adding/removing FieldObjects — the set of fields comes from `uip rpa activities get-default-xaml`.
-
-### JIT-Generated Assemblies
-
-Output fields often use types from JIT-compiled assemblies with hashed names:
-```
-CDF573A04A6_search_r.VeKd1XI2qK1X56UO2Br3Ui3
-^connection(last10)   ^operation   ^content hash
-```
-
-These assembly names are:
-- **Unpredictable** — derived from SHA-512 hashes of the type schema
-- **Connection-specific** — different connections produce different hashes
-- **Generated by the runtime** — you cannot create or reference them without `uip rpa activities get-default-xaml`
-
-The corresponding namespace imports and assembly references MUST come from `uip rpa activities get-default-xaml` output. Never construct them.
-
-### What `uip rpa activities get-default-xaml` Returns for Dynamic Activities
-
-When you call `uip rpa activities get-default-xaml` with `isDynamicActivity: true`, it returns everything needed:
-1. The complete `<isactr:ConnectorActivity>` XAML element with `Configuration` blob, `UiPathActivityTypeId`, and `FieldObjects`
-2. All required `xmlns` declarations for the root `<Activity>` element
-3. All required namespace imports and references
-
-Use this output as-is. The only things you should modify are:
-- `DisplayName` — set a meaningful name
-- `ConnectionId` — if swapping to a different connection of the same connector type
-- Input `FieldObject` values — to set the actual data for your workflow

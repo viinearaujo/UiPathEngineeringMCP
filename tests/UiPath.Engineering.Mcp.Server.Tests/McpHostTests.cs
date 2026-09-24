@@ -83,6 +83,42 @@ public class McpHostTests {
     }
 
     [Fact]
+    public async Task HttpHost_ServerInfo_ComesFromMcpServerConfig() {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "mcp-host-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        try {
+            await using var factory = new McpHostFactory(tempRoot, new Dictionary<string, string?> {
+                ["McpServer:Name"] = "UiPath Engineering MCP",
+                ["McpServer:Version"] = "9.9.9",
+                ["McpServer:Description"] = "Config-bound server identity."
+            });
+            using var authorized = factory.CreateClient();
+            authorized.DefaultRequestHeaders.Add("X-Api-Key", ApiKey);
+            authorized.Timeout = TimeSpan.FromSeconds(30);
+
+            await using var transport = new HttpClientTransport(
+                new HttpClientTransportOptions {
+                    Endpoint = new Uri(authorized.BaseAddress!, "sse"),
+                    TransportMode = HttpTransportMode.StreamableHttp
+                },
+                authorized,
+                ownsHttpClient: false);
+            await using var client = await McpClient.CreateAsync(transport);
+
+            Assert.Equal("UiPath Engineering MCP", client.ServerInfo.Name);
+            Assert.Equal("9.9.9", client.ServerInfo.Version);
+            Assert.Equal("Config-bound server identity.", client.ServerInfo.Description);
+        } finally {
+            try {
+                Directory.Delete(tempRoot, recursive: true);
+            } catch (IOException) {
+                // Best-effort cleanup.
+            }
+        }
+    }
+
+    [Fact]
     public async Task HttpHost_AnalyzeProject_InvalidProjectJson_MapsExceptionWithoutLeakingParserText() {
         var tempRoot = Path.Combine(Path.GetTempPath(), "mcp-host-" + Guid.NewGuid().ToString("N"));
         var projectPath = Path.Combine(tempRoot, "HostTestProject");
@@ -128,19 +164,28 @@ public class McpHostTests {
 
     private sealed class McpHostFactory : WebApplicationFactory<Program> {
         private readonly string _allowedRoot;
+        private readonly Dictionary<string, string?> _overrides;
 
-        public McpHostFactory(string allowedRoot) => _allowedRoot = allowedRoot;
+        public McpHostFactory(string allowedRoot, Dictionary<string, string?>? overrides = null) {
+            _allowedRoot = allowedRoot;
+            _overrides = overrides ?? [];
+        }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder) {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) => {
-                config.AddInMemoryCollection(new Dictionary<string, string?> {
+                var settings = new Dictionary<string, string?> {
                     ["Urls"] = "http://127.0.0.1:0",
                     ["McpServer:HttpAuth:Enabled"] = "true",
                     ["McpServer:HttpAuth:ApiKey"] = ApiKey,
                     ["McpServer:ToolSurface"] = CopilotConnectorTools.SurfaceCopilotDefault,
                     ["Projects:AllowedRoots:0"] = _allowedRoot
-                });
+                };
+                foreach (var pair in _overrides) {
+                    settings[pair.Key] = pair.Value;
+                }
+
+                config.AddInMemoryCollection(settings);
             });
         }
     }

@@ -28,7 +28,7 @@ public sealed class AnalyzeProjectGapsTool {
         _docsValidator = docsValidator;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging on XAML entry and coded [Workflow] methods, XAML business-logic that belongs in coded workflows, descriptions/tests, unresolved invocations, coded/XAML invoke boundary that forbids project-defined types), docs errors, and plan cross-checks, and names the MCP tool that fixes each gap. Next: update_plan_task.")]
+    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging on XAML entry and coded [Workflow] methods, readability and naming — DisplayName quality, in_/out_/io_ argument prefixes, nesting depth, activity counts, Rule 24 container body wraps, description coverage, REFramework conformance — XAML business-logic that belongs in coded workflows, descriptions/tests, unresolved invocations, coded/XAML invoke boundary that forbids project-defined types), docs errors, and plan cross-checks, and names the MCP tool that fixes each gap. Each gap carries a severity (how much it matters) and a confidence: high, medium, or low. A low-confidence gap is a substring or namespace-blind heuristic — verify it before editing and never treat it as a done gate; remediate high-confidence error and warning gaps first. Next: update_plan_task.")]
     public async Task<ToolResult> AnalyzeProjectGaps(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {
@@ -42,7 +42,7 @@ public sealed class AnalyzeProjectGapsTool {
         var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
         var plan = _planStore.Load(projectPath);
         var docsFindings = _docsValidator.Validate(projectPath, model);
-        var gaps = ProjectGapAnalyzer.Analyze(model, plan, docsFindings);
+        var gaps = ProjectGapAnalyzer.Analyze(model, plan, docsFindings, _filesystem);
 
         return ToolResults.Ok($"{gaps.Count} gap(s) found.", new {
             gaps,
@@ -51,6 +51,18 @@ public sealed class AnalyzeProjectGapsTool {
                 warning = gaps.Count(g => g.Severity == Gap.Warning),
                 info = gaps.Count(g => g.Severity == Gap.Info)
             },
+            confidence = new {
+                high = gaps.Count(g => g.Confidence == Gap.ConfidenceHigh),
+                medium = gaps.Count(g => g.Confidence == Gap.ConfidenceMedium),
+                low = gaps.Count(g => g.Confidence == Gap.ConfidenceLow)
+            },
+            categories = gaps
+                .Select(g => g.Category)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(Gap.CategoryRank)
+                .ThenBy(category => category, StringComparer.Ordinal)
+                .Select(category => new { category, count = gaps.Count(g => g.Category == category) })
+                .ToList(),
             plan = new {
                 exists = plan is not null,
                 tasksDone = plan?.Tasks.Count(t => t.Status == PlanTask.Done) ?? 0,

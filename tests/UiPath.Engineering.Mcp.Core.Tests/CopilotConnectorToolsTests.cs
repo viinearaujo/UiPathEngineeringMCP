@@ -38,6 +38,9 @@ public class CopilotConnectorToolsTests {
             "manage_project_file",
             "sync_project_context",
             "validate_project_docs",
+            "get_analyzer_rules",
+            "manage_packages",
+            "get_object_repository",
         }, CopilotConnectorTools.DefaultNames);
         Assert.Contains("recommend_activities", CopilotConnectorTools.DefaultNames);
         Assert.Contains("find_activity", CopilotConnectorTools.DefaultNames);
@@ -69,6 +72,8 @@ public class CopilotConnectorToolsTests {
             "list_skills",
             "search_repository",
             "create_work_items",
+            "run_workflow",
+            "control_debug_session",
         }, CopilotConnectorTools.LeaveOffNames);
         foreach (var name in CopilotConnectorTools.LeaveOffNames) {
             Assert.False(CopilotConnectorTools.IsDefault(name), name);

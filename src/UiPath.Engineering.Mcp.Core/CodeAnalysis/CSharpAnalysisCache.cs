@@ -12,27 +12,34 @@ namespace UiPath.Engineering.Mcp.Core.CodeAnalysis;
 /// Decorates an <see cref="ICSharpContextBuilder"/> with a bounded cross-request cache
 /// keyed by the normalized project path. Each call recomputes the project-model SHA
 /// fingerprint over *.cs + project.json, plus the write times of the NuGet package
-/// folders backing the project's dependencies, and only rebuilds the Roslyn compilation
+/// folders backing the project's dependencies and of the Studio-generated coded-workflow
+/// sources under `.local/.codedworkflows/`, and only rebuilds the Roslyn compilation
 /// when the fingerprint changed. The NuGet folders live outside the project tree, but a
 /// `dotnet restore` changes only them — without them in the fingerprint a stale
-/// partial/syntax-only compilation would be served forever.
+/// partial/syntax-only compilation would be served forever. The generated sources live
+/// inside the tree but are invisible to <see cref="IFilesystemProvider"/> discovery, so
+/// without their write times a regenerated Object Repository would be served from a stale
+/// compilation forever.
 /// Fingerprint failure serves a cached context with <see cref="CSharpAnalysisContext.Stale"/> set.
 /// </summary>
 public sealed class CSharpAnalysisCache : ICSharpContextBuilder, IDisposable {
-    private sealed record CacheEntry(CSharpAnalysisContext Context, string Fingerprint);
+    /// <summary>
+    /// Roslyn compilations are large and retained for the whole sliding TTL, so the
+    /// cache is deliberately smaller than the general default.
+    /// </summary>
+    public const int DefaultMaxEntries = 8;
 
     private readonly ICSharpContextBuilder _inner;
     private readonly IFilesystemProvider _filesystem;
     private readonly NuGetReferenceResolver _resolver;
-    private readonly BoundedCache<CacheEntry> _cache;
-    private readonly ILogger<CSharpAnalysisCache> _logger;
+    private readonly FingerprintedCache<CSharpAnalysisContext> _cache;
 
     public CSharpAnalysisCache(
         ICSharpContextBuilder inner,
         IFilesystemProvider filesystem,
         NuGetReferenceResolver resolver,
         ILogger<CSharpAnalysisCache>? logger = null)
-        : this(inner, filesystem, resolver, BoundedCache<CacheEntry>.DefaultMaxEntries, null, null, logger) {
+        : this(inner, filesystem, resolver, DefaultMaxEntries, null, null, logger) {
     }
 
     public CSharpAnalysisCache(
@@ -46,41 +53,25 @@ public sealed class CSharpAnalysisCache : ICSharpContextBuilder, IDisposable {
         _inner = inner;
         _filesystem = filesystem;
         _resolver = resolver;
-        _cache = new BoundedCache<CacheEntry>(maxEntries, ttl, timeProvider);
-        _logger = logger ?? NullLogger<CSharpAnalysisCache>.Instance;
+        _cache = new FingerprintedCache<CSharpAnalysisContext>(
+            "C# analysis",
+            maxEntries,
+            ttl,
+            timeProvider,
+            logger ?? NullLogger<CSharpAnalysisCache>.Instance);
     }
 
     internal int CacheEntryCount => _cache.EntryCount;
 
     internal int CacheLockCount => _cache.LockCount;
 
-    public async Task<CSharpAnalysisContext> BuildAsync(string projectPath, CancellationToken cancellationToken = default) {
-        var key = Path.GetFullPath(projectPath);
-        return await _cache.RunExclusiveAsync(key, async ct => {
-            if (TryComputeFingerprint(projectPath, out var fingerprint)) {
-                if (_cache.TryGet(key, out var entry) && entry.Fingerprint == fingerprint) {
-                    _logger.LogDebug("C# analysis cache hit for {CacheKey}", key);
-                    entry.Context.Stale = false;
-                    return entry.Context;
-                }
-
-                _logger.LogDebug("C# analysis cache miss for {CacheKey}", key);
-                var built = await _inner.BuildAsync(projectPath, ct);
-                built.Stale = false;
-                _cache.Set(key, new CacheEntry(built, fingerprint));
-                return built;
-            }
-
-            if (_cache.TryGet(key, out var stale, includeExpired: true)) {
-                _logger.LogInformation("C# analysis cache stale for {CacheKey}", key);
-                stale.Context.Stale = true;
-                return stale.Context;
-            }
-
-            _logger.LogDebug("C# analysis cache miss for {CacheKey}", key);
-            return await _inner.BuildAsync(projectPath, ct);
-        }, cancellationToken);
-    }
+    public Task<CSharpAnalysisContext> BuildAsync(string projectPath, CancellationToken cancellationToken = default) =>
+        _cache.GetOrBuildAsync(
+            projectPath,
+            path => TryComputeFingerprint(path, out var fingerprint) ? fingerprint : null,
+            ct => _inner.BuildAsync(projectPath, ct),
+            (context, stale) => context.Stale = stale,
+            cancellationToken);
 
     public void Dispose() => _cache.Dispose();
 
@@ -93,8 +84,17 @@ public sealed class CSharpAnalysisCache : ICSharpContextBuilder, IDisposable {
                 files.Add(projectJson);
             }
 
+            // The generated coded-workflow sources are compilation inputs (see
+            // CSharpContextBuilder) but are invisible to IFilesystemProvider by design, so
+            // they must be stat-ed through the same direct-IO seam the builder uses. Studio
+            // regenerates ObjectRepository.cs whenever the Object Repository changes; without
+            // its write time in the fingerprint a regenerated descriptor surface would be
+            // served from a stale compilation forever.
+            var generated = CSharpContextBuilder.FindGeneratedCodedFiles(projectPath)
+                .Select(file => (Path: file, Ticks: _resolver.SafeGetWriteTicks(file)));
             var extra = GetPackageFolders(projectJson)
-                .Select(folder => (Path: folder, Ticks: _resolver.SafeGetWriteTicks(folder)));
+                .Select(folder => (Path: folder, Ticks: _resolver.SafeGetWriteTicks(folder)))
+                .Concat(generated);
             return ProjectFingerprint.TryCompute(_filesystem, files, out fingerprint, extra);
         } catch (Exception ex) when (ProjectFingerprint.IsIoFailure(ex)) {
             return false;

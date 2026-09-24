@@ -8,7 +8,12 @@ namespace UiPath.Engineering.Mcp.Core.Configuration;
 public static class CopilotConnectorTools {
     public const string SurfaceCopilotDefault = "CopilotDefault";
     public const string SurfaceAll = "All";
-    public const int MaxDefaultCount = 31;
+
+    /// <summary>
+    /// Copilot Studio connector cap. Bumped from 31 to 34 when the read-only CLI surface
+    /// (get_analyzer_rules, manage_packages, get_object_repository) joined the default connector.
+    /// </summary>
+    public const int MaxDefaultCount = 34;
 
     public static readonly string[] DefaultNames = [
         "analyze_project",
@@ -42,6 +47,9 @@ public static class CopilotConnectorTools {
         "manage_project_file",
         "sync_project_context",
         "validate_project_docs",
+        "get_analyzer_rules",
+        "manage_packages",
+        "get_object_repository",
     ];
 
     public static readonly string[] LeaveOffNames = [
@@ -53,6 +61,10 @@ public static class CopilotConnectorTools {
         "list_skills",
         "search_repository",
         "create_work_items",
+        // Execution-capable: both run arbitrary automation and are additionally gated by
+        // UiPathCli:EnableExecution (fail closed, off by default).
+        "run_workflow",
+        "control_debug_session",
     ];
 
     private static readonly HashSet<string> DefaultSet = new(DefaultNames, StringComparer.Ordinal);

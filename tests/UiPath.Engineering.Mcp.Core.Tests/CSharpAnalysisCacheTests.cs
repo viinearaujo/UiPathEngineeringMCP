@@ -258,4 +258,131 @@ public class CSharpAnalysisCacheTests {
 
         Assert.Equal(2, inner.CallCount);
     }
+
+    // --- generated coded-workflow sources (.local/.codedworkflows) --------------
+    //
+    // Studio regenerates ObjectRepository.cs when the Object Repository changes. It is a
+    // compilation input (see CSharpContextBuilder) but invisible to IFilesystemProvider,
+    // so its write time has to be stat-ed directly or a regenerated descriptor surface
+    // would be served from a stale compilation forever.
+
+    /// <summary>
+    /// Like <see cref="FixedPackagesFolderResolver"/> but falls through to the real disk,
+    /// so generated files under a temp project are stat-ed as production would.
+    /// </summary>
+    private sealed class DiskBackedResolver : NuGetReferenceResolver {
+        public override string? GetPackagesFolder() => null;
+    }
+
+    private sealed class GeneratedSourcesProject : IDisposable {
+        public string Root { get; } = Path.Combine(
+            Path.GetTempPath(), "cache-generated-" + Guid.NewGuid().ToString("N"));
+
+        public string GeneratedFolder => Path.Combine(Root, ".local", ".codedworkflows");
+
+        public string GeneratedObjectRepository => Path.Combine(GeneratedFolder, "ObjectRepository.cs");
+
+        public FakeFilesystemProvider Filesystem { get; } = new();
+
+        public GeneratedSourcesProject() {
+            Directory.CreateDirectory(Root);
+            var json = Path.Combine(Root, "project.json");
+            var flowCs = Path.Combine(Root, "LoginFlow.cs");
+            File.WriteAllText(json, """{ "name": "testProcess", "targetFramework": "net8.0", "dependencies": {} }""");
+            File.WriteAllText(flowCs, "namespace TestProcess; public class LoginFlow { }");
+
+            Filesystem.ProjectJsonPath = json;
+            Filesystem.CSharpFiles.Add(flowCs);
+            var stamp = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            Filesystem.WriteTimesUtc[json] = stamp;
+            Filesystem.WriteTimesUtc[flowCs] = stamp;
+        }
+
+        public void WriteGeneratedObjectRepository(string app) {
+            Directory.CreateDirectory(GeneratedFolder);
+            File.WriteAllText(GeneratedObjectRepository, $$"""
+                namespace TestProcess;
+                public static class Descriptors {
+                    public static class {{app}} { public static string Screen => "selector"; }
+                }
+                """);
+        }
+
+        public void SetGeneratedWriteTime(DateTime timestamp) =>
+            File.SetLastWriteTimeUtc(GeneratedObjectRepository, timestamp);
+
+        public void Dispose() {
+            try { Directory.Delete(Root, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    [Fact]
+    public async Task BuildAsync_GeneratedObjectRepositoryAppears_TriggersRebuild() {
+        using var project = new GeneratedSourcesProject();
+        var inner = new CountingContextBuilder();
+        var sut = new CSharpAnalysisCache(inner, project.Filesystem, new DiskBackedResolver());
+
+        var first = await sut.BuildAsync(project.Root);
+        Assert.Same(first, await sut.BuildAsync(project.Root));
+        Assert.Equal(1, inner.CallCount);
+
+        project.WriteGeneratedObjectRepository("MyApp");
+
+        var rebuilt = await sut.BuildAsync(project.Root);
+
+        Assert.Equal(2, inner.CallCount);
+        Assert.NotSame(first, rebuilt);
+    }
+
+    [Fact]
+    public async Task BuildAsync_GeneratedObjectRepositoryRegenerated_TriggersRebuild() {
+        // Regression: a re-capture rewrites ObjectRepository.cs in place. The file set is
+        // identical, so only its write time can invalidate the cached compilation.
+        using var project = new GeneratedSourcesProject();
+        project.WriteGeneratedObjectRepository("MyApp");
+        project.SetGeneratedWriteTime(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var inner = new CountingContextBuilder();
+        var sut = new CSharpAnalysisCache(inner, project.Filesystem, new DiskBackedResolver());
+
+        var first = await sut.BuildAsync(project.Root);
+        Assert.Equal(1, inner.CallCount);
+
+        project.SetGeneratedWriteTime(new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var rebuilt = await sut.BuildAsync(project.Root);
+
+        Assert.Equal(2, inner.CallCount);
+        Assert.NotSame(first, rebuilt);
+    }
+
+    [Fact]
+    public async Task BuildAsync_GeneratedObjectRepositoryUnchanged_ServesCache() {
+        using var project = new GeneratedSourcesProject();
+        project.WriteGeneratedObjectRepository("MyApp");
+        var inner = new CountingContextBuilder();
+        var sut = new CSharpAnalysisCache(inner, project.Filesystem, new DiskBackedResolver());
+
+        var first = await sut.BuildAsync(project.Root);
+        var second = await sut.BuildAsync(project.Root);
+
+        Assert.Equal(1, inner.CallCount);
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public async Task BuildAsync_NoGeneratedSources_FingerprintStillComputes() {
+        // Absent `.local` must not degrade to the stale path, and must not silently pull
+        // generated files into the authored-source list.
+        using var project = new GeneratedSourcesProject();
+        var inner = new CountingContextBuilder();
+        var sut = new CSharpAnalysisCache(inner, project.Filesystem, new DiskBackedResolver());
+
+        var context = await sut.BuildAsync(project.Root);
+
+        Assert.False(context.Stale);
+        Assert.Equal(1, inner.CallCount);
+        Assert.All(
+            project.Filesystem.CSharpFiles,
+            file => Assert.DoesNotContain(".local", file, StringComparison.Ordinal));
+    }
 }

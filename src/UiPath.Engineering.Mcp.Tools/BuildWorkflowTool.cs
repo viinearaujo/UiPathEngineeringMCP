@@ -4,6 +4,7 @@ using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Authoring;
 using UiPath.Engineering.Mcp.Core.Models;
+using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Core.Templates;
 
 namespace UiPath.Engineering.Mcp.Tools;
@@ -12,13 +13,18 @@ namespace UiPath.Engineering.Mcp.Tools;
 public sealed class BuildWorkflowTool {
     private readonly IFilesystemProvider _filesystem;
     private readonly IActivityCatalogResolver _catalogResolver;
+    private readonly IProjectModelBuilder? _projectModelBuilder;
 
-    public BuildWorkflowTool(IFilesystemProvider filesystem, IActivityCatalogResolver catalogResolver) {
+    public BuildWorkflowTool(
+        IFilesystemProvider filesystem,
+        IActivityCatalogResolver catalogResolver,
+        IProjectModelBuilder? projectModelBuilder = null) {
         _filesystem = filesystem;
         _catalogResolver = catalogResolver;
+        _projectModelBuilder = projectModelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Creates a real .xaml workflow file in a UiPath project from a JSON activity spec. Run validate_activity_spec first to dry-run the spec and see every violation before writing. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }. Strings enclosed in square brackets ([expr]) are interpreted as expressions in the project's configured expression language. All other values are treated as literals. Next: validate_project.")]
+    [McpServerTool(UseStructuredContent = true), Description("Creates a real .xaml workflow file in a UiPath project from a JSON activity spec. Run validate_activity_spec first to dry-run the spec and see every violation before writing. Spec shape: { name, properties, children, variables (root only), imports (root only, C# expression projects), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile and InvokeCode) }. Expression form follows the project's expressionLanguage from project.json: in a VisualBasic project pass [expr] bracket shorthand and any other value is a literal; in a CSharp project pass a raw C# expression with no brackets (never bracket shorthand — it deserializes as VB and fails at runtime). Next: validate_project.")]
     public async Task<ToolResult> BuildWorkflow(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file to create relative to the project root, e.g. 'Workflows/Process.xaml'.")] string relativePath,
@@ -51,8 +57,9 @@ public sealed class BuildWorkflowTool {
         }
 
         var catalog = await _catalogResolver.ResolveAsync(projectPath, cancellationToken);
+        var settings = await ProjectXamlSettings.ResolveAsync(_projectModelBuilder, projectPath, cancellationToken);
         var xamlClass = XamlWorkflowTemplates.ToXamlClassName(relativePath);
-        var build = XamlBuilder.RenderWorkflowFile(spec!, xamlClass, catalog);
+        var build = XamlBuilder.RenderWorkflowFile(spec!, xamlClass, catalog, settings);
         if (!build.Success) {
             return ToolResults.Failure($"The activity spec has {build.Errors.Count} violation(s).", build.Errors, sw);
         }
@@ -69,7 +76,9 @@ public sealed class BuildWorkflowTool {
             new {
                 filePath = targetPath,
                 xamlClass,
+                expressionLanguage = settings.ExpressionLanguage.ToString(),
                 activitiesUsed
-            }, sw);
+            }, sw,
+            build.Warnings.Count > 0 ? build.Warnings : null);
     }
 }

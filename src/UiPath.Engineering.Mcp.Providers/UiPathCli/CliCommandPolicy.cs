@@ -12,6 +12,15 @@ public enum CliCommandClass { AllowedReadOnly, AllowedMutating, VerbNotAllowed, 
 public sealed class CliCommandPolicy {
     private static readonly char[] RejectedControlChars = ['\r', '\n', '\0'];
 
+    // Subcommands that execute automation on this machine. Gated by
+    // UiPathCliOptions.EnableExecution, a separate and stricter switch than
+    // EnableMutatingCommands. These are deliberately NOT in ReadOnlySubcommands,
+    // so Classify still reports them as mutating and the run_ui_path_cli hatch
+    // cannot reach them without EnableMutatingCommands either.
+    private static readonly Dictionary<string, string[]> ExecutionSubcommands = new(StringComparer.OrdinalIgnoreCase) {
+        ["rpa"] = ["run", "debug", "execution"]
+    };
+
     private readonly UiPathCliOptions _options;
 
     public CliCommandPolicy(UiPathCliOptions options) {
@@ -42,6 +51,44 @@ public sealed class CliCommandPolicy {
     // tokens under ArgumentList and are not rejected here.
     public static bool ContainsRejectedChars(string arguments) =>
         arguments.IndexOfAny(RejectedControlChars) >= 0;
+
+    /// <summary>
+    /// True when <paramref name="verb"/> <paramref name="arguments"/> drives automation
+    /// execution (rpa run / debug / execution). These are gated by
+    /// <see cref="UiPathCliOptions.EnableExecution"/> and must stay unreachable by default.
+    /// </summary>
+    public bool IsExecution(string verb, string arguments) {
+        if (!_options.AllowedVerbs.Contains(verb, StringComparer.OrdinalIgnoreCase)
+            || ContainsRejectedChars(arguments)) {
+            return false;
+        }
+
+        var trimmed = arguments.Trim();
+        return ExecutionSubcommands.TryGetValue(verb, out var entries)
+            && entries.Any(entry => MatchesTokenPrefix(trimmed, entry));
+    }
+
+    /// <summary>
+    /// <see cref="IsExecution"/> tolerating the verb-prefixed argument form: callers that build
+    /// the executed command line pass "rpa run ..." as the arguments of verb "rpa", so the
+    /// subcommand is the second token rather than the first.
+    /// </summary>
+    public bool IsExecutionCommand(string verb, string arguments) {
+        if (IsExecution(verb, arguments)) {
+            return true;
+        }
+
+        var tokens = ProcessRunner.SplitQuotedArguments(arguments);
+        return tokens.Count >= 2
+            && string.Equals(tokens[0], verb, StringComparison.OrdinalIgnoreCase)
+            && IsExecution(verb, CliVerbArguments.ToArgumentString(tokens.Skip(1).ToList()));
+    }
+
+    /// <summary>True when automation execution is permitted on this server.</summary>
+    public bool ExecutionEnabled => _options.EnableExecution;
+
+    /// <summary>True when mutating subcommands are permitted on this server.</summary>
+    public bool MutatingEnabled => _options.EnableMutatingCommands;
 
     // A read-only entry matches when the arguments start with it followed by a
     // space or end-of-string (case-insensitive), e.g. "project list" matches

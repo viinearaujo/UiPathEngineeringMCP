@@ -4,21 +4,26 @@ using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Authoring;
 using UiPath.Engineering.Mcp.Core.Models;
+using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Tools;
 
 [McpServerToolType]
 public sealed class ValidateActivitySpecTool {
     private readonly IActivityCatalogResolver _catalogResolver;
+    private readonly IProjectModelBuilder? _projectModelBuilder;
 
-    public ValidateActivitySpecTool(IActivityCatalogResolver catalogResolver) {
+    public ValidateActivitySpecTool(
+        IActivityCatalogResolver catalogResolver,
+        IProjectModelBuilder? projectModelBuilder = null) {
         _catalogResolver = catalogResolver;
+        _projectModelBuilder = projectModelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Validates a JSON activity spec against the UiPath activity catalog without reading or writing any files. Pass projectPath to use package-native schemas for that project. Returns every violation as a structured error (errorCode, message, fixHint), or the list of catalog activities the spec uses. Use this as a dry-run before authoring or editing workflows. Spec shape: { name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }. If Children is the Then branch; else is the Else branch. Next: insert_activities or build_workflow.")]
+    [McpServerTool(UseStructuredContent = true), Description("Validates a JSON activity spec against the UiPath activity catalog without reading or writing any files. Pass projectPath to use package-native schemas for that project and to apply its expressionLanguage (from project.json) to expression-form rules. Returns every violation as a structured error (errorCode, message, fixHint), or the list of catalog activities the spec uses. Use this as a dry-run before authoring or editing workflows. Spec shape: { name, properties, children, variables (root only), imports (root only, C# expression projects), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile and InvokeCode) }. If Children is the Then branch; else is the Else branch. Next: insert_activities or build_workflow.")]
     public async Task<ToolResult> ValidateActivitySpec(
         [Description("JSON activity spec to validate (no files are read or written).")] string specJson,
-        [Description("Optional absolute path to the UiPath project directory. When set, validation uses that project's package catalog; otherwise the built-in fallback catalog.")] string? projectPath = null,
+        [Description("Optional absolute path to the UiPath project directory. When set, validation uses that project's package catalog and expression language; otherwise the built-in fallback catalog and VisualBasic expression form.")] string? projectPath = null,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
@@ -28,7 +33,8 @@ public sealed class ValidateActivitySpecTool {
         }
 
         var catalog = await _catalogResolver.ResolveAsync(projectPath, cancellationToken);
-        var errors = SpecValidator.Validate(spec!, catalog);
+        var settings = await ProjectXamlSettings.ResolveAsync(_projectModelBuilder, projectPath, cancellationToken);
+        var errors = SpecValidator.Validate(spec!, catalog, settings);
 
         if (errors.Count > 0) {
             return ToolResults.Failure($"The activity spec has {errors.Count} violation(s).", errors, sw);
@@ -36,7 +42,7 @@ public sealed class ValidateActivitySpecTool {
 
         // Renderability proof: a valid spec must render. Surface XAML_RENDER_FAILED
         // if the builder ever fails on a valid spec.
-        var build = XamlBuilder.RenderFragment(spec!, catalog);
+        var build = XamlBuilder.RenderFragment(spec!, catalog, settings);
         if (!build.Success) {
             return ToolResults.Failure("The activity spec validated but failed to render as XAML.", build.Errors, sw);
         }
@@ -46,6 +52,7 @@ public sealed class ValidateActivitySpecTool {
 
         var warnings = ExperimentalWarnings(activitiesUsed, name =>
             catalog.TryGet(name, out var schema) && schema.Experimental);
+        warnings.AddRange(build.Warnings);
         if (ActivityCatalogResolver.DiscoveryWarning(catalog) is { } discoveryWarning) {
             warnings.Add(discoveryWarning);
         }
@@ -55,6 +62,7 @@ public sealed class ValidateActivitySpecTool {
             new {
                 valid = true,
                 source = catalog.Source,
+                expressionLanguage = settings.ExpressionLanguage.ToString(),
                 activitiesUsed,
                 warnings
             }, sw, warnings);

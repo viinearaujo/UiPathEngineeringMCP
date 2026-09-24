@@ -4,62 +4,88 @@ using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
-public sealed record XamlBuildResult(bool Success, string? Xaml, List<ToolError> Errors);
+public sealed record XamlBuildResult(bool Success, string? Xaml, List<ToolError> Errors) {
+    /// <summary>
+    /// Non-fatal notes about the rendered XAML: properties the schema does not
+    /// know about, expression argument types that had to be assumed, and spec
+    /// fields the target project ignores.
+    /// </summary>
+    public List<string> Warnings { get; init; } = [];
+}
 
-// Renders a validated ActivitySpec into Studio-valid XAML. Expressions and
-// literals pass through verbatim (form is the validator's job). Special shapes
-// (If / Switch / TryCatch / ForEach / InvokeWorkflowFile arguments) are explicit
-// code below; everything else renders as a generic element with attribute-mapped
-// properties and nested children.
+// Renders a validated ActivitySpec into Studio-valid XAML.
+//
+// Expression form follows the project's expression language. A VisualBasic
+// project keeps attribute-form values with [bracket] shorthand. A CSharp project
+// renders every non-literal expression as a typed <InArgument>/<OutArgument>
+// property element holding <CSharpValue> (read) or <CSharpReference> (write),
+// because a non-literal attribute value deserializes as VisualBasicValue<T>
+// regardless of expressionLanguage and then fails at runtime with "JIT
+// compilation is disabled for non-Legacy projects". Attribute form is kept in a
+// C# project only for values with a direct type converter: enums, numbers,
+// booleans, TimeSpan literals, {x:Null} and plain string literals.
+//
+// Container bodies use their canonical shape (.Body / .ActivityBody with
+// ActivityAction + DelegateInArgument) and every body or branch slot is wrapped
+// in a <Sequence>: Studio's designer expects the wrap as a drop zone, and
+// validate/build accept the bare form so nothing else catches a missing one.
 //
 // If: Children = Then branch; Else = Else branch (omitted when empty).
 // Switch: Cases keyed by literal; Default = fallback branch.
-// InvokeWorkflowFile: Arguments = In/Out/InOut mappings.
+// While / DoWhile: Children = the single Activity body.
+// ForEach / ForEachRow: Children = the per-iteration body.
+// RetryScope: Children = the ActivityBody (the activities to attempt).
+// InvokeWorkflowFile / InvokeCode: Arguments = In/Out/InOut bindings; no body.
 public static class XamlBuilder {
-    private static readonly XNamespace Wf = "http://schemas.microsoft.com/netfx/2009/xaml/activities";
-    private static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
-    private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
-    private static readonly XNamespace Sap = "http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation";
-    private static readonly XNamespace Sap2010 = "http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation";
-    private static readonly XNamespace Ui = "http://schemas.uipath.com/workflow/activities";
-    private static readonly XNamespace Scg = "clr-namespace:System.Collections.Generic;assembly=System.Private.CoreLib";
-
     // Renders a validated spec as a fragment (elements only, no <Activity> root).
     public static XamlBuildResult RenderFragment(ActivitySpec spec) =>
-        RenderFragment(spec, ActivityCatalog.Fallback);
+        RenderFragment(spec, ActivityCatalog.Fallback, null);
 
-    public static XamlBuildResult RenderFragment(ActivitySpec spec, IActivityCatalog catalog) {
-        var errors = SpecValidator.Validate(spec, catalog);
-        if (errors.Count > 0) return new XamlBuildResult(false, null, errors);
+    public static XamlBuildResult RenderFragment(ActivitySpec spec, IActivityCatalog catalog) =>
+        RenderFragment(spec, catalog, null);
+
+    public static XamlBuildResult RenderFragment(ActivitySpec spec, IActivityCatalog catalog, ProjectXamlSettings? settings) {
+        var renderer = new Renderer(catalog, settings);
+        var errors = renderer.Validate(spec);
+        if (errors.Count > 0) {
+            return new XamlBuildResult(false, null, errors);
+        }
 
         try {
-            var element = RenderElement(spec, includeVariables: true, catalog);
-            AddFragmentNamespaceDeclarations(element, spec, catalog);
-            return new XamlBuildResult(true, element.ToString(), []);
+            var element = renderer.Element(spec, includeVariables: true);
+            renderer.DeclareFragmentNamespaces(element, spec);
+            return new XamlBuildResult(true, element.ToString(), []) { Warnings = renderer.Warnings };
         } catch (Exception ex) {
             return new XamlBuildResult(false, null, [RenderFailed(ex)]);
         }
     }
 
-    // Renders a full workflow file: <Activity x:Class="..." …>{fragment}</Activity>.
+    // Renders a full workflow file: <Activity x:Class="…" …>{fragment}</Activity>.
     // Validates first (never renders an invalid spec), then round-trips the output
     // through XamlWorkflowParser to prove the file parses.
     public static XamlBuildResult RenderWorkflowFile(ActivitySpec spec, string xamlClassName) =>
-        RenderWorkflowFile(spec, xamlClassName, ActivityCatalog.Fallback);
+        RenderWorkflowFile(spec, xamlClassName, ActivityCatalog.Fallback, null);
 
-    public static XamlBuildResult RenderWorkflowFile(ActivitySpec spec, string xamlClassName, IActivityCatalog catalog) {
-        var errors = SpecValidator.Validate(spec, catalog);
-        if (errors.Count > 0) return new XamlBuildResult(false, null, errors);
+    public static XamlBuildResult RenderWorkflowFile(ActivitySpec spec, string xamlClassName, IActivityCatalog catalog) =>
+        RenderWorkflowFile(spec, xamlClassName, catalog, null);
+
+    public static XamlBuildResult RenderWorkflowFile(
+        ActivitySpec spec, string xamlClassName, IActivityCatalog catalog, ProjectXamlSettings? settings) {
+        var renderer = new Renderer(catalog, settings);
+        var errors = renderer.Validate(spec);
+        if (errors.Count > 0) {
+            return new XamlBuildResult(false, null, errors);
+        }
 
         try {
-            var root = new XElement(Wf + "Activity",
-                new XAttribute(Mc + "Ignorable", "sap sap2010"),
-                new XAttribute(X + "Class", xamlClassName),
-                new XAttribute("xmlns", Wf.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "mc", Mc.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "sap", Sap.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "sap2010", Sap2010.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "x", X.NamespaceName));
+            var root = new XElement(Renderer.Wf + "Activity",
+                new XAttribute(Renderer.Mc + "Ignorable", "sap sap2010"),
+                new XAttribute(Renderer.X + "Class", xamlClassName),
+                new XAttribute("xmlns", Renderer.Wf.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "mc", Renderer.Mc.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "sap", Renderer.Sap.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "sap2010", Renderer.Sap2010.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "x", Renderer.X.NamespaceName));
 
             // Root variables live on a Sequence; wrap a non-Sequence root so they
             // still have a valid home.
@@ -72,14 +98,14 @@ public static class XamlBuilder {
                 };
             }
 
-            root.Add(RenderElement(effective, includeVariables: true, catalog));
-            if (UsesNamespace(effective, Ui, catalog)) {
-                root.Add(new XAttribute(XNamespace.Xmlns + "ui", Ui.NamespaceName));
+            // The expression-language block precedes the body, matching the file
+            // anatomy Studio writes (x:Members, language settings, imports, body).
+            if (renderer.LanguageBlock(spec) is { } languageBlock) {
+                root.Add(languageBlock);
             }
 
-            if (UsesInvokeArguments(effective)) {
-                root.Add(new XAttribute(XNamespace.Xmlns + "scg", Scg.NamespaceName));
-            }
+            root.Add(renderer.Element(effective, includeVariables: true));
+            renderer.DeclareNamespaces(root, effective);
 
             var xaml = root.ToString();
 
@@ -91,7 +117,7 @@ public static class XamlBuilder {
                     "The spec validated but produced malformed XAML; simplify the spec or report this as an authoring bug.")]);
             }
 
-            return new XamlBuildResult(true, xaml, []);
+            return new XamlBuildResult(true, xaml, []) { Warnings = renderer.Warnings };
         } catch (Exception ex) {
             return new XamlBuildResult(false, null, [RenderFailed(ex)]);
         }
@@ -113,262 +139,670 @@ public static class XamlBuilder {
         Arguments = spec.Arguments,
     };
 
-    private static XElement RenderElement(ActivitySpec spec, bool includeVariables, IActivityCatalog catalog) {
-        if (!catalog.TryGet(spec.Name, out var schema)) {
-            throw new InvalidOperationException($"Unknown activity \"{spec.Name}\".");
+    // One renderer instance carries the project settings, the catalog and the
+    // state gathered while rendering (warnings, xmlns aliases actually used) so
+    // the root element declares exactly the namespaces the body needs.
+    internal sealed class Renderer {
+        internal static readonly XNamespace Wf = "http://schemas.microsoft.com/netfx/2009/xaml/activities";
+        internal static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
+        internal static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+        internal static readonly XNamespace Sap = "http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation";
+        internal static readonly XNamespace Sap2010 = "http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation";
+        internal static readonly XNamespace Ui = "http://schemas.uipath.com/workflow/activities";
+
+        // Namespace imports Studio writes into a new C# workflow. A spec that
+        // supplies its own 'imports' list replaces this set.
+        private static readonly string[] DefaultCSharpImports = [
+            "System",
+            "System.Activities",
+            "System.Collections.Generic",
+            "System.Data",
+            "System.Linq",
+            "System.Threading.Tasks",
+            "UiPath.Core",
+            "UiPath.Core.Activities"
+        ];
+
+        private const int MaxWarnings = 20;
+
+        private readonly IActivityCatalog _catalog;
+        private readonly ProjectXamlSettings _settings;
+        private readonly HashSet<string> _aliases = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _warned = new(StringComparer.Ordinal);
+
+        internal Renderer(IActivityCatalog catalog, ProjectXamlSettings? settings) {
+            _catalog = catalog;
+            _settings = settings ?? ProjectXamlSettings.Default;
+            var coreAssembly = _settings.CoreAssembly;
+            S = XNamespace.Get($"clr-namespace:System;assembly={coreAssembly}");
+            Sc = XNamespace.Get($"clr-namespace:System.Collections;assembly={coreAssembly}");
+            Scg = XNamespace.Get($"clr-namespace:System.Collections.Generic;assembly={coreAssembly}");
+            Sco = XNamespace.Get($"clr-namespace:System.Collections.ObjectModel;assembly={coreAssembly}");
+            // System.Data resolves through type forwarding on both targets.
+            Sd = XNamespace.Get("clr-namespace:System.Data;assembly=System.Data");
         }
 
-        var element = schema.Name switch {
-            "If" => RenderIf(spec, schema, catalog),
-            "Switch" => RenderSwitch(spec, schema, catalog),
-            "TryCatch" => RenderTryCatch(spec, schema, catalog),
-            "ForEach" => RenderForEach(spec, schema, catalog),
-            "InvokeWorkflowFile" => RenderInvoke(spec, schema, catalog),
-            _ => RenderGeneric(spec, schema, catalog),
+        private XNamespace S { get; }
+        private XNamespace Sc { get; }
+        private XNamespace Scg { get; }
+        private XNamespace Sco { get; }
+        private XNamespace Sd { get; }
+
+        internal List<string> Warnings { get; } = [];
+
+        internal List<ToolError> Validate(ActivitySpec spec) => SpecValidator.Validate(spec, _catalog, _settings);
+
+        // ---- root-level blocks -------------------------------------------------
+
+        // <TextExpression.NamespacesForImplementation> for a C# project — the only
+        // place a C# XAML workflow declares its expression imports — and
+        // <VisualBasic.Settings> for a VB project, where imports are configured in
+        // project.json instead.
+        internal XElement? LanguageBlock(ActivitySpec spec) {
+            if (!_settings.IsCSharp) {
+                if (spec.Imports is { Count: > 0 }) {
+                    Warn("The spec's 'imports' list is ignored for a VisualBasic project; VB namespace imports are configured in project.json (designOptions).");
+                }
+
+                return new XElement(Wf + "VisualBasic.Settings", new XElement(X + "Null"));
+            }
+
+            var imports = spec.Imports is { Count: > 0 } ? spec.Imports : (IReadOnlyList<string>)DefaultCSharpImports;
+            var collection = new XElement(Sco + "Collection", new XAttribute(X + "TypeArguments", "x:String"));
+            foreach (var import in imports) {
+                if (!string.IsNullOrWhiteSpace(import)) {
+                    collection.Add(new XElement(X + "String", import.Trim()));
+                }
+            }
+
+            UseAlias("sco");
+            return new XElement(Wf + "TextExpression.NamespacesForImplementation", collection);
+        }
+
+        // A fragment has no <Activity> root to carry declarations, so its root
+        // element declares the namespaces it needs (appended after the property
+        // attributes).
+        internal void DeclareFragmentNamespaces(XElement root, ActivitySpec spec) {
+            root.Add(new XAttribute("xmlns", Wf.NamespaceName));
+            root.Add(new XAttribute(XNamespace.Xmlns + "x", X.NamespaceName));
+            DeclareNamespaces(root, spec);
+        }
+
+        internal void DeclareNamespaces(XElement root, ActivitySpec spec) {
+            if (UsesNamespace(spec, Ui)) {
+                root.Add(new XAttribute(XNamespace.Xmlns + "ui", Ui.NamespaceName));
+            }
+
+            foreach (var alias in _aliases.OrderBy(a => a, StringComparer.Ordinal)) {
+                if (AliasNamespace(alias) is { } ns) {
+                    root.Add(new XAttribute(XNamespace.Xmlns + alias, ns.NamespaceName));
+                }
+            }
+        }
+
+        private XNamespace? AliasNamespace(string alias) => alias switch {
+            "s" => S,
+            "sc" => Sc,
+            "scg" => Scg,
+            "sco" => Sco,
+            "sd" => Sd,
+            _ => null
         };
 
-        if (includeVariables && spec.Variables is { Count: > 0 }) {
-            element.AddFirst(RenderVariables(spec.Variables));
+        private void UseAlias(string alias) => _aliases.Add(alias);
+
+        private void UseAliasesIn(string? typeArguments) {
+            foreach (var alias in TypeToken.AliasesIn(typeArguments)) {
+                if (AliasNamespace(alias) is not null) {
+                    UseAlias(alias);
+                }
+            }
         }
 
-        return element;
-    }
+        // ---- elements ----------------------------------------------------------
 
-    private static XElement RenderGeneric(ActivitySpec spec, ActivitySchema schema, IActivityCatalog catalog) {
-        var element = new XElement(Ns(schema) + schema.Name, RenderAttributes(spec, schema));
-        AddChildren(element, spec.Children, catalog);
-        return element;
-    }
+        internal XElement Element(ActivitySpec spec, bool includeVariables) {
+            if (!_catalog.TryGet(spec.Name, out var schema)) {
+                throw new InvalidOperationException($"Unknown activity \"{spec.Name}\".");
+            }
 
-    private static XElement RenderIf(ActivitySpec spec, ActivitySchema schema, IActivityCatalog catalog) {
-        var element = new XElement(Wf + "If", RenderAttributes(spec, schema));
-        element.Add(new XElement(Wf + "If.Then", RenderedChildren(spec.Children, catalog)));
-        if (spec.Else is { Count: > 0 }) {
-            element.Add(new XElement(Wf + "If.Else", RenderedChildren(spec.Else, catalog)));
-        }
+            var element = schema.Name switch {
+                "If" => RenderIf(spec, schema),
+                "Switch" => RenderSwitch(spec, schema),
+                "TryCatch" => RenderTryCatch(spec, schema),
+                "ForEach" => RenderForEach(spec, schema),
+                "ForEachRow" => RenderForEachRow(spec, schema),
+                "RetryScope" => RenderRetryScope(spec, schema),
+                "While" or "DoWhile" => RenderSingleBody(spec, schema),
+                "Assign" => RenderAssign(spec, schema),
+                _ when ActivityCatalog.AcceptsArgumentDictionary(schema.Name) => RenderArguments(spec, schema),
+                _ => RenderGeneric(spec, schema),
+            };
 
-        return element;
-    }
+            if (includeVariables && spec.Variables is { Count: > 0 }) {
+                element.AddFirst(RenderVariables(spec.Variables));
+            }
 
-    private static XElement RenderSwitch(ActivitySpec spec, ActivitySchema schema, IActivityCatalog catalog) {
-        var element = new XElement(Wf + "Switch", RenderAttributes(spec, schema));
-        foreach (var switchCase in spec.Cases ?? []) {
-            element.Add(RenderKeyedBody(switchCase.Key, switchCase.Children, catalog));
-        }
-
-        if (spec.Default is { Count: > 0 }) {
-            element.Add(new XElement(Wf + "Switch.Default", RenderedChildren(spec.Default, catalog)));
-        }
-
-        return element;
-    }
-
-    private static XElement RenderKeyedBody(string key, List<ActivitySpec>? children, IActivityCatalog catalog) {
-        var rendered = RenderedChildren(children, catalog).ToList();
-        if (rendered.Count == 1) {
-            rendered[0].Add(new XAttribute(X + "Key", key));
-            return rendered[0];
-        }
-
-        var sequence = new XElement(Wf + "Sequence", new XAttribute(X + "Key", key));
-        sequence.Add(rendered);
-        return sequence;
-    }
-
-    private static XElement RenderInvoke(ActivitySpec spec, ActivitySchema schema, IActivityCatalog catalog) {
-        var element = RenderGeneric(spec, schema, catalog);
-        if (spec.Arguments is not { Count: > 0 }) {
             return element;
         }
 
-        var dictionary = new XElement(Scg + "Dictionary",
-            new XAttribute(X + "TypeArguments", "x:String, Argument"));
-        foreach (var argument in spec.Arguments) {
+        private XElement RenderGeneric(ActivitySpec spec, ActivitySchema schema) {
+            var element = new XElement(Ns(schema) + schema.Name, Attributes(spec, schema));
+            AddExpressionProperties(element, spec, schema);
+            AddChildren(element, spec.Children);
+            return element;
+        }
+
+        private XElement RenderIf(ActivitySpec spec, ActivitySchema schema) {
+            var element = new XElement(Wf + "If", Attributes(spec, schema));
+            AddExpressionProperties(element, spec, schema);
+            element.Add(new XElement(Wf + "If.Then", WrappedBody(spec.Children, "Then")));
+            if (spec.Else is { Count: > 0 }) {
+                element.Add(new XElement(Wf + "If.Else", WrappedBody(spec.Else, "Else")));
+            }
+
+            return element;
+        }
+
+        private XElement RenderSwitch(ActivitySpec spec, ActivitySchema schema) {
+            var element = new XElement(Wf + "Switch", Attributes(spec, schema));
+            AddExpressionProperties(element, spec, schema);
+            foreach (var switchCase in spec.Cases ?? []) {
+                element.Add(RenderKeyedBody(switchCase.Key, switchCase.Children));
+            }
+
+            if (spec.Default is { Count: > 0 }) {
+                element.Add(new XElement(Wf + "Switch.Default", WrappedBody(spec.Default, displayName: null)));
+            }
+
+            return element;
+        }
+
+        // A Switch case carries its literal on the wrapper Sequence, so the wrap
+        // is always emitted (a bare keyed activity is legal XAML but is not the
+        // drop zone Studio's designer expects).
+        private XElement RenderKeyedBody(string key, List<ActivitySpec>? children) {
+            var sequence = WrappedBody(children, displayName: null);
+            sequence.Add(new XAttribute(X + "Key", key));
+            return sequence;
+        }
+
+        private XElement RenderTryCatch(ActivitySpec spec, ActivitySchema schema) {
+            var element = new XElement(Wf + "TryCatch", Attributes(spec, schema));
+            AddExpressionProperties(element, spec, schema);
+            element.Add(new XElement(Wf + "TryCatch.Try", WrappedBody(spec.Children, "Try")));
+
+            var catches = new XElement(Wf + "TryCatch.Catches");
+            foreach (var catchSpec in spec.Catches ?? []) {
+                var exception = TypeToken.Render(catchSpec.Exception);
+                UseAliasesIn(exception);
+                catches.Add(new XElement(Wf + "Catch",
+                    new XAttribute(X + "TypeArguments", exception),
+                    new XElement(Wf + "ActivityAction",
+                        new XAttribute(X + "TypeArguments", exception),
+                        new XElement(Wf + "ActivityAction.Argument",
+                            new XElement(Wf + "DelegateInArgument",
+                                new XAttribute(X + "TypeArguments", exception),
+                                new XAttribute("Name", "ex"))),
+                        WrappedBody(catchSpec.Children, "Catch"))));
+            }
+
+            element.Add(catches);
+            return element;
+        }
+
+        private XElement RenderForEach(ActivitySpec spec, ActivitySchema schema) {
+            var typeArgument = DeclaredTypeArgument(spec) ?? "x:Object";
+            var itemName = PropertyValue(spec, "ItemName") ?? "item";
+
+            var element = new XElement(Wf + "ForEach", Attributes(spec, schema, exclude: "ItemName"));
+            AddExpressionProperties(element, spec, schema);
+            // The framework ForEach<T> body is its content property, so the
+            // ActivityAction sits directly inside the element (as it always has);
+            // its inner body is Sequence-wrapped per Rule 24.
+            element.Add(Body(typeArgument, itemName, spec.Children));
+            return element;
+        }
+
+        // ForEachRow's iterator is fixed by the activity: the body always sees the
+        // row as CurrentRow (sd:DataRow).
+        private XElement RenderForEachRow(ActivitySpec spec, ActivitySchema schema) {
+            var typeArgument = TypeToken.Render("DataRow");
+            UseAliasesIn(typeArgument);
+
+            var element = new XElement(Ns(schema) + schema.Name, Attributes(spec, schema));
+            AddExpressionProperties(element, spec, schema);
+            element.Add(new XElement(Ns(schema) + schema.Name + ".Body",
+                Body(typeArgument, "CurrentRow", spec.Children)));
+            return element;
+        }
+
+        // RetryScope has two bodies; the activities to attempt go in ActivityBody
+        // (an untyped ActivityAction). The optional Condition body is not part of
+        // the spec model.
+        private XElement RenderRetryScope(ActivitySpec spec, ActivitySchema schema) {
+            var element = new XElement(Ns(schema) + schema.Name, Attributes(spec, schema));
+            AddExpressionProperties(element, spec, schema);
+            element.Add(new XElement(Ns(schema) + schema.Name + ".ActivityBody",
+                new XElement(Wf + "ActivityAction", WrappedBody(spec.Children, "Body"))));
+            return element;
+        }
+
+        // While / DoWhile take exactly one Activity body; the validator rejects a
+        // second child, so the body here is always a single Sequence.
+        private XElement RenderSingleBody(ActivitySpec spec, ActivitySchema schema) {
+            var element = new XElement(Ns(schema) + schema.Name, Attributes(spec, schema));
+            AddExpressionProperties(element, spec, schema);
+            element.Add(new XElement(Ns(schema) + schema.Name + ".Body",
+                WrappedBody(spec.Children, "Body")));
+            return element;
+        }
+
+        private XElement RenderAssign(ActivitySpec spec, ActivitySchema schema) {
+            var typed = TypedAssign(spec);
+
+            // Without a TypeArgument the spec asks for the non-generic object
+            // form, which in VB is exactly what the attribute form already is.
+            if (!typed && !_settings.IsCSharp) {
+                var plain = new XElement(Wf + "Assign", Attributes(spec, schema));
+                AddChildren(plain, spec.Children);
+                return plain;
+            }
+
+            if (!typed) {
+                Warn("An Assign without \"TypeArgument\" renders the non-generic object form. Pass \"TypeArgument\": \"Int32\" (the variable's type) for the preferred Assign<T>, which surfaces type mismatches at validate time.");
+            }
+
+            var element = new XElement(Wf + "Assign", Attributes(spec, schema));
+            var token = DeclaredTypeArgument(spec) ?? "x:Object";
+            AddArgumentProperty(element, schema, "To", PropertyValue(spec, "To"), token, ArgumentDirection.Out);
+            AddArgumentProperty(element, schema, "Value", PropertyValue(spec, "Value"), token, ArgumentDirection.In);
+            return element;
+        }
+
+        // InvokeWorkflowFile and InvokeCode both bind their parameters through an
+        // <Arguments> scg:Dictionary keyed by name; neither takes an activity body.
+        private XElement RenderArguments(ActivitySpec spec, ActivitySchema schema) {
+            var element = new XElement(Ns(schema) + schema.Name, Attributes(spec, schema));
+            AddExpressionProperties(element, spec, schema);
+            if (spec.Arguments is not { Count: > 0 }) {
+                return element;
+            }
+
+            UseAlias("scg");
+            var dictionary = new XElement(Scg + "Dictionary",
+                new XAttribute(X + "TypeArguments", "x:String, Argument"));
+            foreach (var argument in spec.Arguments) {
+                dictionary.Add(RenderArgumentMapping(argument));
+            }
+
+            element.Add(new XElement(Ns(schema) + schema.Name + ".Arguments", dictionary));
+            return element;
+        }
+
+        private XElement RenderArgumentMapping(ArgumentMappingSpec argument) {
             var direction = NormalizeDirection(argument.Direction);
-            var typeName = TypeToken.Render(string.IsNullOrWhiteSpace(argument.Type) ? "String" : argument.Type);
-            var node = new XElement(Wf + direction,
-                new XAttribute(X + "TypeArguments", typeName),
+            var token = TypeToken.Render(string.IsNullOrWhiteSpace(argument.Type) ? "String" : argument.Type);
+            UseAliasesIn(token);
+
+            var node = new XElement(Wf + ArgumentElement(direction),
+                new XAttribute(X + "TypeArguments", token),
                 new XAttribute(X + "Key", argument.Name));
-            if (!string.IsNullOrEmpty(argument.Value)) {
-                node.Add(argument.Value);
+            AddBinding(node, argument.Value, token, direction);
+            return node;
+        }
+
+        private static ArgumentDirection NormalizeDirection(string? direction) {
+            if (string.IsNullOrWhiteSpace(direction) || direction.Equals("In", StringComparison.OrdinalIgnoreCase)) {
+                return ArgumentDirection.In;
             }
 
-            dictionary.Add(node);
+            return direction.Equals("Out", StringComparison.OrdinalIgnoreCase)
+                ? ArgumentDirection.Out
+                : ArgumentDirection.InOut;
         }
 
-        element.Add(new XElement(Ui + "InvokeWorkflowFile.Arguments", dictionary));
-        return element;
-    }
+        private static string ArgumentElement(ArgumentDirection direction) => direction switch {
+            ArgumentDirection.Out => "OutArgument",
+            ArgumentDirection.InOut => "InOutArgument",
+            _ => "InArgument"
+        };
 
-    private static string NormalizeDirection(string? direction) {
-        if (string.IsNullOrWhiteSpace(direction) || direction.Equals("In", StringComparison.OrdinalIgnoreCase)) {
-            return "InArgument";
-        }
+        private XElement RenderVariables(List<VariableSpec> variables) =>
+            new(Wf + "Sequence.Variables", variables.Select(RenderVariable));
 
-        if (direction.Equals("Out", StringComparison.OrdinalIgnoreCase)) {
-            return "OutArgument";
-        }
-
-        return "InOutArgument";
-    }
-
-    private static XElement RenderTryCatch(ActivitySpec spec, ActivitySchema schema, IActivityCatalog catalog) {
-        var element = new XElement(Wf + "TryCatch", RenderAttributes(spec, schema));
-        element.Add(new XElement(Wf + "TryCatch.Try", RenderedChildren(spec.Children, catalog)));
-
-        var catches = new XElement(Wf + "TryCatch.Catches");
-        foreach (var catchSpec in spec.Catches ?? []) {
-            catches.Add(new XElement(Wf + "Catch",
-                new XAttribute(X + "TypeArguments", catchSpec.Exception),
-                new XElement(Wf + "ActivityAction",
-                    new XAttribute(X + "TypeArguments", catchSpec.Exception),
-                    new XElement(Wf + "DelegateInArgument",
-                        new XAttribute(X + "TypeArguments", catchSpec.Exception),
-                        new XAttribute("Name", "ex")),
-                    RenderedChildren(catchSpec.Children, catalog))));
-        }
-        element.Add(catches);
-        return element;
-    }
-
-    private static XElement RenderForEach(ActivitySpec spec, ActivitySchema schema, IActivityCatalog catalog) {
-        var typeArgument = GetPropertyValue(spec, schema, "TypeArgument") ?? "Object";
-        var itemName = GetPropertyValue(spec, schema, "ItemName") ?? "item";
-
-        var element = new XElement(Wf + "ForEach", RenderAttributes(spec, schema, exclude: "ItemName"));
-        element.Add(new XElement(Wf + "ActivityAction",
-            new XAttribute(X + "TypeArguments", typeArgument),
-            new XElement(Wf + "DelegateInArgument",
-                new XAttribute(X + "TypeArguments", typeArgument),
-                new XAttribute("Name", itemName)),
-            RenderedChildren(spec.Children, catalog)));
-        return element;
-    }
-
-    private static XElement RenderVariables(List<VariableSpec> variables) =>
-        new(Wf + "Sequence.Variables", variables.Select(v => {
+        private XElement RenderVariable(VariableSpec variable) {
+            var token = TypeToken.Render(variable.Type);
+            UseAliasesIn(token);
             var element = new XElement(Wf + "Variable",
-                new XAttribute(X + "TypeArguments", TypeToken.Render(v.Type)),
-                new XAttribute("Name", v.Name));
-            if (v.Default is not null) {
-                element.Add(new XAttribute("Default", v.Default));
+                new XAttribute(X + "TypeArguments", token),
+                new XAttribute("Name", variable.Name));
+            if (variable.Default is null) {
+                return element;
             }
+
+            // A C# project cannot carry the default on the attribute: the
+            // attribute parser builds a VisualBasicValue<T> from it. The typed
+            // <Variable.Default> element with a CSharpValue is the C# form.
+            if (_settings.IsCSharp) {
+                element.Add(new XElement(Wf + "Variable.Default",
+                    new XElement(Wf + "CSharpValue",
+                        new XAttribute(X + "TypeArguments", token),
+                        Unwrap(variable.Default))));
+                return element;
+            }
+
+            element.Add(new XAttribute("Default", variable.Default));
             return element;
-        }));
-
-    private static void AddChildren(XElement element, List<ActivitySpec>? children, IActivityCatalog catalog) {
-        foreach (var child in children ?? []) {
-            element.Add(RenderElement(child, includeVariables: false, catalog));
-        }
-    }
-
-    private static IEnumerable<XElement> RenderedChildren(List<ActivitySpec>? children, IActivityCatalog catalog) =>
-        (children ?? []).Select(child => RenderElement(child, includeVariables: false, catalog));
-
-    // Properties → attributes. TypeArgument properties render first as x:TypeArguments
-    // (UiPath's conventional order); the rest follow schema order. Spec keys match
-    // schema property names case-insensitively; unknown spec keys pass through as-is.
-    private static List<XAttribute> RenderAttributes(ActivitySpec spec, ActivitySchema schema, string? exclude = null) {
-        var attributes = new List<XAttribute>();
-        var matched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var property in schema.Properties.OrderBy(p => p.Kind == PropertyKind.TypeArgument ? 0 : 1)) {
-            if (IsExcluded(property.Name)) continue;
-            var value = GetPropertyValue(spec, schema, property.Name);
-            if (value is null) continue;
-            matched.Add(property.Name);
-            attributes.Add(property.Kind == PropertyKind.TypeArgument
-                ? new XAttribute(X + "TypeArguments", value)
-                : new XAttribute(property.Name, value));
         }
 
-        foreach (var (key, value) in spec.Properties ?? []) {
-            if (matched.Contains(key) || IsExcluded(key)) continue;
-            attributes.Add(new XAttribute(key, value));
-        }
+        // ---- bodies ------------------------------------------------------------
 
-        return attributes;
-
-        bool IsExcluded(string name) =>
-            exclude is not null && string.Equals(name, exclude, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string? GetPropertyValue(ActivitySpec spec, ActivitySchema schema, string propertyName) {
-        if (spec.Properties is null) return null;
-        if (spec.Properties.TryGetValue(propertyName, out var exact)) return exact;
-        foreach (var (key, value) in spec.Properties) {
-            if (string.Equals(key, propertyName, StringComparison.OrdinalIgnoreCase)) return value;
-        }
-        return null;
-    }
-
-    private static XNamespace Ns(ActivitySchema schema) => schema.XmlNamespace;
-
-    // A fragment has no <Activity> root to carry declarations, so its root element
-    // declares the namespaces it needs (appended after the property attributes).
-    private static void AddFragmentNamespaceDeclarations(XElement root, ActivitySpec spec, IActivityCatalog catalog) {
-        root.Add(new XAttribute("xmlns", Wf.NamespaceName));
-        root.Add(new XAttribute(XNamespace.Xmlns + "x", X.NamespaceName));
-        if (UsesNamespace(spec, Ui, catalog)) {
-            root.Add(new XAttribute(XNamespace.Xmlns + "ui", Ui.NamespaceName));
-        }
-
-        if (UsesInvokeArguments(spec)) {
-            root.Add(new XAttribute(XNamespace.Xmlns + "scg", Scg.NamespaceName));
-        }
-    }
-
-    private static bool UsesNamespace(ActivitySpec spec, XNamespace ns, IActivityCatalog catalog) {
-        if (catalog.TryGet(spec.Name, out var schema) && schema.XmlNamespace == ns.NamespaceName) {
-            return true;
-        }
-        foreach (var child in spec.Children ?? []) {
-            if (UsesNamespace(child, ns, catalog)) return true;
-        }
-        foreach (var child in spec.Else ?? []) {
-            if (UsesNamespace(child, ns, catalog)) return true;
-        }
-        foreach (var child in spec.Default ?? []) {
-            if (UsesNamespace(child, ns, catalog)) return true;
-        }
-        foreach (var switchCase in spec.Cases ?? []) {
-            foreach (var child in switchCase.Children ?? []) {
-                if (UsesNamespace(child, ns, catalog)) return true;
+        // Rule 24: every container body/branch slot holds a <Sequence>, even a
+        // single-activity one. A body that already is one Sequence is used as-is
+        // so the wrap never doubles up.
+        private XElement WrappedBody(List<ActivitySpec>? children, string? displayName) {
+            if (children is [{ } only] && IsSequence(only)) {
+                return Element(only, includeVariables: false);
             }
-        }
-        foreach (var catchSpec in spec.Catches ?? []) {
-            foreach (var child in catchSpec.Children ?? []) {
-                if (UsesNamespace(child, ns, catalog)) return true;
-            }
-        }
-        return false;
-    }
 
-    private static bool UsesInvokeArguments(ActivitySpec spec) {
-        if (spec.Arguments is { Count: > 0 }) {
-            return true;
+            var sequence = new XElement(Wf + "Sequence");
+            if (displayName is not null) {
+                sequence.Add(new XAttribute("DisplayName", displayName));
+            }
+
+            AddChildren(sequence, children);
+            return sequence;
         }
 
-        foreach (var child in spec.Children ?? []) {
-            if (UsesInvokeArguments(child)) return true;
+        // The ActivityAction + DelegateInArgument body of an iteration scope.
+        private XElement Body(string typeArgument, string itemName, List<ActivitySpec>? children) {
+            UseAliasesIn(typeArgument);
+            return new XElement(Wf + "ActivityAction",
+                new XAttribute(X + "TypeArguments", typeArgument),
+                new XElement(Wf + "ActivityAction.Argument",
+                    new XElement(Wf + "DelegateInArgument",
+                        new XAttribute(X + "TypeArguments", typeArgument),
+                        new XAttribute("Name", itemName))),
+                WrappedBody(children, "Body"));
         }
-        foreach (var child in spec.Else ?? []) {
-            if (UsesInvokeArguments(child)) return true;
-        }
-        foreach (var child in spec.Default ?? []) {
-            if (UsesInvokeArguments(child)) return true;
-        }
-        foreach (var switchCase in spec.Cases ?? []) {
-            foreach (var child in switchCase.Children ?? []) {
-                if (UsesInvokeArguments(child)) return true;
-            }
-        }
-        foreach (var catchSpec in spec.Catches ?? []) {
-            foreach (var child in catchSpec.Children ?? []) {
-                if (UsesInvokeArguments(child)) return true;
+
+        private bool IsSequence(ActivitySpec spec) =>
+            _catalog.TryGet(spec.Name, out var schema)
+            && string.Equals(schema.Name, "Sequence", StringComparison.OrdinalIgnoreCase);
+
+        private void AddChildren(XElement element, List<ActivitySpec>? children) {
+            foreach (var child in children ?? []) {
+                element.Add(Element(child, includeVariables: false));
             }
         }
 
-        return false;
+        // ---- properties --------------------------------------------------------
+
+        // Properties → attributes. TypeArgument properties render first as
+        // x:TypeArguments (UiPath's conventional order); the rest follow schema
+        // order. Spec keys match schema property names case-insensitively.
+        //
+        // In a C# project an expression property is skipped here whenever it gets
+        // a typed property element instead (see AddExpressionProperties).
+        private List<XAttribute> Attributes(ActivitySpec spec, ActivitySchema schema, string? exclude = null) {
+            var attributes = new List<XAttribute>();
+            var matched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var property in schema.Properties.OrderBy(p => p.Kind == PropertyKind.TypeArgument ? 0 : 1)) {
+                if (IsExcluded(property.Name)) {
+                    continue;
+                }
+
+                var value = PropertyValue(spec, property.Name);
+                if (value is null) {
+                    continue;
+                }
+
+                matched.Add(property.Name);
+                if (property.Kind == PropertyKind.TypeArgument) {
+                    var token = TypeToken.Render(value);
+                    UseAliasesIn(token);
+                    attributes.Add(new XAttribute(X + "TypeArguments", token));
+                } else if (RendersAsArgumentElement(spec, schema, property, value)) {
+                    continue; // rendered as a property element below
+                } else {
+                    attributes.Add(new XAttribute(property.Name, value));
+                }
+            }
+
+            foreach (var (key, value) in spec.Properties ?? []) {
+                if (matched.Contains(key) || IsExcluded(key)) {
+                    continue;
+                }
+
+                if (UnknownAttribute(schema, key, value) is { } attribute) {
+                    attributes.Add(attribute);
+                }
+            }
+
+            return attributes;
+
+            bool IsExcluded(string name) =>
+                exclude is not null && string.Equals(name, exclude, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // True when a property must leave the attribute list because it is
+        // rendered as a typed argument property element: always for a typed
+        // Assign<T>, and for any non-literal expression in a C# project.
+        private bool RendersAsArgumentElement(ActivitySpec spec, ActivitySchema schema, PropertySchema property, string value) {
+            if (property.Kind != PropertyKind.Expression) {
+                return false;
+            }
+
+            if (schema.Name == "Assign" && property.Name is "To" or "Value") {
+                return TypedAssign(spec) || _settings.IsCSharp;
+            }
+
+            // In a C# project only converter literals (number, boolean, TimeSpan,
+            // {x:Null}) stay in attribute form; a quoted string or an identifier is
+            // an expression and must render through CSharpValue/CSharpReference.
+            return _settings.IsCSharp && !ExpressionValue.IsCSharpAttributeLiteral(value);
+        }
+
+        private void AddExpressionProperties(XElement element, ActivitySpec spec, ActivitySchema schema) {
+            foreach (var property in schema.Properties) {
+                if (property.Kind != PropertyKind.Expression) {
+                    continue;
+                }
+
+                var value = PropertyValue(spec, property.Name);
+                if (value is null || !RendersAsArgumentElement(spec, schema, property, value)) {
+                    continue;
+                }
+
+                AddArgumentProperty(element, schema, property.Name, value,
+                    ArgumentToken(spec, schema, property.Name), ArgumentDirectionOf(schema, property.Name));
+            }
+        }
+
+        private void AddArgumentProperty(
+            XElement element, ActivitySchema schema, string propertyName, string? value, string token, ArgumentDirection direction) {
+            if (value is null) {
+                return;
+            }
+
+            UseAliasesIn(token);
+            var argumentName = ArgumentElement(direction);
+            var argument = new XElement(Wf + argumentName, new XAttribute(X + "TypeArguments", token));
+            AddBinding(argument, value, token, direction);
+            element.Add(new XElement(Ns(schema) + schema.Name + "." + propertyName, argument));
+        }
+
+        // Fills an argument element: a C# project gets the typed
+        // CSharpValue/CSharpReference child, a VB project keeps the [bracket]
+        // text the attribute form used to carry.
+        private void AddBinding(XElement argument, string? value, string token, ArgumentDirection direction) {
+            if (string.IsNullOrEmpty(value)) {
+                return;
+            }
+
+            if (!_settings.IsCSharp) {
+                argument.Add(value);
+                return;
+            }
+
+            var isWrite = direction is ArgumentDirection.Out or ArgumentDirection.InOut;
+            argument.Add(new XElement(Wf + (isWrite ? "CSharpReference" : "CSharpValue"),
+                new XAttribute(X + "TypeArguments", token),
+                Unwrap(value)));
+        }
+
+        private ArgumentDirection ArgumentDirectionOf(ActivitySchema schema, string propertyName) =>
+            ActivityCatalog.ExpressionArgument(schema.Name, propertyName)?.Direction ?? ArgumentDirection.In;
+
+        // The x:TypeArguments token an expression property binds through. Types
+        // that vary with the spec's own TypeArgument (Assign, Switch, ForEach)
+        // are derived here; fixed types come from the catalog; anything else is
+        // assumed x:Object and reported.
+        private string ArgumentToken(ActivitySpec spec, ActivitySchema schema, string propertyName) {
+            var known = ActivityCatalog.ExpressionArgument(schema.Name, propertyName);
+            if (known is { Token.Length: > 0 } fixedType) {
+                return fixedType.Token;
+            }
+
+            if (known is not null) {
+                var declared = DeclaredTypeArgument(spec) ?? "x:Object";
+                return schema.Name == "ForEach" ? Generic("scg:IEnumerable", declared) : declared;
+            }
+
+            Warn($"The argument type of \"{schema.Name}.{propertyName}\" is not in the built-in catalog, so its C# binding was rendered as x:Object. If the property is not InArgument<Object>, correct the type in the emitted XAML — run validate_project to confirm.");
+            return "x:Object";
+        }
+
+        private string Generic(string openType, string typeArgument) {
+            UseAlias("scg");
+            return $"{openType}({typeArgument})";
+        }
+
+        // The spec's own TypeArgument property rendered as an x:TypeArguments
+        // token, or null when the spec does not declare one.
+        private static string? DeclaredTypeArgument(ActivitySpec spec) {
+            var declared = PropertyValue(spec, "TypeArgument");
+            return string.IsNullOrWhiteSpace(declared) ? null : TypeToken.Render(declared);
+        }
+
+        private static bool TypedAssign(ActivitySpec spec) =>
+            !string.IsNullOrWhiteSpace(PropertyValue(spec, "TypeArgument"));
+
+        // A property the schema does not know about is passed through, but never
+        // silently. Two corrections apply so the passthrough cannot produce XAML
+        // that looks valid but is not: an unprefixed XAML-language member
+        // (typeArguments, key) is qualified as x: with its canonical casing, and a
+        // property naming an xmlns prefix this builder does not declare is omitted
+        // with a warning rather than emitted as a name LINQ-to-XML cannot represent.
+        private XAttribute? UnknownAttribute(ActivitySchema schema, string key, string value) {
+            var colon = key.IndexOf(':');
+            if (colon > 0 && colon < key.Length - 1) {
+                var prefix = key[..colon];
+                if (KnownPrefixNamespace(prefix) is { } ns) {
+                    Warn($"Property \"{key}\" is not in the schema for \"{schema.Name}\"; it was passed through as a {prefix}: attribute. Verify it against the activity's documentation.");
+                    return new XAttribute(ns + key[(colon + 1)..], value);
+                }
+
+                Warn($"Property \"{key}\" names the xmlns prefix \"{prefix}\", which this builder does not declare, so it was omitted — emitting it would produce a workflow that cannot load. Declare the prefix in the file (activities get-default-xaml), or drop the property.");
+                return null;
+            }
+
+            if (key.Equals("TypeArguments", StringComparison.OrdinalIgnoreCase)) {
+                Warn($"Property \"{key}\" of \"{schema.Name}\" is the XAML language member x:TypeArguments, not an activity property; it was rendered as \"x:TypeArguments\". An unprefixed {key} attribute is not valid XAML.");
+                return new XAttribute(X + "TypeArguments", value);
+            }
+
+            if (key.Equals("Key", StringComparison.OrdinalIgnoreCase)) {
+                Warn($"Property \"{key}\" of \"{schema.Name}\" is the XAML language member x:Key, not an activity property; it was rendered as \"x:Key\". An unprefixed {key} attribute is not valid XAML.");
+                return new XAttribute(X + "Key", value);
+            }
+
+            Warn($"Property \"{key}\" is not in the schema for \"{schema.Name}\"; it was passed through as an attribute. Verify the name against the activity's documentation (activities get-default-xaml).");
+            return new XAttribute(key, value);
+        }
+
+        private static XNamespace? KnownPrefixNamespace(string prefix) => prefix switch {
+            "x" => X,
+            "sap" => Sap,
+            "sap2010" => Sap2010,
+            "mc" => Mc,
+            "ui" => Ui,
+            _ => null
+        };
+
+        private void Warn(string message) {
+            if (!_warned.Add(message) || Warnings.Count >= MaxWarnings) {
+                return;
+            }
+
+            Warnings.Add(message);
+        }
+
+        private static string? PropertyValue(ActivitySpec spec, string propertyName) {
+            if (spec.Properties is null) {
+                return null;
+            }
+
+            if (spec.Properties.TryGetValue(propertyName, out var exact)) {
+                return exact;
+            }
+
+            foreach (var (key, value) in spec.Properties) {
+                if (string.Equals(key, propertyName, StringComparison.OrdinalIgnoreCase)) {
+                    return value;
+                }
+            }
+
+            return null;
+        }
+
+        // [expr] is VB bracket shorthand; a C# binding carries the raw expression.
+        private static string Unwrap(string value) => ExpressionValue.Unwrap(value);
+
+        private static XNamespace Ns(ActivitySchema schema) => schema.XmlNamespace;
+
+        private bool UsesNamespace(ActivitySpec spec, XNamespace ns) {
+            if (_catalog.TryGet(spec.Name, out var schema) && schema.XmlNamespace == ns.NamespaceName) {
+                return true;
+            }
+
+            foreach (var child in spec.Children ?? []) {
+                if (UsesNamespace(child, ns)) {
+                    return true;
+                }
+            }
+
+            foreach (var child in spec.Else ?? []) {
+                if (UsesNamespace(child, ns)) {
+                    return true;
+                }
+            }
+
+            foreach (var child in spec.Default ?? []) {
+                if (UsesNamespace(child, ns)) {
+                    return true;
+                }
+            }
+
+            foreach (var switchCase in spec.Cases ?? []) {
+                foreach (var child in switchCase.Children ?? []) {
+                    if (UsesNamespace(child, ns)) {
+                        return true;
+                    }
+                }
+            }
+
+            foreach (var catchSpec in spec.Catches ?? []) {
+                foreach (var child in catchSpec.Children ?? []) {
+                    if (UsesNamespace(child, ns)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
     }
 }

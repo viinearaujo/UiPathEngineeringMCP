@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "uipath-cli.skills.catalog",
+  "source": {
+    "repository": "https://www.npmjs.com/package/@uipath/skills"
+  },
+  "agent": "codex",
+  "scope": "local",
+  "generatedAt": "2026-09-23T23:08:14.703Z",
+  "skills": [
+    {
+      "name": "uipath-admin",
+      "description": "UiPath Admin via `uip admin` — Identity Server (users, groups, robot accounts, external OAuth2 apps, secrets, PATs, SMTP), Authorization (custom roles, role assignments, permission catalog, effective-access check-access PDP), OMS (org read/update, tenant lifecycle, service provisioning, regions, async op polling), IP Restriction (allowlist, enforcement, bypass rules, lockout safety), and Audit via `uip admin audit` (event sources, paginated queries, JSON-folder or CSV export). Troubleshoot access-denied, login failures, role misconfig, IP lockout, PAT/app auth. Owns ALL org/tenant/identity audit — use `uip admin audit`, NOT `uip or audit-logs`, for any audit logs / audit trail / audit events / export / login history / who-did-what request. Orchestrator-specific roles/permissions/folders/jobs→uipath-platform. RPA workflows→uipath-rpa.",
+      "skillPath": "uipath-admin/SKILL.md"
+    },
+    {
+      "name": "uipath-agents",
+      "description": "End-to-end work with UiPath Agents of all types: build, integrate with UiPath Products (e.g., Orchestrator, Flow, Maestro), design with UiPath Tools (e.g., Agent Builder/Studio Web), deploy, and configure/validate. Covers Coded Agents (e.g., LangGraph, LlamaIndex, OpenAI Agents) and Low-Code Agents (`agent.json` / Agent Builder). For deterministic Coded Functions — Python or JS/TS (`uip function`, `uipath.json` functions map, no agent runtime/LLM)→uipath-functions.",
+      "skillPath": "uipath-agents/SKILL.md"
+    },
+    {
+      "name": "uipath-aops",
+      "description": "UiPath StudioAdmin AOps (`uip aops`) — SourceControl discovery plus CICD pipelines. Drives `aops connection` / `repo` / `project` / `solution` to resolve a GitHub or Azure source binding, `aops pipeline processes` to pick an already-published Orchestrator process, then composes a PipelineDto for `pipeline create` / `save-and-run` and follows runs via `aops execution logs --follow`. Replaces the retired `uip sc` and `uip cicd` tools. For AOps governance policies (`uip gov aops-policy`)→uipath-governance. For `uip solution pack/publish/deploy`→uipath-platform. For workflow authoring (.xaml/.cs)→uipath-rpa.",
+      "skillPath": "uipath-aops/SKILL.md"
+    },
+    {
+      "name": "uipath-api-workflow",
+      "description": "UiPath API Workflow assistant — author, run, validate, package, publish, deploy, and troubleshoot JSON workflows for `uip api-workflow`. Load for ANY create/edit of a `Workflow.json` / API workflow project; with `evals/` present, tests come first (TDD). Covers Sequence, Assign, JavaScript, If (#Wrapper/#Then/#Else), ForEach, DoWhile, Break, TryCatch, Wait, Response, nested; files as JobAttachment refs via File to Base64 / Base64 to File (`$helpers.file.*`, `serializeData()`, `--input-file`/`--output-dir`); HTTP / IS connector activities via `uip api-workflow registry`. Operate: run, IS connections, pack/publish/deploy. Test/eval: `evals/<scope>/eval-sets/` datasets (exact-match, Evaluations panel); loop until green. Triggers on API workflows, project type \"Api\", JSON with `document.dsl`/`do[]`, those activity types, or file/base64 handling. Agent evals (`evals/eval-sets/`, no scope) & coded agents→uipath-agents. Flow & its evals→uipath-maestro-flow. .xaml/coded RPA→uipath-rpa. Coded Apps→uipath-coded-apps.",
+      "skillPath": "uipath-api-workflow/SKILL.md"
+    },
+    {
+      "name": "uipath-automation-discovery",
+      "description": "UiPath automation discovery — mines Slack/email/wikis/CRM/HRIS/ERP for repetitive work, SPOFs, and replicable models; produces a 4-tier prioritized opportunity report with UiPath implementation paths, then sizes build effort (complexity band → pack-hours → contingency). Use to discover automation opportunities, find what to automate, estimate/size a delivery, or run an internal automation audit across an organization. For building a specific automation→uipath-rpa, authoring a Flow→uipath-maestro-flow, working with agents→uipath-agents.",
+      "skillPath": "uipath-automation-discovery/SKILL.md"
+    },
+    {
+      "name": "uipath-automationhub",
+      "description": "Publish and read business processes in UiPath Automation Hub via the Open API, using the user's cloud login — no admin OpenAPI token needed. PUBLISH an approved process and its PDD/SDD documents (schema-driven payload, base64 file upload or link) to AH as the system of record — e.g. a process captured/approved by Process Scribe. GET a process back by id or search, list its attached documents, and DOWNLOAD their file bytes (e.g. for dedup / related-idea lookups or retrieving a published PDD). Authenticates with the user's cloud bearer token and NEVER sends the admin `x-ah-openapi-auth` header. CLI-first: when the installed `uip` has the `ah` commands, flows run through them (`references/*-cli-guide.md`); otherwise the raw Open API flows apply. Routes by intent to publish (create/upload) or get (read/fetch/download) references over the shared catalogs. Structured to extend to more Automation Hub operations.",
+      "skillPath": "uipath-automationhub/SKILL.md"
+    },
+    {
+      "name": "uipath-coded-apps",
+      "description": "UiPath Coded Apps — scaffold, build, run, and deploy Coded Web Apps and Coded Action Apps: React/TypeScript apps that call UiPath Cloud APIs via the `@uipath/uipath-typescript` SDK and ship to Automation Cloud (push/pull to Studio Web, pack, publish, deploy, OAuth-PKCE). Also generates live analytics & governance dashboards from a plain-language request, wired to tenant data via the Insights real-time API, with edit and deploy flows. For RPA→uipath-rpa, Python agents→uipath-agents, Maestro flows→uipath-maestro-flow, solution packaging→uipath-solution, JS/TS function backends (`defineFunction`, `uip function serve`)→uipath-functions.",
+      "skillPath": "uipath-coded-apps/SKILL.md"
+    },
+    {
+      "name": "uipath-connector-builder",
+      "description": "UiPath Integration Service connector authoring (REST+JSON) on disk via `uip is connectors builder`. Triggers on `element.json`, `element-metadata.json`, `standard-resources/*.json`, a `periodic-uipath-*`/`periodic-design-*` connector repo, or any request to build/edit an IS connector: init the connector shell, configure auth (19 types via `auth set`, incl. jwtOauth claims, FPS, none), add activities with fields/params/methods/hooks, wire polling/webhook triggers, add auth-system resources, inspect, validate, and surgically read/write files via state. Import + publish live on the parent `uip is connectors` (need `uip login`). NOT for operating a published connector — connections, ping, run an activity→uipath-platform; NOT for `.flow` connector nodes→uipath-maestro-flow.",
+      "skillPath": "uipath-connector-builder/SKILL.md"
+    },
+    {
+      "name": "uipath-feedback",
+      "description": "UiPath bug reports and improvement suggestions via `uip feedback send`. Use for 'report issue', 'send feedback', 'file a bug', or the /uipath-feedback command. For investigating an error rather than reporting one→uipath-troubleshoot.",
+      "skillPath": "uipath-feedback/SKILL.md"
+    },
+    {
+      "name": "uipath-functions",
+      "description": "UiPath Coded Functions — deterministic Python or TypeScript/JavaScript units built with the `uip function` CLI (`new -l py|ts|js`, `init`, `serve`, `run`, `pack`, `publish`); the `functions` map in `uipath.json` marks the project. Python: Pydantic Input/Output models, lazy `UiPath()` SDK singleton. JS/TS: `defineFunction` + `defineSchema<T>()` contracts, HTTP endpoints for Coded App backends or run-as-job, `FunctionError`. Rule-based logic, data transforms, ERP/Integration Service calls — invoked as Maestro Service Tasks, from agents, via Orchestrator `POST /Jobs/StartJobs`, or HTTP triggers; no LLM reasoning or agent loop. For LLM/agentic projects (LangGraph, LlamaIndex, OpenAI Agents, `agent.json`)→uipath-agents. For the Coded App frontend itself (React app code, PKCE setup, app deploy)→uipath-coded-apps.",
+      "skillPath": "uipath-functions/SKILL.md"
+    },
+    {
+      "name": "uipath-governance",
+      "description": "UiPath governance via `uip gov` — author, deploy, and diagnose policies on three layers. AOps product policies (`uip gov aops-policy`): block/restrict/enforce features in Studio, StudioX, Assistant, Robot, AI Trust Layer, Agent Builder; deploy to user/group/tenant. Access ToolUsePolicy (`uip gov access-policy`): allow/deny when one workflow invokes another as a tool (Agent→Agent/Maestro/Flow/RPA/API/Case), gated by tag, caller, or actor (User/Group). Compliance Standards (ISO 42001, ISO 27001): check posture and configure recommended settings across products in one operation. Operate: deploy/undeploy, query effective deployed policy. Diagnose: policy not taking effect, deployment precedence (user>group>tenant), blocked tool invocations. For platform ops→uipath-platform.",
+      "skillPath": "uipath-governance/SKILL.md"
+    },
+    {
+      "name": "uipath-human-in-the-loop",
+      "description": "UiPath Human-in-the-Loop / HITL node authoring — building approval gates, escalations, write-back validation, and data enrichment checkpoints in Flow, Maestro, Case Management, or Coded Agents. NOT for managing, reassigning, or monitoring tasks at runtime (use uipath-tasks for that).",
+      "skillPath": "uipath-human-in-the-loop/SKILL.md"
+    },
+    {
+      "name": "uipath-insights",
+      "description": "UiPath Insights job monitoring and read-only alert inspection via `uip insights` — job execution metrics, failure analysis, and process performance; filter discovery of Insights-active folders, processes, queues, and machines; real-time alert definition, history, delivery, and entitlement reads. Alert writes are not covered. For Orchestrator job start/stop/logs→uipath-platform, root-cause analysis of specific errors→uipath-troubleshoot, RPA workflow authoring→uipath-rpa.",
+      "skillPath": "uipath-insights/SKILL.md"
+    },
+    {
+      "name": "uipath-ixp",
+      "description": "UiPath IXP (Document Understanding) via `uip ixp` — create projects (with autopilot taxonomy suggestion, an imported taxonomy file, or empty), upload/download/delete documents, author the taxonomy (field groups, fields, data types, per-field and overall extraction instructions), configure the extraction model and pre-processing, review/confirm/unconfirm predictions, mark fields missing, pull metrics and model versions, publish/tag/roll back model versions, deploy a trained version to an Orchestrator folder and move an existing deployment to another version (`deployments create`/`upgrade`/`list`). DO NOT TRIGGER during .flow / Maestro Flow work — discovering or listing IxP / document-extraction models, extractors, or nodes available to Maestro Flow, and adding or wiring an IxP node, belong to uipath-maestro-flow even when they sound like IXP model management.",
+      "skillPath": "uipath-ixp/SKILL.md"
+    },
+    {
+      "name": "uipath-maestro-bpmn",
+      "description": "UiPath Maestro BPMN / Process Orchestration: author (registry-driven), validate, package, operate, and diagnose .bpmn projects. For .flow use uipath-maestro-flow; for case plans use uipath-maestro-case.",
+      "skillPath": "uipath-maestro-bpmn/SKILL.md"
+    },
+    {
+      "name": "uipath-maestro-case",
+      "description": "Always invoke for UiPath Maestro Case Management build work: `caseplan.json`, `sdd.md`, or building/creating a case when no SDD exists yet (the case design is produced first, then confirmed in one review). Resolves tenant resources then authors or edits caseplan.json directly with Write/Edit. For .xaml→uipath-rpa, .flow→uipath-maestro-flow, .bpmn→uipath-maestro-bpmn. For standalone case SDD design, case `sdd.draft.md` finalization, PDD→SDD, or cross-product planning→uipath-planner.",
+      "skillPath": "uipath-maestro-case/SKILL.md"
+    },
+    {
+      "name": "uipath-maestro-flow",
+      "description": "TRIGGER for `.flow` files, UiPath Flow / Maestro Flow / Maestro Automate build/edit requests, and adding or listing IXP model/document-extraction nodes for a Flow. Build, edit, run, debug, fix, evaluate a Maestro Flow (.flow): create/connect nodes (connector, approval, script, subflow, ixp, data fabric entity), triggers, schedules, validate; build conversational flows (chat, chatbot, voice, phone calls); upload, publish, manage runs/instances; diagnose errors, incidents, traces; design eval sets, evaluators, run Studio Web evals. `uip maestro flow` CLI. DO NOT TRIGGER for raw IXP project labelling/prediction review/prompt tuning outside Flow→uipath-ixp; C#/XAML→uipath-rpa; standalone agents→uipath-agents.",
+      "skillPath": "uipath-maestro-flow/SKILL.md"
+    },
+    {
+      "name": "uipath-mcp-servers",
+      "description": "UiPath AgentHub MCP server registration + resource-tool authoring via `uip agenthub mcp` (six server types: uipath / coded / command / remote / platform / swagger) and `uip agenthub mcp-tools` on `uipath`-type servers. For Python MCP servers / coded-agent integration→uipath-agents.",
+      "skillPath": "uipath-mcp-servers/SKILL.md"
+    },
+    {
+      "name": "uipath-planner",
+      "description": "UiPath solution planner & designer. Always invoke for PDD / SDD files (`pdd.md`, `*-sdd.md`). Authors a Solution Design Document (SDD) from a Process Design Document (PDD) — or from another process-knowledge source (Confluence page, SOP, BPMN model, meeting transcript) — then derives the multi-skill, multi-project task list from an SDD, emitting live TaskCreate calls. Known-product single-project build, no PDD/SDD→that skill; ambiguous/'what should I build'→here. For `uip solution` lifecycle & `.uipx`→uipath-solution. For non-solution Orchestrator/IS/auth/traces→uipath-platform. For .xaml/.cs→uipath-rpa. For .flow→uipath-maestro-flow. For building/editing .bpmn→uipath-maestro-bpmn (a .bpmn as design input routes here). For agent.json/.py→uipath-agents. Sole case-SDD author. For caseplan.json build→uipath-maestro-case.",
+      "skillPath": "uipath-planner/SKILL.md"
+    },
+    {
+      "name": "uipath-platform",
+      "description": "UiPath platform ops via the uip CLI — use for ANY task hitting UiPath Cloud / Orchestrator / Studio Web / Integration Service / Data Fabric / LLM Gateway. Load BEFORE writing code that calls a UiPath API. Covers auth, folders, assets, queues, storage buckets, libraries, webhooks, triggers, processes, jobs, machines, users, roles, sessions, calendars, IS connectors/connections/activities, Data Fabric entities/records/files/choice-sets (`uip df`), BYO LLM product configurations, BYO guardrail (BYOG) configurations, context grounding, traces (execution traces and spans + trace feedback / annotation), licensing. For 'why did X fail' / root-cause→uipath-troubleshoot. For org/tenant audit trail / audit logs / login history→uipath-admin. For `uip solution` lifecycle→uipath-solution. For PDD/SDD design→uipath-planner. For workflow code (.xaml/.cs)→uipath-rpa, .flow (incl. Data Fabric connector nodes)→uipath-maestro-flow, .bpmn→uipath-maestro-bpmn, agents (.py/agent.json)→uipath-agents, Test Manager→uipath-test.",
+      "skillPath": "uipath-platform/SKILL.md"
+    },
+    {
+      "name": "uipath-process-mining",
+      "description": "UiPath Process Mining via `uip pm` — build and operate a process app end-to-end from a CSV / event log: templates, data mapping, upload, ingest, the dbt (Snowflake) transformation layer, publish, and query it (metrics, percentiles, RCA). Covers `uipath.custom`, the `Cases.sql` optional-column gotcha, Case-linked data-model tables (add-table + re-ingest), the apply-not-reingest fix loop, fixing a wrong mapping in place via `apps data-mapping get|update` (no app rebuild), and editing the app model via `apps model fields` — a field's data kind / calculated fields, including the numeric→duration mismatch that locks dashboards open. For Orchestrator/Data Fabric/Integration Service→uipath-platform. For `.flow`/Maestro→uipath-maestro-flow. For IXP→uipath-ixp.",
+      "skillPath": "uipath-process-mining/SKILL.md"
+    },
+    {
+      "name": "uipath-review",
+      "description": "UiPath read-only reviewer — audit structure, quality, best practices for RPA (.xaml/.cs), agents (.py/agent.json), flows (.flow), BPMN (.bpmn), coded apps, solutions (.uipx). Does NOT edit files. For building/editing→domain skills.",
+      "skillPath": "uipath-review/SKILL.md"
+    },
+    {
+      "name": "uipath-rpa",
+      "description": "Always invoke for `.xaml` or `.cs` workflow files. UiPath RPA — create, edit, build, run, debug `.cs` coded workflows and `.xaml` workflows. UI automation with Object Repository selectors, test case authoring, Integration Service connector calls. Live desktop/browser UI exploration and control. Deploy via `.uipx`→uipath-solution. Non-solution Orchestrator ops→uipath-platform. Test reports→uipath-test. Agents→uipath-agents.",
+      "skillPath": "uipath-rpa/SKILL.md"
+    },
+    {
+      "name": "uipath-solution",
+      "description": "Always invoke for `.uipx` files. UiPath Solution lifecycle via the `uip solution` CLI: init/restore/pack/publish/deploy/activate/upgrade/upload, projects add|import|remove, resources refresh|add|remove|edit, feeds list plus `--feed` / `--personal-workspace` targeting. Also DIAGNOSE solution-lifecycle failures: pack/publish/deploy/activate errors, stale or missing bindings, unimported/unset/unresolved resources, deploy error codes (e.g. `[1009] Invalid argument 'Value'`), publish name+version/processKey collisions, a redeploy blocked because the deployment already exists (use `deploy upgrade`), a feed rejected as 'not an available publish location', a feed-published package missing from `packages list`, and `uip solution` 'unknown command' after the new→init rename. Bundles multiple automation projects (RPA/Flow/Case/Agents/API Workflows/AppV2 Coded and Coded Action apps) into one deployable `.uipx`. For PDD→SDD design (sdd.md/pdd.md) & multi-skill task derivation→uipath-planner. For non-solution Orchestrator/IS/resources/auth/traces→uipath-platform. For .xaml/.cs→uipath-rpa. For .flow→uipath-maestro-flow. For .bpmn→uipath-maestro-bpmn. For agent.json and .py agents→uipath-agents. For standalone coded-app deploy (no parent .uipx)→uipath-coded-apps.",
+      "skillPath": "uipath-solution/SKILL.md"
+    },
+    {
+      "name": "uipath-tasks",
+      "description": "UiPath Action Center human-in-the-loop tasks via `uip tasks`: list, assign, complete, plus task catalogs, comments, labels, metadata, and task data (get/save). For authoring HITL nodes in flows/agents→uipath-human-in-the-loop. For Orchestrator→uipath-platform, codedapp→uipath-coded-apps. Skip Document Understanding.",
+      "skillPath": "uipath-tasks/SKILL.md"
+    },
+    {
+      "name": "uipath-test",
+      "description": "UiPath Test Manager — manage test projects, cases, sets, executions; generate reports; package and run external Playwright test suites. For Orchestrator→uipath-platform. For Studio/RPA test automation authoring→uipath-rpa.",
+      "skillPath": "uipath-test/SKILL.md"
+    },
+    {
+      "name": "uipath-troubleshoot",
+      "description": "UiPath causal investigation across every product, runtime, and activity package. Use when the primary outcome is an explanation, diagnosis, or root cause for undesirable existing behavior: faults, hangs, regressions, slowdowns, access loss, unexpected state changes, wrong or empty results, silent no-ops, or raw errors. Diagnostic intent outranks surface ownership for runtime behavior; invoke even when the prompt names only a job, folder, queue item, connector, connection, activity, trace, flow, agent, or other resource and another UiPath skill supplies inspection commands. Correlates runtime, configuration, history, and source evidence to find the originating fault and fix. Also covers UiPath Assistant desktop-app failures from a shared diagnostic archive (combined.log, Robot.log). For operating resources without causal investigation→uipath-platform; for applying a known source fix→the artifact owner; for build-time/CLI faults of a local artifact (pack, build, validate, bindings)→the artifact's skill.",
+      "skillPath": "uipath-troubleshoot/SKILL.md"
+    }
+  ]
+}

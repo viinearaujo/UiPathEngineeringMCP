@@ -6,12 +6,29 @@ using UiPath.Engineering.Mcp.Core.Models;
 namespace UiPath.Engineering.Mcp.Providers.Filesystem;
 
 public sealed class FilesystemProvider : IFilesystemProvider {
-    private static readonly string[] IgnoredDirectories =
+    // Folders that are never workflow/source discovery targets. `.objects` holds Object
+    // Repository metadata (.metadata/.type/.content/.hash) that must not be parsed as a
+    // workflow, and `.local` holds generated caches plus package docs.
+    private static readonly string[] WorkflowIgnoredDirectories =
     [
         ".git",
         ".local",
         ".settings",
         ".objects",
+        "bin",
+        "obj",
+        "node_modules",
+        ".vs"
+    ];
+
+    // Folders hidden from the read/discovery surface (the folder tree). `.objects` is NOT
+    // here: it is the Object Repository, and hiding it left the server structurally blind to
+    // every saved application, screen, and element. `.local` stays hidden.
+    private static readonly string[] DiscoveryIgnoredDirectories =
+    [
+        ".git",
+        ".local",
+        ".settings",
         "bin",
         "obj",
         "node_modules",
@@ -76,7 +93,7 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
         foreach (var sub in subDirs) {
             var name = Path.GetFileName(sub);
-            if (IgnoredDirectories.Contains(name, StringComparer.OrdinalIgnoreCase)) {
+            if (WorkflowIgnoredDirectories.Contains(name, StringComparer.OrdinalIgnoreCase)) {
                 continue;
             }
 
@@ -114,7 +131,7 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
         foreach (var sub in subDirs) {
             var subName = Path.GetFileName(sub);
-            if (IgnoredDirectories.Contains(subName, StringComparer.OrdinalIgnoreCase)) {
+            if (DiscoveryIgnoredDirectories.Contains(subName, StringComparer.OrdinalIgnoreCase)) {
                 continue;
             }
 

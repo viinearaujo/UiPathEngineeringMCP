@@ -74,7 +74,8 @@ public static class McpServiceCollectionExtensions {
                 sp.GetRequiredService<CSharpContextBuilder>(),
                 sp.GetRequiredService<IFilesystemProvider>(),
                 sp.GetRequiredService<NuGetReferenceResolver>(),
-                sp.GetService<ILogger<CSharpAnalysisCache>>()));
+                maxEntries: CSharpAnalysisCache.DefaultMaxEntries,
+                logger: sp.GetService<ILogger<CSharpAnalysisCache>>()));
         services.AddSingleton<ICSharpAnalysisService, CSharpAnalysisService>();
         services.AddSingleton<ICodebaseSearchService, CodebaseSearchService>();
 
@@ -87,6 +88,16 @@ public static class McpServiceCollectionExtensions {
     }
 
     public static IMcpServerBuilder AddUiPathMcpServer(this IServiceCollection services, bool restrictToCopilotDefault = true) {
+        services.AddOptions<ModelContextProtocol.Server.McpServerOptions>()
+            .PostConfigure<IOptions<McpServerOptions>>((sdkOptions, repoOptions) => {
+                var identity = repoOptions.Value;
+                sdkOptions.ServerInfo = new Implementation {
+                    Name = identity.Name,
+                    Version = identity.Version,
+                    Description = string.IsNullOrWhiteSpace(identity.Description) ? null : identity.Description
+                };
+            });
+
         return services.AddMcpServer()
             .WithToolsFromAssembly(typeof(AnalyzeProjectTool).Assembly)
             .WithResourcesFromAssembly(typeof(AnalyzeProjectTool).Assembly)

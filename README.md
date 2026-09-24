@@ -110,7 +110,10 @@ validated (security guard). Do not commit personal machine paths. Example:
 > 🔒 **Security:** empty committed roots are intentional. Writes and analysis stay inside `AllowedRoots`.
 
 `UiPathCli:IncludeRawOutput` is `false` by default (raw CLI console output is suppressed).
-`appsettings.Development.json` turns it on for local debugging.
+The committed `appsettings.Development.json` overrides logging levels only; to surface raw
+CLI output for local debugging, set `UiPathCli:IncludeRawOutput` yourself — in
+`appsettings.Development.json`, user secrets, or the environment variable
+`UiPathCli__IncludeRawOutput`.
 
 <a id="run-locally"></a>
 ## 🖥️ Run locally
@@ -174,9 +177,9 @@ Your MCP endpoint for clients is: `https://<id>-5000.devtunnels.ms/sse`
 
 - **Name:** UiPath Engineering MCP
 - **Endpoint:** `https://<id>-5000.devtunnels.ms/sse`
-- **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop). Uploaded Copilot Studio skills plus this catalog are the Copilot path. New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with primitives only; never custom types or source-file methods from XAML.
-- **Recommended tools (default connector):** `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`, `analyze_project_gaps`, `read_skill`, `explain_workflow`, `get_workflow_dependencies`, `generate_documentation`, `find_code_symbol`, `find_code_references`, `get_code_context`, `validate_activity_spec`, `recommend_activities`, `build_workflow`, `manage_workflow_data`, `add_xaml_workflow`, `create_implementation_plan`, `create_project`, `patch_project_json`, `manage_project_docs`, `manage_project_file`, `sync_project_context`, `validate_project_docs`
-- **Leave off the default connector:** `CopilotConnectorTools.LeaveOffNames` (hatches and aliases only). Notable overlaps: `compile_project` (use `validate_project(build:true)`), `verify_work` (use `validate_project` then `update_plan_task`), `edit_workflow_activity` (prefer `insert_activities`; fragment hatch on `All`), `write_workflow_file` (full-file overwrite on `ToolSurface=All` only), `list_skills` (uploaded skills already name the playbooks). HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only `CopilotConnectorTools.DefaultNames`. Keep work Copilot on `CopilotDefault`. Set `All` for Inspector. GitLab tools stay registered on the server.
+- **Agent instructions:** paste [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) (source of truth for the Copilot loop). Uploaded Copilot Studio skills plus this catalog are the Copilot path. New work is coded unless it is REFramework/orchestration. XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
+- **Recommended tools (default connector):** `analyze_project`, `search_codebase`, `read_workflow_file`, `validate_project`, `get_implementation_plan`, `update_plan_task`, `add_coded_workflow`, `edit_workflow_file`, `find_activity`, `insert_activities`, `get_compile_errors`, `analyze_project_gaps`, `read_skill`, `explain_workflow`, `get_workflow_dependencies`, `generate_documentation`, `find_code_symbol`, `find_code_references`, `get_code_context`, `validate_activity_spec`, `recommend_activities`, `build_workflow`, `manage_workflow_data`, `add_xaml_workflow`, `create_implementation_plan`, `create_project`, `patch_project_json`, `manage_project_docs`, `manage_project_file`, `sync_project_context`, `validate_project_docs`, `get_analyzer_rules`, `manage_packages`, `get_object_repository`
+- **Leave off the default connector:** `CopilotConnectorTools.LeaveOffNames` — hatches, aliases, and the execution tools. Notable overlaps: `compile_project` (use `validate_project(build:true)`), `verify_work` (use `validate_project` then `update_plan_task`), `edit_workflow_activity` (prefer `insert_activities`; fragment hatch on `All`), `write_workflow_file` (full-file overwrite on `ToolSurface=All` only), `list_skills` (uploaded skills already name the playbooks). `run_workflow` and `control_debug_session` execute automation on the machine and stay off the default connector: they are additionally fail-closed unless `UiPathCli:EnableExecution` is `true`, so they are absent by default. HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only `CopilotConnectorTools.DefaultNames`. Keep work Copilot on `CopilotDefault`. Set `All` for Inspector. GitLab tools stay registered on the server.
 - **Full tool surface** (Inspector / `ToolSurface=All`): the live catalog of every registered `[McpServerTool]` — the same tools the grouped Toolkit already describes. `LeaveOffNames` is not the runtime source for All; it is the hatch/alias set hidden on the Copilot default connector.
 
 > ✅ **Green gate:** `validate_project(build:false, pack:false)` → `analyze_project_gaps` → `update_plan_task`. Do not use `verify_work` as the done gate.
@@ -196,8 +199,9 @@ the task is REFramework or orchestration XAML. Create files with `add_coded_work
 helper class and is not registered.
 
 XAML is a thin shell: `find_activity` + `insert_activities` for REFramework and
-`InvokeWorkflowFile` wiring only. XAML may invoke coded workflows with primitives only;
-never custom types or source-file methods from XAML.
+`InvokeWorkflowFile` wiring only. XAML may invoke coded workflows with BCL and framework
+types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in
+this automation or source-file methods from XAML.
 
 Spec-based XAML authoring (`validate_activity_spec`, `build_workflow`, `manage_workflow_data`)
 is on the Copilot default connector for that shell. Spec shape:
@@ -269,7 +273,7 @@ adds hatches and aliases (`LeaveOffNames`).
 - `find_activity` — Finds activities in `.xaml` and returns stable per-snapshot ids, line numbers, and ancestor chains. Pass the returned `id` to `insert_activities`.
 - `insert_activities` — Recommended Copilot surgical XAML path: inserts a JSON spec as children of the activity located by `activityId` or `DisplayName`.
 - `get_compile_errors` — Structured Roslyn diagnostics (file/line/column/code/severity/message) without a build; responses include `analysisMode` (`full` / `partial` / `syntaxOnly`).
-- `analyze_project_gaps` — Deterministic hygiene gaps (entry point, orphans, exception handling, logging, descriptions, tests, unresolved invokes, coded/XAML primitive-only invoke boundary) plus plan cross-checks; each gap names the MCP tool that fixes it.
+- `analyze_project_gaps` — Deterministic hygiene gaps (entry point, orphans, exception handling, logging, descriptions, tests, unresolved invokes, coded/XAML invoke boundary: project-defined types and coded-source method calls crossing into XAML) plus plan cross-checks; each gap names the MCP tool that fixes it.
 - `read_skill` — Reads one RPA skill (`SKILL.md` or an auxiliary file).
 - `explain_workflow` — Structured breakdown of one workflow: arguments, variables, activity outline, handlers, invokes, log messages. Coded (`.cs`) files return `kind` (`workflow` / `test` / `source`), class, namespace, entry methods, and public methods.
 - `get_workflow_dependencies` — `InvokeWorkflowFile` graph: project-wide edges, cycles, orphans, unresolved targets; or, with `workflowFile`, that workflow's callers/callees with argument mappings.
@@ -289,6 +293,9 @@ adds hatches and aliases (`LeaveOffNames`).
 - `manage_project_file` — Creates, edits, or deletes a `.md` / `.json` / `.txt` file. Refuses `project.json`, plan files, `docs/knowledge`, `docs/adr`, secret names, and `***REDACTED***` bodies.
 - `sync_project_context` — Regenerates `AGENTS.md` (marker block) and `.claude/rules/project-context.md` from the project model.
 - `validate_project_docs` — Inspects docs without changing plan state. Wiki hygiene only — does not block `update_plan_task(done)`. `verify_work` still refuses auto-done on docs errors.
+- `get_analyzer_rules` — Lists the Workflow Analyzer rules **enabled** for the project (`uip rpa analyzer-rules list`): rule id, severity, scope, title, recommendation, docs URL, configured parameters. These are the best-practice rules `validate_project` enforces; the tool reports the rules, not the violations. Rule-id prefix: `ST-*` built-in Studio, `MA-*` package-shipped. Always pass a scope — the unscoped call enumerates every rule across every installed package and can take a minute or more. Call on demand, e.g. when the same rule family keeps failing validate/build.
+- `manage_packages` — Canonical NuGet dependency path via the CLI package verbs (`uip rpa packages install` / `versions` / `inspect`). `install` takes one `packageId` per call and resolves the latest compatible version unless pinned; `versions` lists available versions (prerelease included by default); `inspect` returns a package's public API as markdown. Hand-editing `project.json` dependencies is the wrong path — there is no `add-dependency` verb, and `patch_project_json(upsert_dependency)` only rewrites JSON without restoring or resolving. `install` mutates the project and is blocked unless `UiPathCli:EnableMutatingCommands` is set.
+- `get_object_repository` — Reads the project's Object Repository — the saved hierarchy of applications → screens → elements (selectors/targets) UI Automation activities bind to — as JSON, via the CLI read verbs. Read it before authoring UI Automation activities so an existing screen/element is reused by name+reference instead of re-indicating. `source=project` (default) excludes entries inherited from referenced libraries; `source=library` reads the repository out of library `.nupkg` files. Requires an open project (Studio IPC). Each node carries name, type (App/Screen/Element), taxonomyType, reference, and a dotted path.
 
 ### 🔍 Understand
 
@@ -354,7 +361,7 @@ adds hatches and aliases (`LeaveOffNames`).
 dotnet test
 ```
 
-The `tests/` folder contains four xUnit projects. Tests use hand-written fakes (no Moq).
+The `tests/` folder contains four xUnit test projects plus a shared `UiPath.Engineering.Mcp.TestUtilities` class library (hand-written fakes such as `FakeDirectoryTrees`, referenced by `Core.Tests` and `Tools.Tests`; not a test project itself). Tests use hand-written fakes (no Moq).
 
 | Project | Covers |
 |---------|--------|
@@ -362,6 +369,7 @@ The `tests/` folder contains four xUnit projects. Tests use hand-written fakes (
 | `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing, filesystem write/delete guards, `.xaml`/`.cs` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree`, `CliExecutableResolver`, `UiPathCliOutputParser`, `UiPathCliProvider` per-step results, `GitStatusParser`, `GitLabProvider` (token never surfaced). |
 | `UiPath.Engineering.Mcp.Tools.Tests` | Project-docs tools, path/project guards, validate output shape, authoring guards, coded-workflow entry-point registration, `uip rpa init` partial-success, activity-level and spec-based authoring, `read_workflow_file` / `edit_workflow_file`, plan create/update/get (`update_plan_task(done)` is not docs-gated), gap-analysis shape, `verify_work` branches, C# analysis tools, `search_codebase`, structured errors. |
 | `UiPath.Engineering.Mcp.Server.Tests` | HTTP host, Copilot default connector list, `/sse` API-key auth (on/off, fail-closed empty key, `/health` anonymous), non-Development HTTP startup validation, empty committed `AllowedRoots`, and `update_plan_task(done)` not blocked on docs freshness. |
+| `UiPath.Engineering.Mcp.TestUtilities` | Shared fake-building helpers (e.g. `FakeDirectoryTrees`) used by `Core.Tests` and `Tools.Tests`. Class library — no tests of its own. |
 
 <a id="project-layout"></a>
 ## 📁 Project layout
@@ -390,8 +398,9 @@ reject path escapes outside the target project, and only accept `.xaml`/`.cs` co
 shell. `edit_workflow_activity` fragment mode remains an escape hatch for edits the spec model
 does not cover. In the spec model an `If` activity's `children` are the **Then** branch only.
 `manage_workflow_data` rename updates the declaration only; expressions referencing the old name
-are not rewritten. XAML `InvokeWorkflowFile` of a `.cs` workflow may pass only primitives,
-`DataTable`, or `string[]`; coded source methods must never be called from XAML.
+are not rewritten. XAML `InvokeWorkflowFile` of a `.cs` workflow may pass BCL and framework
+types (`String`, `Boolean`, `Int32`, `Dictionary`, `IEnumerable`, `DataTable`, arrays); never
+types defined in this automation, and never coded source methods.
 
 **Activity targeting.** `edit_workflow_activity` matches by `DisplayName` (exact, case-sensitive);
 when several activities share a name the edit is rejected and `activityType` must be passed

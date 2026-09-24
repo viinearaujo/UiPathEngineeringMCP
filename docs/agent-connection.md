@@ -55,6 +55,27 @@ File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` al
 
 `GET /health` is always anonymous. Non-Development HTTP requires `McpServer:HttpAuth:Enabled` true and a non-empty `McpServer:HttpAuth:ApiKey` (env `McpServer__HttpAuth__ApiKey`) at startup. Send `X-Api-Key` or `Authorization: Bearer <key>` on `/sse`. Development may leave auth off for localhost; do not expose that configuration through a Dev Tunnel. Stdio is unauthenticated. When Enabled is true and the key is empty, `/sse` is fail-closed.
 
+## Protocol limits over HTTP
+
+`HttpServerTransportOptions.Stateless` defaults to `true` as of the `2026-07-28` protocol revision (SEP-2567), which removed `Mcp-Session-Id` from Streamable HTTP. The server does not override it. Under the current revision, HTTP requests are only served when `Stateless` is `true`; a `false` setting is refused with `-32022 UnsupportedProtocolVersion` so a dual-path client downgrades to the `initialize` handshake. Each HTTP request gets a fresh server context, and a response could otherwise arrive at a different ASP.NET Core process — so **no server-to-client request and no unsolicited server-to-client message is possible over HTTP**.
+
+Do not plan any of these for the HTTP transport:
+
+| Capability | HTTP | stdio |
+|------------|------|-------|
+| Sampling (`sampling/createMessage`) | unavailable | available |
+| Elicitation (`elicitation/create`) | unavailable | available |
+| Roots (`roots/list`) | unavailable | available |
+| Resource subscriptions (`resources/subscribe`, `resources/updated`) | unavailable | available |
+| List-changed notifications (`tools/list_changed`, `resources/list_changed`, `prompts/list_changed`) | unavailable | available |
+| Progress notifications (`notifications/progress`) | **available** | available |
+
+Progress is the exception because a progress notification is scoped to the `ProgressToken` of the in-flight request and travels back on that request's own response stream — it is not an unsolicited server-to-client message. It is the only long-call feedback channel the HTTP transport offers. Long CLI-backed calls (`validate_project` with `pack:true`, `create_project`, `build_workflow`) can take tens of seconds, so the client must carry a timeout generous enough for them; without progress notifications there is nothing to poll in the meantime.
+
+Recovering any of the unavailable capabilities requires opting the server out of the current protocol revision, which costs HTTP interoperability with clients on `2026-07-28` and later. The client-driven loop is the design: the server is passive, tools are one-shot request/response, and the harness owns sequencing and retries.
+
+Stdio (`--stdio`) is a separate process with a persistent bidirectional stream, so it is unaffected by all of the above.
+
 ## Traps
 
 | Symptom | What to do |
@@ -75,6 +96,10 @@ The agent green gate is `validate=true`, `build=false` (the tool default), `pack
 Clients that support MCP Prompts can load `implement_uipath_goal` with `projectPath` and `goal`. It is a thin recipe of the Copilot agent instructions.
 
 ## Resources
+
+> ⚠️ **Every resource registered by this server is a URI *template*, so `resources/list` returns an empty array.** A client that only reads `resources/list` sees zero resources. Enumerate them with `resources/listResourceTemplates`, then `resources/read` a concrete URI built by substituting the `{...}` placeholders.
+>
+> **Verify this against the actual Copilot Studio registration.** If Studio's resource discovery reads only `resources/list`, it currently sees none of the resources below despite them being implemented and reachable by exact URI.
 
 URI templates (MCP resources):
 

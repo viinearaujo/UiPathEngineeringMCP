@@ -4,8 +4,10 @@ namespace UiPath.Engineering.Mcp.Core.Caching;
 
 /// <summary>
 /// Bounded in-process cache: max entries (LRU), sliding TTL, and a per-key
-/// <see cref="SemaphoreSlim"/> that is disposed once the key is no longer cached
-/// and no waiter holds it.
+/// <see cref="SemaphoreSlim"/>. Keys are project paths, so the key space is small; the
+/// per-key semaphores are kept for the lifetime of the cache and disposed only in
+/// <see cref="Dispose"/>. Disposing an idle semaphore on eviction can race another
+/// caller between its <c>GetOrAdd</c> and <c>WaitAsync</c>, so it is deliberately avoided.
 /// </summary>
 public sealed class BoundedCache<TValue> : IDisposable {
     public const int DefaultMaxEntries = 32;
@@ -50,7 +52,6 @@ public sealed class BoundedCache<TValue> : IDisposable {
             return await action(cancellationToken);
         } finally {
             gate.Release();
-            TryDisposeUnusedLock(key, gate);
         }
     }
 
@@ -117,44 +118,12 @@ public sealed class BoundedCache<TValue> : IDisposable {
                 break;
             }
 
-            if (_entries.TryRemove(victim, out _)) {
-                TryDisposeLockIfIdle(victim);
-            }
+            _entries.TryRemove(victim, out _);
         }
     }
 
     private bool IsExpired(Entry entry, DateTimeOffset now) =>
         _ttl > TimeSpan.Zero && now - entry.LastAccessUtc > _ttl;
-
-    private void TryDisposeLockIfIdle(string key) {
-        if (!_locks.TryGetValue(key, out var gate) || gate.CurrentCount != 1) {
-            return;
-        }
-
-        if (_locks.TryRemove(key, out var removed) && ReferenceEquals(removed, gate) && gate.CurrentCount == 1) {
-            gate.Dispose();
-        } else if (removed is not null && !ReferenceEquals(removed, gate)) {
-            _locks.TryAdd(key, removed);
-        }
-    }
-
-    private void TryDisposeUnusedLock(string key, SemaphoreSlim gate) {
-        if (_entries.ContainsKey(key)) {
-            return;
-        }
-
-        _locks.TryRemove(key, out var removed);
-        if (removed is not null && !ReferenceEquals(removed, gate)) {
-            _locks.TryAdd(key, removed);
-            return;
-        }
-
-        if (gate.CurrentCount == 1) {
-            gate.Dispose();
-        } else {
-            _locks.TryAdd(key, gate);
-        }
-    }
 
     private sealed class Entry {
         public Entry(TValue value, DateTimeOffset lastAccessUtc, long accessOrder) {

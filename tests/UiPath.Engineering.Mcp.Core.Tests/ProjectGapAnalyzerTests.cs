@@ -1,18 +1,13 @@
 using UiPath.Engineering.Mcp.Core;
+using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Docs;
 using UiPath.Engineering.Mcp.Core.GapAnalysis;
 using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
-public class ProjectGapAnalyzerTests : IDisposable {
-    private readonly string _projectPath = Path.Combine(Path.GetTempPath(), "mcp-gaps-" + Guid.NewGuid().ToString("N"));
-
-    public void Dispose() {
-        if (Directory.Exists(_projectPath)) {
-            Directory.Delete(_projectPath, recursive: true);
-        }
-    }
+public class ProjectGapAnalyzerTests {
+    private const string ProjectPath = @"C:\projects\clean";
 
     private static WorkflowModel Wf(string fileName, bool isMain = false, string? description = "A workflow.",
         int exceptionHandlers = 0, int logMessages = 0, params string[] invokes) => new() {
@@ -29,7 +24,7 @@ public class ProjectGapAnalyzerTests : IDisposable {
 
     // A model that trips no rule: entry point with handling/logging/description,
     // one invoked child, and a (standalone) test workflow.
-    private static UiPathProjectModel CleanModel(string? mainWorkflow = "Main.xaml", string projectPath = "") => new() {
+    private static UiPathProjectModel CleanModel(string? mainWorkflow = "Main.xaml", string projectPath = ProjectPath) => new() {
         ProjectPath = projectPath,
         ProjectName = "clean",
         MainWorkflow = mainWorkflow,
@@ -39,6 +34,16 @@ public class ProjectGapAnalyzerTests : IDisposable {
             Wf("Tests/TestMain.xaml")
         ]
     };
+
+    /// <summary>In-memory filesystem for the plan cross-check; no temp directory, no disk.</summary>
+    private static FakeFilesystemProvider FilesWith(params string[] relativePaths) {
+        var filesystem = new FakeFilesystemProvider();
+        foreach (var relativePath in relativePaths) {
+            filesystem.FileContents[ProjectFilePolicy.CombineProject(ProjectPath, relativePath)] = "<Activity />";
+        }
+
+        return filesystem;
+    }
 
     [Fact]
     public void Analyze_CleanProject_ReportsNoGaps() {
@@ -92,6 +97,36 @@ public class ProjectGapAnalyzerTests : IDisposable {
 
         Assert.Contains(gaps, g => g.Id == "orphan-workflow:Unused.xaml" && g.Severity == Gap.Warning);
         Assert.DoesNotContain(gaps, g => g.Id.StartsWith("orphan-workflow:Tests/", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Latest.xaml")]
+    [InlineData("LatestInvoice.xaml")]
+    [InlineData("Attest.xaml")]
+    [InlineData("Contest.xaml")]
+    [InlineData("Protest.xaml")]
+    public void Analyze_ProseWordEndingInTest_IsNotClassifiedAsTest(string fileName) {
+        // A plain EndsWith("Test", IgnoreCase) exempted these real production workflows from
+        // orphan detection and counted them as test coverage. They must be flagged as orphans.
+        var model = CleanModel();
+        model.Workflows.Add(Wf(fileName, description: "A real workflow."));
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        Assert.Contains(gaps, g => g.Id == $"orphan-workflow:{fileName}");
+    }
+
+    [Theory]
+    [InlineData("TestLoginFlow.xaml")]
+    [InlineData("InvoiceTests.xaml")]
+    [InlineData("Invoice_Test.xaml")]
+    [InlineData("test_invoice.xaml")]
+    public void Analyze_RealTestWorkflowName_IsExemptFromOrphanRule(string fileName) {
+        var model = CleanModel();
+        model.Workflows.Add(Wf(fileName, description: "A test case."));
+
+        Assert.DoesNotContain(ProjectGapAnalyzer.Analyze(model),
+            g => g.Id == $"orphan-workflow:{fileName}");
     }
 
     [Fact]
@@ -198,18 +233,17 @@ public class ProjectGapAnalyzerTests : IDisposable {
 
     [Fact]
     public void Analyze_PendingTaskWithAllTargetFilesPresent_SuggestsUpdatePlanTask() {
-        Directory.CreateDirectory(_projectPath);
-        File.WriteAllText(Path.Combine(_projectPath, "Main.xaml"), "<Activity />");
-        var model = CleanModel(projectPath: _projectPath);
+        var model = CleanModel();
         var plan = new ImplementationPlan {
             Goal = "g",
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main", Status = PlanTask.Pending, TargetFiles = ["Main.xaml"] }]
         };
 
-        var gaps = ProjectGapAnalyzer.Analyze(model, plan);
+        var gaps = ProjectGapAnalyzer.Analyze(model, plan, filesystem: FilesWith("Main.xaml"));
 
         var gap = Assert.Single(gaps, g => g.Id == "plan-task-possibly-complete:task-1");
         Assert.Equal(Gap.Info, gap.Severity);
+        Assert.Equal(Gap.ConfidenceHigh, gap.Confidence);
         Assert.Equal("update_plan_task", gap.SuggestedTool);
         Assert.Equal(
             "Run validate_project(build:false, pack:false), then update_plan_task for 'task-1' to mark it done.",
@@ -218,13 +252,13 @@ public class ProjectGapAnalyzerTests : IDisposable {
 
     [Fact]
     public void Analyze_InProgressTaskWithMissingTargetFile_ReportsPlannedArtifactMissing() {
-        var model = CleanModel(projectPath: _projectPath);
+        var model = CleanModel();
         var plan = new ImplementationPlan {
             Goal = "g",
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main", Status = PlanTask.InProgress, TargetFiles = ["Main.xaml"] }]
         };
 
-        var gaps = ProjectGapAnalyzer.Analyze(model, plan);
+        var gaps = ProjectGapAnalyzer.Analyze(model, plan, filesystem: FilesWith());
 
         var gap = Assert.Single(gaps, g => g.Id == "plan-artifact-missing:task-1");
         Assert.Equal(Gap.Warning, gap.Severity);
@@ -233,14 +267,41 @@ public class ProjectGapAnalyzerTests : IDisposable {
     }
 
     [Fact]
+    public void Analyze_PlanWithoutFilesystem_SkipsArtifactCrossCheck() {
+        var plan = new ImplementationPlan {
+            Goal = "g",
+            Tasks = [new PlanTask { Id = "task-1", Title = "Create Main", Status = PlanTask.Pending, TargetFiles = ["Main.xaml"] }]
+        };
+
+        var gaps = ProjectGapAnalyzer.Analyze(CleanModel(), plan);
+
+        Assert.DoesNotContain(gaps, g => g.Category == "plan");
+    }
+
+    [Fact]
+    public void Analyze_PlanTargetOutsideProject_CountsAsMissing() {
+        var plan = new ImplementationPlan {
+            Goal = "g",
+            Tasks = [new PlanTask { Id = "task-1", Title = "Escape", Status = PlanTask.Pending, TargetFiles = ["../escape/Main.xaml"] }]
+        };
+
+        var filesystem = new FakeFilesystemProvider { Allowed = false };
+        filesystem.FileContents[ProjectFilePolicy.CombineProject(ProjectPath, "../escape/Main.xaml")] = "<Activity />";
+
+        var gaps = ProjectGapAnalyzer.Analyze(CleanModel(), plan, filesystem: filesystem);
+
+        Assert.Single(gaps, g => g.Id == "plan-artifact-missing:task-1");
+    }
+
+    [Fact]
     public void Analyze_DoneTask_IsNotCrossChecked() {
-        var model = CleanModel(projectPath: _projectPath);
+        var model = CleanModel();
         var plan = new ImplementationPlan {
             Goal = "g",
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main", Status = PlanTask.Done, TargetFiles = ["Missing.xaml"] }]
         };
 
-        var gaps = ProjectGapAnalyzer.Analyze(model, plan);
+        var gaps = ProjectGapAnalyzer.Analyze(model, plan, filesystem: FilesWith());
 
         Assert.DoesNotContain(gaps, g => g.Category == "plan");
     }
@@ -339,10 +400,31 @@ public class ProjectGapAnalyzerTests : IDisposable {
         var gaps = ProjectGapAnalyzer.Analyze(model);
 
         var gap = Assert.Single(gaps, g => g.Id == "xaml-business-logic:Process.xaml");
-        Assert.Equal(Gap.Warning, gap.Severity);
+        // Downgraded from warning: activity types are matched on namespace-blind local names,
+        // so this is a preference to verify, not a violation the agent must remediate.
+        Assert.Equal(Gap.Info, gap.Severity);
+        Assert.Equal(Gap.ConfidenceMedium, gap.Confidence);
         Assert.Equal("boundary", gap.Category);
         Assert.Equal("add_coded_workflow", gap.SuggestedTool);
         Assert.Contains("prefer a coded workflow", gap.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Hint", gap.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Analyze_XamlBusinessLogicSubstringMatch_IsLowConfidenceHint() {
+        var model = CleanModel();
+        model.Workflows.Add(new WorkflowModel {
+            FileName = "Portal.xaml",
+            Description = "Portal.",
+            // "Http" is a substring of a custom activity name, not an HTTP call.
+            Activities = [new ActivityModel { Type = "NFindElement", DisplayName = "Find portal button" }]
+        });
+
+        var gaps = ProjectGapAnalyzer.Analyze(model);
+
+        var gap = Assert.Single(gaps, g => g.Id == "xaml-business-logic:Portal.xaml");
+        Assert.Equal(Gap.Info, gap.Severity);
+        Assert.Equal(Gap.ConfidenceLow, gap.Confidence);
     }
 
     [Fact]
