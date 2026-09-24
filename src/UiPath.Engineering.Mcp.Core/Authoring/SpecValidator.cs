@@ -18,9 +18,13 @@ public static class SpecValidator {
     /// VisualBasicValue and break C#-only syntax).
     /// </summary>
     /// <remarks>
-    /// Properties the schema does not know about are tolerated here (a discovered
-    /// activity may have a richer surface than the catalog carries); the builder
-    /// reports each passthrough as a warning on the render result.
+    /// A schema with a complete property surface (<see cref="ActivitySchema.PropertiesAreComplete"/>,
+    /// set by reflection over the activity's assemblies) rejects a property the
+    /// schema does not know about: it is a typo that would otherwise render as a
+    /// silent passthrough attribute. A schema whose surface is a curated list or a
+    /// discovered sample keeps tolerating unknown properties — those deliberately
+    /// under-list, so an unknown key may name a real property of a newer package
+    /// version; the builder reports the passthrough as a warning.
     /// </remarks>
     public static List<ToolError> Validate(ActivitySpec spec, IActivityCatalog catalog, ProjectXamlSettings? settings) {
         var errors = new List<ToolError>();
@@ -109,7 +113,20 @@ public static class SpecValidator {
 
         if (spec.Properties is not null) {
             foreach (var (name, value) in spec.Properties) {
-                if (!lookup.TryGetValue(name, out var property)) continue; // unknown properties are rendered as a passthrough attribute with a warning
+                if (!lookup.TryGetValue(name, out var property)) {
+                    // A complete surface makes an unknown key a typo; an incomplete
+                    // one tolerates it for forward compatibility with a newer
+                    // activity package, and the builder warns on the passthrough.
+                    if (schema.PropertiesAreComplete) {
+                        errors.Add(new ToolError(
+                            ToolErrorCodes.SpecUnknownProperty,
+                            $"Property \"{name}\" of \"{schema.Name}\" at {path} is not a property of this activity.",
+                            UnknownPropertyHint(schema, name, context)));
+                    }
+
+                    continue;
+                }
+
                 var mismatch = FormMismatch(property, value, context);
                 if (mismatch is not null) {
                     errors.Add(new ToolError(
@@ -516,6 +533,58 @@ public static class SpecValidator {
 
     private static bool ContainsProperty(Dictionary<string, string> properties, string name) =>
         properties.ContainsKey(name) || properties.Keys.Any(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
+
+    // The closest declared property, so a typo points at the intended name.
+    private static string UnknownPropertyHint(ActivitySchema schema, string name, Context context) {
+        var known = schema.Properties.Select(p => p.Name).ToList();
+        var suggestion = Suggest(name, known);
+        if (suggestion is not null) {
+            var property = schema.Properties.First(p => p.Name == suggestion);
+            return $"Did you mean \"{suggestion}\"? {CorrectForm(property, context)}";
+        }
+
+        return known.Count == 0
+            ? "This activity declares no settable properties; remove the property bag."
+            : $"Remove the property, or use one of: {string.Join(", ", known)}.";
+    }
+
+    // Levenshtein under a small threshold, matching ActivityCatalog.Suggest.
+    private static string? Suggest(string name, IReadOnlyList<string> candidates) {
+        string? best = null;
+        var bestDistance = 4;
+        foreach (var candidate in candidates) {
+            var distance = Levenshtein(name, candidate);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private static int Levenshtein(string a, string b) {
+        if (a.Length == 0) return b.Length;
+        if (b.Length == 0) return a.Length;
+
+        var previous = new int[b.Length + 1];
+        var current = new int[b.Length + 1];
+        for (var j = 0; j <= b.Length; j++) {
+            previous[j] = j;
+        }
+
+        for (var i = 1; i <= a.Length; i++) {
+            current[0] = i;
+            for (var j = 1; j <= b.Length; j++) {
+                var cost = char.ToUpperInvariant(a[i - 1]) == char.ToUpperInvariant(b[j - 1]) ? 0 : 1;
+                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
+            }
+
+            (previous, current) = (current, previous);
+        }
+
+        return previous[b.Length];
+    }
 
     private static string? AllowedValueMismatch(PropertySchema property, string value) {
         if (property.AllowedValues is not { Count: > 0 } allowed) {

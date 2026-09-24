@@ -19,6 +19,15 @@ public interface IActivityDiscovery {
         string projectPath, string activityClassName, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
 }
 
+/// <summary>
+/// One activity discovered from the project (typically <c>uip rpa activities find</c>).
+/// <paramref name="PropertiesAreComplete"/> says whether
+/// <paramref name="Properties"/> is the activity's complete settable surface.
+/// Discovery surfaces start as samples (false): the CLI property array and the
+/// package's default XAML both enumerate only some properties, so the validator
+/// tolerates properties the sample does not name. Reflection over the activity
+/// assemblies sets it true once it has read the whole surface.
+/// </summary>
 public sealed record DiscoveredActivity(
     string Name,
     string? FullTypeName = null,
@@ -28,4 +37,5 @@ public sealed record DiscoveredActivity(
     string? Prefix = null,
     bool IsContainer = true,
     IReadOnlyList<PropertySchema>? Properties = null,
-    BodyDescriptor? Body = null);
+    BodyDescriptor? Body = null,
+    bool PropertiesAreComplete = false);

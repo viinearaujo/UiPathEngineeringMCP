@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Caching;
+using UiPath.Engineering.Mcp.Core.CodeAnalysis;
+using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Authoring;
@@ -57,6 +59,7 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
             _logger.LogDebug("Activity catalog cache miss for {CacheKey}", cacheKey);
             var packages = ReadPackages(projectJson);
             var (discovered, discoveryFailed, truncated) = await DiscoverForProjectAsync(projectPath, packages, ct);
+            discovered = EnrichWithReflection(packages, discovered);
             var catalog = Merge(
                 ActivityCatalog.All,
                 packages,
@@ -211,6 +214,10 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
             PackageVersion = discovered.PackageVersion ?? curated.PackageVersion,
             FullTypeName = curated.FullTypeName ?? discovered.FullTypeName,
             Properties = properties,
+            // A curated surface deliberately under-lists, so the merge stays lenient;
+            // only a reflection-completed discovery (a package activity the curated
+            // catalog does not carry) can reject unknown properties.
+            PropertiesAreComplete = curated.Properties.Count == 0 && discovered.PropertiesAreComplete,
             Body = curated.Body ?? discovered.Body
         };
     }
@@ -229,8 +236,65 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
             PackageId: hit.PackageId,
             PackageVersion: ActivityFindParser.StripVersion(hit.PackageVersion),
             FullTypeName: hit.FullTypeName,
-            Body: hit.Body);
+            Body: hit.Body,
+            PropertiesAreComplete: hit.PropertiesAreComplete);
         return StampVersion(schema, projectPackages);
+    }
+
+    // Reflection over the package assemblies gives a discovered activity its
+    // COMPLETE, required-aware surface, replacing the starter sample (which carries
+    // only properties whose value differs from the CLR type default). Activities
+    // that already have a curated or reflection-completed surface are left alone;
+    // those the reflector cannot resolve keep the starter sample and stay
+    // incomplete, so the validator tolerates their unknown properties.
+    private IReadOnlyList<DiscoveredActivity> EnrichWithReflection(
+        IReadOnlyDictionary<string, string> packages, IReadOnlyList<DiscoveredActivity> hits) {
+        if (packages.Count == 0) {
+            return hits;
+        }
+
+        var packagesFolder = new NuGetReferenceResolver().GetPackagesFolder();
+        if (packagesFolder is null) {
+            return hits;
+        }
+
+        var packageModels = packages
+            .Select(entry => new PackageModel { Id = entry.Key, Version = entry.Value })
+            .ToList();
+
+        var enriched = new List<DiscoveredActivity>(hits.Count);
+        foreach (var hit in hits) {
+            if (hit.PropertiesAreComplete) {
+                enriched.Add(hit);
+                continue;
+            }
+
+            var reflected = ActivitySchemaReflector.TryReadProperties(
+                packagesFolder,
+                packageModels,
+                targetFramework: null,
+                hit.FullTypeName);
+            if (reflected is { Count: > 1 } && reflected.Any(p => p.Kind == PropertyKind.Expression)) {
+                // A property surface is only treated as complete — able to reject an
+                // unknown key as a typo — once reflection has resolved at least one
+                // typed argument property. If the framework argument wrappers could
+                // not be resolved, the read surface may be missing real argument
+                // properties, so claiming completeness would reject a valid property;
+                // the sample stays lenient instead.
+                _logger.LogDebug("Reflected {Count} properties for {Activity}", reflected.Count, hit.Name);
+                enriched.Add(hit with { Properties = reflected, PropertiesAreComplete = true });
+            } else if (reflected is { Count: > 1 }) {
+                _logger.LogDebug(
+                    "Reflection for {Activity} resolved no typed argument (framework refs missing); keeping a lenient surface",
+                    hit.Name);
+                enriched.Add(hit with { Properties = reflected, PropertiesAreComplete = false });
+            } else {
+                _logger.LogDebug("Reflection unavailable for {Activity}; keeping the starter surface", hit.Name);
+                enriched.Add(hit);
+            }
+        }
+
+        return enriched;
     }
 
     private static ActivitySchema StampVersion(ActivitySchema schema, IReadOnlyDictionary<string, string> projectPackages) {

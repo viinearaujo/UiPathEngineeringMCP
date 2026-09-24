@@ -69,11 +69,21 @@ public sealed record PropertySchema(
     ArgumentDirection? Direction = null,
     bool IsContentProperty = false);
 
+/// <summary>
+/// One activity in the catalog. <paramref name="PropertiesAreComplete"/> says
+/// whether <paramref name="Properties"/> is complete enough that a property the
+/// schema does not list is a typo the validator rejects. It is true only when the
+/// surface was read from the activity's assemblies by reflection: a hand-written
+/// curated schema deliberately under-lists (a newer package may add properties)
+/// and a starter sample carries only non-default values, so both stay false and an
+/// unknown property is tolerated as a passthrough with a builder warning.
+/// </summary>
 public sealed record ActivitySchema(
     string Name, string Prefix, string XmlNamespace, bool IsContainer,
     IReadOnlyList<PropertySchema> Properties, bool Experimental = false,
     string? PackageId = null, string? PackageVersion = null, string? FullTypeName = null,
-    BodyDescriptor? Body = null, string? ElementName = null) {
+    BodyDescriptor? Body = null, string? ElementName = null,
+    bool PropertiesAreComplete = false) {
     /// <summary>
     /// The XML element local name to emit. Differs from <see cref="Name"/> only
     /// where Studio's toolbox label is not the emitted type: the "While",

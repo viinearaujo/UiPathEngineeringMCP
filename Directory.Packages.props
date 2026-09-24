@@ -9,6 +9,8 @@
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.0.0-preview.3" />
 
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+    <!-- Reflection over activity package assemblies without loading them (activity-schema enrichment). -->
+    <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="8.0.0" />
     <!-- MCP SDK 2.0.0-preview.3 requires 10.0.7 (NU1605 if lower). -->
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="8.0.2" />
