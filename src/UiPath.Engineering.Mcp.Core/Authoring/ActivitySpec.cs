@@ -11,6 +11,11 @@ public sealed class ActivitySpec {
     public List<ActivitySpec>? Default { get; set; }     // Switch only — default branch
     public List<ArgumentMappingSpec>? Arguments { get; set; } // InvokeWorkflowFile and InvokeCode only
     public List<string>? Imports { get; set; }           // root spec only — expression namespaces
+
+    // The workflow's own argument declarations, rendered as <x:Property> children
+    // of the root <x:Members>. Root spec only. Distinct from Arguments, which are
+    // the In/Out bindings of a single InvokeWorkflowFile / InvokeCode call.
+    public List<ArgumentSpec>? WorkflowArguments { get; set; }
 }
 
 public sealed class VariableSpec {
@@ -34,4 +39,12 @@ public sealed class ArgumentMappingSpec {
     public string Direction { get; set; } = "In"; // In, Out, InOut / In/Out
     public string Type { get; set; } = "String";
     public string? Value { get; set; }
+}
+
+// One workflow argument declaration: an <x:Property> member of the root
+// <x:Members>. Rendered as Type="InArgument(x:String)" (or Out/InOut).
+public sealed class ArgumentSpec {
+    public string Name { get; set; } = "";
+    public string Type { get; set; } = "String";
+    public string Direction { get; set; } = "In"; // In, Out, InOut / In/Out
 }

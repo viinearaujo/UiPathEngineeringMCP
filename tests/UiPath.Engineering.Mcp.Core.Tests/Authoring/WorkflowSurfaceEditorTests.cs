@@ -181,9 +181,10 @@ public class WorkflowSurfaceEditorTests {
         Assert.True(result.Success, result.Error);
         Assert.Contains("Name=\"greeting\"", result.UpdatedContent);
         Assert.DoesNotContain("Name=\"message\"", result.UpdatedContent);
-        // Expressions are not rewritten; the warning must say so.
+        // Expressions referencing the old name are rewritten, not left dangling.
+        Assert.Contains("[greeting]", result.UpdatedContent);
+        Assert.DoesNotContain("[message]", result.UpdatedContent);
         Assert.Contains(result.Warnings, w => w.Contains("message") && w.Contains("greeting"));
-        Assert.Contains("[message]", result.UpdatedContent);
     }
 
     [Fact]

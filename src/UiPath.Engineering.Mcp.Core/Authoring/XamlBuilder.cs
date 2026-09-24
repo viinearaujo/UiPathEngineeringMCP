@@ -100,6 +100,10 @@ public static class XamlBuilder {
 
             // The expression-language block precedes the body, matching the file
             // anatomy Studio writes (x:Members, language settings, imports, body).
+            if (renderer.Members(spec) is { } members) {
+                root.Add(members);
+            }
+
             if (renderer.LanguageBlock(spec) is { } languageBlock) {
                 root.Add(languageBlock);
             }
@@ -193,6 +197,33 @@ public static class XamlBuilder {
         internal List<ToolError> Validate(ActivitySpec spec) => SpecValidator.Validate(spec, _catalog, _settings);
 
         // ---- root-level blocks -------------------------------------------------
+
+        // <x:Members> with one <x:Property> per declared workflow argument. A
+        // spec-built workflow with no arguments renders no Members block (Studio
+        // emits an empty one; either is loadable).
+        internal XElement? Members(ActivitySpec spec) {
+            if (spec.WorkflowArguments is not { Count: > 0 }) {
+                return null;
+            }
+
+            var members = new XElement(X + "Members");
+            foreach (var argument in spec.WorkflowArguments) {
+                var token = TypeToken.Render(string.IsNullOrWhiteSpace(argument.Type) ? "String" : argument.Type);
+                UseAliasesIn(token);
+                members.Add(new XElement(X + "Property",
+                    new XAttribute("Name", argument.Name),
+                    new XAttribute("Type", $"{ArgumentWrapper(argument.Direction)}({token})")));
+            }
+
+            return members;
+        }
+
+        private static string ArgumentWrapper(string? direction) =>
+            (direction ?? "In").Trim().ToLowerInvariant() switch {
+                "out" => "OutArgument",
+                "inout" or "in/out" => "InOutArgument",
+                _ => "InArgument"
+            };
 
         // <TextExpression.NamespacesForImplementation> for a C# project — the only
         // place a C# XAML workflow declares its expression imports — and

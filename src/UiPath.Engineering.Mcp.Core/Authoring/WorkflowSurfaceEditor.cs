@@ -9,8 +9,8 @@ namespace UiPath.Engineering.Mcp.Core.Authoring;
 /// <Sequence.Variables> block, created when absent). Whitespace is preserved so
 /// untouched regions stay byte-identical; edits never throw, failures come back as
 /// <see cref="SurfaceEditResult.Error"/> with a typed <see cref="SurfaceEditResult.ErrorCode"/>.
-/// Rename updates the declaration only and reports a warning that expressions
-/// referencing the old name are not rewritten.
+/// Rename rewrites the declaration and every expression that references the old
+/// name; it reports how many expressions were updated.
 /// </summary>
 public static class WorkflowSurfaceEditor {
     public const string Add = "add";
@@ -56,6 +56,86 @@ public static class WorkflowSurfaceEditor {
         return normalizedKind == Variable
             ? EditVariable(doc, normalizedOperation!, name, type, newName, defaultValue)
             : EditArgument(doc, normalizedOperation!, name, type, direction, newName);
+    }
+
+    // TypeToken emits s:/sd: tokens for BCL/System.Data types; a document that never
+    // declared those aliases would not resolve them. After any edit, declare every
+    // alias the document's type tokens actually use.
+    private static void EnsureTypeAliases(XDocument doc) {
+        if (doc.Root is null) {
+            return;
+        }
+
+        var aliases = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var attribute in doc.Root.DescendantsAndSelf().SelectMany(e => e.Attributes())) {
+            if (attribute.IsNamespaceDeclaration) {
+                continue;
+            }
+
+            var value = attribute.Name.LocalName switch {
+                "TypeArguments" => attribute.Value,
+                "Type" => UnwrapArgumentWrapper(attribute.Value),
+                _ => null
+            };
+            if (value is null) {
+                continue;
+            }
+
+            foreach (var alias in TypeToken.AliasesIn(value)) {
+                aliases.Add(alias);
+            }
+        }
+
+        foreach (var alias in aliases) {
+            RegisterAlias(doc.Root, alias);
+        }
+    }
+
+    // "InArgument(x:String)" -> "x:String"; "x:String, Argument" is unchanged.
+    private static string UnwrapArgumentWrapper(string value) {
+        var open = value.IndexOf('(');
+        var close = value.LastIndexOf(')');
+        return open >= 0 && close > open
+            ? value[(open + 1)..close].Trim()
+            : value;
+    }
+
+    private static void RegisterAlias(XElement root, string alias) {
+        var declaration = XNamespace.Xmlns + alias;
+        if (root.Attribute(declaration) is not null) {
+            return;
+        }
+
+        var core = ExistingCoreAssembly(root);
+        var ns = alias switch {
+            "s" => $"clr-namespace:System;assembly={core}",
+            "sc" => $"clr-namespace:System.Collections;assembly={core}",
+            "scg" => $"clr-namespace:System.Collections.Generic;assembly={core}",
+            "sco" => $"clr-namespace:System.Collections.ObjectModel;assembly={core}",
+            "sd" => "clr-namespace:System.Data;assembly=System.Data",
+            _ => null
+        };
+        if (ns is not null) {
+            root.SetAttributeValue(declaration, ns);
+        }
+    }
+
+    // Prefer the assembly the document already uses for any clr-namespace: alias,
+    // so a Legacy (mscorlib) workflow is not given a modern System.Private.CoreLib
+    // declaration. Defaults to the modern assembly when none is present.
+    private static string ExistingCoreAssembly(XElement root) {
+        foreach (var attribute in root.Attributes()) {
+            if (!attribute.IsNamespaceDeclaration || !attribute.Value.StartsWith("clr-namespace:System;", StringComparison.Ordinal)) {
+                continue;
+            }
+
+            var assemblyIndex = attribute.Value.IndexOf("assembly=", StringComparison.Ordinal);
+            if (assemblyIndex >= 0) {
+                return attribute.Value[(assemblyIndex + "assembly=".Length)..];
+            }
+        }
+
+        return "System.Private.CoreLib";
     }
 
     private static SurfaceEditResult EditVariable(
@@ -106,7 +186,8 @@ public static class WorkflowSurfaceEditor {
                         ToolErrorCodes.DataDeclarationNotFound);
                 }
                 existing.SetAttributeValue("Name", newName);
-                return SurfaceEditResult.Ok(Serialize(doc), [RenameWarning("variable", name, newName)]);
+                var rewritten = RewriteReferences(doc, name, newName);
+                return SurfaceEditResult.Ok(Serialize(doc), [RenameWarning("variable", name, newName, rewritten)]);
         }
 
         return SurfaceEditResult.Ok(Serialize(doc), []);
@@ -162,7 +243,8 @@ public static class WorkflowSurfaceEditor {
                         ToolErrorCodes.DataDeclarationNotFound);
                 }
                 existing.SetAttributeValue("Name", newName);
-                return SurfaceEditResult.Ok(Serialize(doc), [RenameWarning("argument", name, newName)]);
+                var rewritten = RewriteReferences(doc, name, newName);
+                return SurfaceEditResult.Ok(Serialize(doc), [RenameWarning("argument", name, newName, rewritten)]);
         }
 
         return SurfaceEditResult.Ok(Serialize(doc), []);
@@ -238,11 +320,146 @@ public static class WorkflowSurfaceEditor {
         return string.Empty;
     }
 
-    private static string RenameWarning(string kind, string oldName, string newName) =>
-        $"Rename updated the {kind} declaration only ('{oldName}' → '{newName}'); " +
-        $"expressions referencing '{oldName}' are not rewritten — update them yourself.";
+    private static string RenameWarning(string kind, string oldName, string newName, int rewrittenExpressions) =>
+        rewrittenExpressions > 0
+            ? $"Rename updated the {kind} declaration ('{oldName}' → '{newName}') and rewrote {rewrittenExpressions} expression reference(s) to it."
+            : $"Rename updated the {kind} declaration ('{oldName}' → '{newName}'). No expression references to '{oldName}' were found.";
+
+    // Rewrites whole-word references to a renamed declaration inside every
+    // expression in the document: [bracket] attribute values, ExpressionText
+    // attributes, Variable Default, and the typed argument/value elements
+    // (VisualBasicValue/Reference, CSharpValue/Reference, bare InArgument text).
+    // String literals are left alone. Returns the number of expressions changed.
+    private static int RewriteReferences(XDocument doc, string oldName, string newName) {
+        if (doc.Root is null || !IsIdentifier(oldName)) {
+            return 0;
+        }
+
+        var count = 0;
+        foreach (var element in doc.Root.DescendantsAndSelf()) {
+            count += RewriteAttributeExpressions(element, oldName, newName);
+            count += RewriteElementExpression(element, oldName, newName);
+        }
+
+        return count;
+    }
+
+    private static int RewriteAttributeExpressions(XElement element, string oldName, string newName) {
+        var count = 0;
+        foreach (var attribute in element.Attributes()) {
+            if (attribute.IsNamespaceDeclaration) {
+                continue;
+            }
+
+            var local = attribute.Name.LocalName;
+            var isExpression =
+                local.Equals("ExpressionText", StringComparison.Ordinal)
+                || (local.Equals("Default", StringComparison.Ordinal)
+                    && element.Name.LocalName.Equals("Variable", StringComparison.Ordinal))
+                || IsBracketWrapped(attribute.Value);
+            if (!isExpression) {
+                continue;
+            }
+
+            var rewritten = ReplaceIdentifiers(attribute.Value, oldName, newName);
+            if (!string.Equals(rewritten, attribute.Value, StringComparison.Ordinal)) {
+                attribute.Value = rewritten;
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static int RewriteElementExpression(XElement element, string oldName, string newName) {
+        var local = element.Name.LocalName;
+        if (local is "VisualBasicValue" or "VisualBasicReference" or "CSharpValue" or "CSharpReference") {
+            var rewritten = ReplaceIdentifiers(element.Value, oldName, newName);
+            if (!string.Equals(rewritten, element.Value, StringComparison.Ordinal)) {
+                element.Value = rewritten;
+                return 1;
+            }
+
+            return 0;
+        }
+
+        // A bare InArgument/OutArgument/InOutArgument holds bracket text; one with
+        // a child expression element is handled by that child instead.
+        if (local is "InArgument" or "OutArgument" or "InOutArgument"
+            && !element.HasElements && IsBracketWrapped(element.Value)) {
+            var rewritten = ReplaceIdentifiers(element.Value, oldName, newName);
+            if (!string.Equals(rewritten, element.Value, StringComparison.Ordinal)) {
+                element.Value = rewritten;
+                return 1;
+            }
+        }
+
+        return 0;
+    }
+
+    // Replaces whole-word occurrences of the declaration name, skipping quoted
+    // string literals and member accesses (x.oldName).
+    private static string ReplaceIdentifiers(string text, string oldName, string newName) {
+        var builder = new System.Text.StringBuilder(text.Length);
+        var i = 0;
+        while (i < text.Length) {
+            var c = text[i];
+            if (c == '"') {
+                builder.Append(c);
+                i++;
+                while (i < text.Length) {
+                    builder.Append(text[i]);
+                    if (text[i] == '\\' && i + 1 < text.Length) {
+                        builder.Append(text[i + 1]);
+                        i += 2;
+                        continue;
+                    }
+
+                    if (text[i] == '"') {
+                        i++;
+                        break;
+                    }
+
+                    i++;
+                }
+
+                continue;
+            }
+
+            if (char.IsLetter(c) || c == '_') {
+                var start = i;
+                while (i < text.Length && (char.IsLetterOrDigit(text[i]) || text[i] == '_')) {
+                    i++;
+                }
+
+                var token = text[start..i];
+                var memberAccess = start > 0 && text[start - 1] == '.';
+                builder.Append(!memberAccess && token.Equals(oldName, StringComparison.Ordinal) ? newName : token);
+                continue;
+            }
+
+            builder.Append(c);
+            i++;
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool IsBracketWrapped(string? value) {
+        var trimmed = value?.Trim();
+        return trimmed is { Length: >= 2 } && trimmed.StartsWith('[') && trimmed.EndsWith(']');
+    }
+
+    private static bool IsIdentifier(string value) {
+        if (string.IsNullOrEmpty(value) || (!char.IsLetter(value[0]) && value[0] != '_')) {
+            return false;
+        }
+
+        return value.All(ch => char.IsLetterOrDigit(ch) || ch == '_');
+    }
 
     private static string Serialize(XDocument doc) {
+        EnsureTypeAliases(doc);
         var settings = new XmlWriterSettings {
             Indent = false,
             OmitXmlDeclaration = doc.Declaration is null,

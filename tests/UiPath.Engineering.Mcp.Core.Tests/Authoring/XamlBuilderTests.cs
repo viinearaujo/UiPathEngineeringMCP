@@ -176,4 +176,47 @@ public class XamlBuilderTests {
         Assert.Contains("<Sequence.Variables>", result.Xaml);
         Assert.Contains("<Variable x:TypeArguments=\"x:Int32\" Name=\"n\" />", result.Xaml);
     }
+
+    [Fact]
+    public void RenderWorkflowFile_WorkflowArguments_RenderMembersProperties() {
+        var spec = new ActivitySpec {
+            Name = "Sequence",
+            WorkflowArguments = [
+                new ArgumentSpec { Name = "in_Path", Type = "String", Direction = "In" },
+                new ArgumentSpec { Name = "out_Ok", Type = "Boolean", Direction = "Out" },
+                new ArgumentSpec { Name = "io_Table", Type = "DataTable", Direction = "InOut" }
+            ],
+            Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"hi\"" } }]
+        };
+        var result = XamlBuilder.RenderWorkflowFile(spec, "TestWorkflow");
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<x:Members>", result.Xaml);
+        Assert.Contains("<x:Property Name=\"in_Path\" Type=\"InArgument(x:String)\" />", result.Xaml);
+        Assert.Contains("<x:Property Name=\"out_Ok\" Type=\"OutArgument(x:Boolean)\" />", result.Xaml);
+        Assert.Contains("<x:Property Name=\"io_Table\" Type=\"InOutArgument(sd:DataTable)\" />", result.Xaml);
+        Assert.Contains("xmlns:sd=", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderWorkflowFile_NoWorkflowArguments_OmitsMembers() {
+        var spec = new ActivitySpec {
+            Name = "Sequence",
+            Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"hi\"" } }]
+        };
+        var result = XamlBuilder.RenderWorkflowFile(spec, "TestWorkflow");
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.DoesNotContain("<x:Members>", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderWorkflowFile_WorkflowArgumentsOnNestedSpec_IsRejected() {
+        var spec = new ActivitySpec {
+            Name = "Sequence",
+            Children = [new ActivitySpec {
+                Name = "Sequence",
+                WorkflowArguments = [new ArgumentSpec { Name = "in_X", Type = "String" }]
+            }]
+        };
+        Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
+    }
 }

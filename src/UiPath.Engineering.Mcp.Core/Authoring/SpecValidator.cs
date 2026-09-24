@@ -150,6 +150,40 @@ public static class SpecValidator {
                 "Move the 'imports' list to the root spec."));
         }
 
+        if (spec.WorkflowArguments is { Count: > 0 } && !isRoot) {
+            errors.Add(new ToolError(
+                ToolErrorCodes.SpecInvalidNesting,
+                $"Activity \"{schema.Name}\" at {path} declares workflowArguments, which are only allowed on the root spec.",
+                "Move the 'workflowArguments' list to the root spec."));
+        }
+
+        if (spec.WorkflowArguments is not null) {
+            for (var i = 0; i < spec.WorkflowArguments.Count; i++) {
+                var argument = spec.WorkflowArguments[i];
+                if (string.IsNullOrWhiteSpace(argument.Name)) {
+                    errors.Add(new ToolError(
+                        ToolErrorCodes.SpecMissingRequiredProperty,
+                        $"Workflow argument at {path}.workflowArguments[{i}] is missing required property \"name\".",
+                        "Set \"name\" to the argument name, e.g. \"in_FilePath\"."));
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(argument.Type)) {
+                    errors.Add(new ToolError(
+                        ToolErrorCodes.SpecMissingRequiredProperty,
+                        $"Workflow argument \"{argument.Name}\" at {path}.workflowArguments[{i}] is missing required property \"type\".",
+                        "Set \"type\" to the argument type, e.g. \"String\" or \"DataTable\"."));
+                }
+
+                if (!IsKnownDirection(argument.Direction)) {
+                    errors.Add(new ToolError(
+                        ToolErrorCodes.SpecValueFormMismatch,
+                        $"Workflow argument \"{argument.Name}\" at {path}.workflowArguments[{i}] has direction \"{argument.Direction}\".",
+                        "Use direction \"In\", \"Out\", or \"InOut\"."));
+                }
+            }
+        }
+
         if (spec.Catches is { Count: > 0 } && schema.Name != "TryCatch") {
             errors.Add(new ToolError(
                 ToolErrorCodes.SpecInvalidNesting,
