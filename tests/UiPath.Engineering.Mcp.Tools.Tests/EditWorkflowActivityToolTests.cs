@@ -88,10 +88,14 @@ public class XamlActivityEditorTests {
             fragment: "<ui:LogMessage DisplayName=\"End\" Message=\"done\" />");
 
         Assert.True(result.Success, result.Error);
-        Assert.Contains(
-            "<ui:LogMessage DisplayName=\"End\" Message=\"done\" xmlns:ui=\"http://schemas.uipath.com/workflow/activities\" />",
-            result.UpdatedContent);
+        // Attribute order is not pinned (the ViewState pass adds attributes); the
+        // inserted element must carry the ui: declaration so the prefix resolves.
+        Assert.Contains("xmlns:ui=\"http://schemas.uipath.com/workflow/activities\"", result.UpdatedContent);
         Assert.DoesNotContain("xmlns=\"http://schemas.uipath.com/workflow/activities\"", result.UpdatedContent);
+        var doc = System.Xml.Linq.XDocument.Parse(result.UpdatedContent!);
+        var inserted = doc.Descendants().Single(e => e.Name.LocalName == "LogMessage");
+        Assert.Equal("http://schemas.uipath.com/workflow/activities", inserted.Name.NamespaceName);
+        Assert.Equal("End", inserted.Attribute("DisplayName")!.Value);
     }
 
     [Fact]

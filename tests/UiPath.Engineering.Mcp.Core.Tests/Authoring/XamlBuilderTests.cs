@@ -53,9 +53,12 @@ public class XamlBuilderTests {
         var result = XamlBuilder.RenderWorkflowFile(spec, "TestWorkflow");
         Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
         Assert.Contains("x:Class=\"TestWorkflow\"", result.Xaml);
-        Assert.Contains("<TryCatch>", result.Xaml);
+        Assert.Contains("<TryCatch ", result.Xaml);
         Assert.Contains("<TryCatch.Catches>", result.Xaml);
         Assert.Contains("<Catch x:TypeArguments=\"System.Exception\">", result.Xaml);
+        // Every activity carries the designer handle ValidateDiagnosticMapper reads.
+        Assert.Contains("sap2010:WorkflowViewState.IdRef=\"TryCatch_1\"", result.Xaml);
+        Assert.Contains("sap:VirtualizedContainerService.HintSize=", result.Xaml);
         // round-trip is asserted inside RenderWorkflowFile itself; reaching Success proves it
     }
 

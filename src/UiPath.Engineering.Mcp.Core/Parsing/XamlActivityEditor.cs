@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using UiPath.Engineering.Mcp.Core.Authoring;
 
 namespace UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -136,6 +137,12 @@ public static class XamlActivityEditor {
                 if (nodes is null) {
                     return XamlEditResult.Failure(fragmentError!);
                 }
+
+                // Designer state: assign IdRef/HintSize/ViewState seeded from the
+                // target document, so an inserted activity continues its type's
+                // counter instead of colliding with an existing one. The fragment
+                // re-declares the ViewState prefixes itself.
+                XamlViewStateEmitter.ApplyToFragment(nodes, doc);
                 if (operation == Insert) {
                     InsertInto(target.Element, nodes, position == First);
                 } else {

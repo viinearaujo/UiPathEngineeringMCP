@@ -111,7 +111,13 @@ public static class XamlBuilder {
             root.Add(renderer.Element(effective, includeVariables: true));
             renderer.DeclareNamespaces(root, effective);
 
-            var xaml = root.ToString();
+            // Designer state: IdRef is Studio's stable activity handle (and what
+            // ValidateDiagnosticMapper matches), HintSize sizes the node.
+            var document = new XDocument(root);
+            XamlViewStateEmitter.Apply(document, settings?.CoreAssembly);
+            DeclareViewStateNamespace(document.Root!, settings?.CoreAssembly);
+
+            var xaml = document.Root!.ToString();
 
             var parsed = new XamlWorkflowParser().Parse(xamlClassName + ".xaml", xamlClassName + ".xaml", xaml);
             if (parsed.HasParseError) {
@@ -131,6 +137,16 @@ public static class XamlBuilder {
         ToolErrorCodes.XamlRenderFailed,
         $"Failed to render the spec as XAML: {ex.Message}",
         "Fix the offending property values and retry; run validate_activity_spec for detailed property guidance.");
+
+    // ViewState binds scg: and x:, so the root must declare scg:. sap/sap2010 are
+    // already declared on the <Activity> root; scg: is not.
+    private static void DeclareViewStateNamespace(XElement root, string? coreAssembly) {
+        if (root.Attribute(XNamespace.Xmlns + "scg") is null) {
+            var core = coreAssembly ?? ProjectXamlSettings.ModernCoreAssembly;
+            root.Add(new XAttribute(XNamespace.Xmlns + "scg",
+                $"clr-namespace:System.Collections.Generic;assembly={core}"));
+        }
+    }
 
     private static ActivitySpec WithoutVariables(ActivitySpec spec) => new() {
         Name = spec.Name,
