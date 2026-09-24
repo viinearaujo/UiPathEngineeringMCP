@@ -131,6 +131,140 @@ public class XamlActivityLocatorTests {
     }
 
     [Fact]
+    public void Locate_PreservesSlotIdentityForBranchBodies() {
+        var activities = Locate(MixedXaml);
+
+        // Log yes sits in If.Then, so its slot is "Then"; its structural ID and
+        // depth are unchanged (the slot is additive).
+        var logYes = activities.Single(a => a.Element.Attribute("DisplayName")?.Value == "Log yes");
+        Assert.Equal("Then", logYes.Slot);
+        Assert.Equal("sequence.1/if.1/logmessage.1", logYes.Id);
+        // Log done is a plain child of the Sequence, so it has no slot.
+        Assert.Null(activities.Single(a => a.Element.Attribute("DisplayName")?.Value == "Log done").Slot);
+    }
+
+    [Fact]
+    public void Locate_DistinguishesWrappedFromBareThenBranch() {
+        const string bare = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities">
+              <If>
+                <If.Then>
+                  <ui:LogMessage DisplayName="Log then" />
+                </If.Then>
+              </If>
+            </Activity>
+            """;
+        const string wrapped = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities">
+              <If>
+                <If.Then>
+                  <Sequence DisplayName="Then">
+                    <ui:LogMessage DisplayName="Log then" />
+                  </Sequence>
+                </If.Then>
+              </If>
+            </Activity>
+            """;
+
+        var bareThen = Locate(bare).Single(a => a.Element.Attribute("DisplayName")?.Value == "Log then");
+        var wrappedThen = Locate(wrapped).Single(a => a.Element.Attribute("DisplayName")?.Value == "Log then");
+
+        // The bare LogMessage is the Then child; the wrapped one sits inside a
+        // Sequence, so it has no slot and a deeper depth.
+        Assert.Equal("Then", bareThen.Slot);
+        Assert.Null(wrappedThen.Slot);
+        Assert.Equal(bareThen.Depth, wrappedThen.Depth - 1);
+    }
+
+    [Fact]
+    public void Locate_ReportsTryCatchAndForEachSlots() {
+        const string xaml = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <TryCatch>
+                <TryCatch.Try>
+                  <Sequence DisplayName="Try">
+                    <ui:LogMessage DisplayName="In try" />
+                  </Sequence>
+                </TryCatch.Try>
+                <TryCatch.Catches>
+                  <Catch x:TypeArguments="s:Exception">
+                    <ActivityAction x:TypeArguments="s:Exception">
+                      <ActivityAction.Argument>
+                        <DelegateInArgument x:TypeArguments="s:Exception" Name="ex" />
+                      </ActivityAction.Argument>
+                      <Sequence DisplayName="Catch">
+                        <ui:LogMessage DisplayName="In catch" />
+                      </Sequence>
+                    </ActivityAction>
+                  </Catch>
+                </TryCatch.Catches>
+              </TryCatch>
+            </Activity>
+            """;
+
+        var activities = Locate(xaml);
+
+        var trySeq = activities.Single(a => a.Element.Attribute("DisplayName")?.Value == "Try");
+        Assert.Equal("Try", trySeq.Slot);
+        // The Catch action's Sequence is the Catch body, carried through the
+        // transparent ActivityAction wrapper.
+        var catchSeq = activities.Single(a => a.Element.Attribute("DisplayName")?.Value == "Catch");
+        Assert.Equal("Catch", catchSeq.Slot);
+    }
+
+    [Fact]
+    public void Locate_ReportsForEachBodySlot() {
+        const string xaml = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <ui:ForEach x:TypeArguments="x:String">
+                <ui:ForEach.Body>
+                  <ActivityAction x:TypeArguments="x:String">
+                    <Sequence DisplayName="Body">
+                      <ui:LogMessage DisplayName="In body" />
+                    </Sequence>
+                  </ActivityAction>
+                </ui:ForEach.Body>
+              </ui:ForEach>
+            </Activity>
+            """;
+
+        var activities = Locate(xaml);
+
+        Assert.Equal("Body", activities.Single(a => a.Element.Attribute("DisplayName")?.Value == "Body").Slot);
+    }
+
+    [Fact]
+    public void Locate_ReportsSwitchCaseSlots() {
+        const string xaml = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <Switch x:TypeArguments="x:Int32">
+                <Sequence x:Key="1" DisplayName="Case one">
+                  <ui:LogMessage DisplayName="In case" />
+                </Sequence>
+                <Switch.Default>
+                  <Sequence DisplayName="Default">
+                    <ui:LogMessage DisplayName="In default" />
+                  </Sequence>
+                </Switch.Default>
+              </Switch>
+            </Activity>
+            """;
+
+        var activities = Locate(xaml);
+
+        Assert.Equal("Case:1", activities.Single(a => a.Element.Attribute("DisplayName")?.Value == "Case one").Slot);
+        Assert.Equal("Default", activities.Single(a => a.Element.Attribute("DisplayName")?.Value == "Default").Slot);
+    }
+
+    [Fact]
     public void Locate_AssignsPreOrderDocumentOrderIndex() {
         var activities = Locate(MixedXaml);
 

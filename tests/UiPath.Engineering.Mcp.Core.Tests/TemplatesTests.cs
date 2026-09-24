@@ -14,6 +14,38 @@ public class TemplatesTests {
         Assert.NotNull(doc.Root!.Element(XName.Get("Members", "http://schemas.microsoft.com/winfx/2006/xaml")));
     }
 
+    [Fact]
+    public void BlankWorkflow_RootSequenceDisplayNameIsTheFileNameNotTheClassName() {
+        var xaml = XamlWorkflowTemplates.BlankWorkflow("Workflows_SendEmail");
+
+        // The canvas must not show "Workflows_SendEmail".
+        Assert.Contains("<Sequence DisplayName=\"SendEmail\"", xaml);
+        Assert.DoesNotContain("DisplayName=\"Workflows_SendEmail\"", xaml);
+    }
+
+    [Fact]
+    public void BlankWorkflow_AcceptsAnExplicitDisplayName() {
+        var xaml = XamlWorkflowTemplates.BlankWorkflow("Workflows_SendEmail", "Send the invoice email");
+
+        Assert.Contains("<Sequence DisplayName=\"Send the invoice email\"", xaml);
+    }
+
+    [Fact]
+    public void BlankWorkflow_IncludesTheExpressionImportBlock() {
+        var xaml = XamlWorkflowTemplates.BlankWorkflow("Main");
+
+        Assert.Contains("TextExpression.NamespacesForImplementation", xaml);
+        Assert.Contains("<x:String>UiPath.Core.Activities</x:String>", xaml);
+    }
+
+    [Theory]
+    [InlineData("Workflows_SendEmail", "SendEmail")]
+    [InlineData("SendEmail", "SendEmail")]
+    [InlineData("Workflows_Nested_SendEmail", "SendEmail")]
+    public void DefaultDisplayName_UsesTheLastSegment(string xamlClassName, string expected) {
+        Assert.Equal(expected, XamlWorkflowTemplates.DefaultDisplayName(xamlClassName));
+    }
+
     [Theory]
     [InlineData("SendEmail.xaml", "SendEmail")]
     [InlineData("Workflows/SendEmail.xaml", "Workflows_SendEmail")]

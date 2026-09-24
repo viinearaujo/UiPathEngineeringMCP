@@ -124,7 +124,8 @@ public sealed class XamlWorkflowParser {
                 Depth = located.Depth,
                 Order = located.Order,
                 Line = located.Line,
-                Annotation = ReadAnnotation(element)
+                Annotation = ReadAnnotation(element),
+                Slot = located.Slot
             };
             model.Activities.Add(activity);
             byId[located.Id] = activity;

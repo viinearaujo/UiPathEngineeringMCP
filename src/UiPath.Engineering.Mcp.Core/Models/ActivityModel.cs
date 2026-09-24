@@ -11,6 +11,13 @@ public sealed class ActivityModel {
     public string Type { get; init; } = string.Empty;
     /// <summary>Studio annotation (<c>sap2010:Annotation.AnnotationText</c>) on this activity, if any.</summary>
     public string? Annotation { get; init; }
+    /// <summary>
+    /// The attached-property slot this activity sits in when its parent is a
+    /// branch container (Then/Else, Try/Catch/Finally, Body, Default, a Switch
+    /// case). Null for a plain child list. Lets Rule 24 wrap detection tell a
+    /// wrapped branch from a bare one without changing the structural-path ID.
+    /// </summary>
+    public string? Slot { get; init; }
     public int Depth { get; init; }
     public int Order { get; init; }
     public int Line { get; init; }
