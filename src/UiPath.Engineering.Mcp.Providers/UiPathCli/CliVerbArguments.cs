@@ -12,30 +12,74 @@ public static class CliVerbArguments {
     public const string RpaVerb = "rpa";
 
     /// <summary>Accepted <c>--scope</c> values for the Workflow Analyzer rule list.</summary>
-    public static readonly string[] AnalyzerRuleScopes = ["Activity", "Workflow", "Project", "Coded Workflow"];
+    /// <remarks>
+    /// The per-value constants exist so tool parameters can reference them from
+    /// <c>[AllowedValues]</c>, which requires compile-time constants.
+    /// </remarks>
+    public const string AnalyzerScopeActivity = "Activity";
+    public const string AnalyzerScopeWorkflow = "Workflow";
+    public const string AnalyzerScopeProject = "Project";
+    public const string AnalyzerScopeCodedWorkflow = "Coded Workflow";
+
+    public static readonly string[] AnalyzerRuleScopes =
+    [
+        AnalyzerScopeActivity,
+        AnalyzerScopeWorkflow,
+        AnalyzerScopeProject,
+        AnalyzerScopeCodedWorkflow
+    ];
 
     /// <summary>Accepted <c>--log-level</c> values for the run/debug verbs.</summary>
-    public static readonly string[] RunLogLevels = ["Verbose", "Trace", "Information", "Warning", "Error", "Critical"];
+    public const string LogLevelVerbose = "Verbose";
+    public const string LogLevelTrace = "Trace";
+    public const string LogLevelInformation = "Information";
+    public const string LogLevelWarning = "Warning";
+    public const string LogLevelError = "Error";
+    public const string LogLevelCritical = "Critical";
+
+    public static readonly string[] RunLogLevels =
+    [
+        LogLevelVerbose,
+        LogLevelTrace,
+        LogLevelInformation,
+        LogLevelWarning,
+        LogLevelError,
+        LogLevelCritical
+    ];
 
     /// <summary>Accepted <c>--profiling-mode</c> values for the run/debug start verbs.</summary>
-    public static readonly string[] ProfilingModes = ["endOfRun", "stream"];
+    public const string ProfilingModeEndOfRun = "endOfRun";
+    public const string ProfilingModeStream = "stream";
+
+    public static readonly string[] ProfilingModes = [ProfilingModeEndOfRun, ProfilingModeStream];
 
     /// <summary>
     /// Mid-session debug commands that take <c>--wait-timeout-seconds</c> and return at the next
     /// stable state carrying DebugState/DebugDetails.
     /// </summary>
+    public const string DebugStateCommand = "state";
+    public const string DebugStepOverCommand = "step-over";
+    public const string DebugStepIntoCommand = "step-into";
+    public const string DebugStepOutCommand = "step-out";
+    public const string DebugContinueCommand = "continue";
+    public const string DebugContinueRetryCommand = "continue-retry";
+    public const string DebugContinueIgnoreCommand = "continue-ignore";
+    public const string DebugResumeCommand = "resume";
+    public const string DebugBreakCommand = "break";
+    public const string DebugRestartFromTopCommand = "restart-from-top";
+
     public static readonly string[] DebugSessionCommands =
     [
-        "state",
-        "step-over",
-        "step-into",
-        "step-out",
-        "continue",
-        "continue-retry",
-        "continue-ignore",
-        "resume",
-        "break",
-        "restart-from-top"
+        DebugStateCommand,
+        DebugStepOverCommand,
+        DebugStepIntoCommand,
+        DebugStepOutCommand,
+        DebugContinueCommand,
+        DebugContinueRetryCommand,
+        DebugContinueIgnoreCommand,
+        DebugResumeCommand,
+        DebugBreakCommand,
+        DebugRestartFromTopCommand
     ];
 
     /// <summary>

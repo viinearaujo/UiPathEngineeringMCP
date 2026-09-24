@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -27,7 +28,8 @@ public sealed class GetObjectRepositoryTool {
     [McpServerTool(UseStructuredContent = true), Description("Reads a UiPath project's Object Repository — the saved hierarchy of applications → screens → elements (selectors/targets) that UI Automation activities bind to — via the CLI read verbs (uip rpa get-object-repository / get-library-object-repository). Read this BEFORE authoring UI Automation activities so you reuse an existing screen/element by name+reference instead of emitting a placeholder selector with a TODO Indicate marker. source=project (default) returns the project's own entries; entries inherited from referenced libraries are excluded. source=library reads the Object Repository out of one or more library .nupkg files (pass libraryPaths), grouped by library. Requires an open project (Studio IPC). Each node carries name, type (App/Screen/Element), taxonomyType, reference, and a dotted path. Next: find_activity.")]
     public async Task<ToolResult> GetObjectRepository(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
-        [Description("Which repository to read: project (the project's own entries) or library (entries exposed by referenced library .nupkg files).")] string source = "project",
+        [Description("Which repository to read: project (the project's own entries) or library (entries exposed by referenced library .nupkg files).")]
+        [AllowedValues(ProjectSource, LibrarySource)] string source = ProjectSource,
         [Description("For source=library: absolute path(s) to the library .nupkg file(s). Passed as ONE comma-separated value; avoid paths containing commas. Must be inside Projects:AllowedRoots.")] string? libraryPaths = null,
         [Description("Optional case-insensitive substring to filter nodes by name (matches apps, screens, and elements).")] string? query = null,
         [Description("Optional maximum tree depth to return (0 = unlimited, default). Set to 1 for just apps, 2 for apps+screens.")] int? maxDepth = null,

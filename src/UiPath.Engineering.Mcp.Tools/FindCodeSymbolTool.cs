@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -21,7 +22,8 @@ public sealed class FindCodeSymbolTool {
     public async Task<ToolResult> FindCodeSymbol(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Exact symbol name to find, e.g. 'ProcessTransaction'.")] string symbol,
-        [Description("Optional kind filter: method, property, field, class, interface.")] string? kind = null,
+        [Description("Optional kind filter: method, property, field, class, interface.")]
+        [AllowedValues("method", "property", "field", "class", "interface")] string? kind = null,
         CancellationToken cancellationToken = default) {
         var sw = Stopwatch.StartNew();
 

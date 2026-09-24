@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -20,7 +21,8 @@ public sealed class AnalyzeProjectTool {
     [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project and returns structured metadata. Default detail is 'summary' (counts + workflow index, coded-file kind workflow/test/source, no activity trees). Pass detail='full' to page complete workflow models; pass workflowFile to load one workflow fully. Next: get_implementation_plan.")]
     public async Task<ToolResult> AnalyzeProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
-        [Description("summary (default) or full.")] string detail = "summary",
+        [Description("summary (default) or full.")]
+        [AllowedValues(ProjectAnalysisView.DetailSummary, ProjectAnalysisView.DetailFull)] string detail = "summary",
         [Description("1-based page of workflows when detail=full.")] int page = 1,
         [Description("Workflows per page when detail=full (1-50, default 20).")] int pageSize = 20,
         [Description("Optional workflow file name to return that workflow's full model.")] string? workflowFile = null,

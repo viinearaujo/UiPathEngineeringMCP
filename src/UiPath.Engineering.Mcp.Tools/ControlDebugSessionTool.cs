@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -28,15 +29,37 @@ public sealed class ControlDebugSessionTool {
     [McpServerTool(UseStructuredContent = true), Description("Drives ONE UiPath debug session (uip rpa debug start|state|step-*|continue*|resume|break|restart-from-top|set-breakpoints, plus execution cancel) and returns DebugState, DebugDetails, and the verdict. EXECUTES ARBITRARY AUTOMATION, so it is refused unless the server operator set UiPathCli:EnableExecution=true. Prefer this over run_workflow for UI automation: the app is preserved for selector repair on error. READ DebugState BEFORE HasErrors — a Suspended session has an awaiting exception while HasErrors is still false, and Paused means a breakpoint was hit with the current activity and locals in debugDetails. Every mid-session command returns at the next stable state (Paused, Suspended, Running when the wait timed out, or Completed). command=start needs filePath; breakpoints target activities by their sap2010:WorkflowViewState.IdRef (workflowFile=Main.xaml,activityIdRef=Assign_1). command=cancel ends the active run or session — always cancel when done. Pass profiling=true on start to surface profilingOutputDirectory (the .uistat files and screenshots). Next: validate_project.")]
     public async Task<ToolResult> ControlDebugSession(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
-        [Description("Debug command: start, state, step-over, step-into, step-out, continue, continue-retry, continue-ignore, resume, break, restart-from-top, set-breakpoints, or cancel.")] string command,
+        [Description("Debug command: start, state, step-over, step-into, step-out, continue, continue-retry, continue-ignore, resume, break, restart-from-top, set-breakpoints, or cancel.")]
+        [AllowedValues(
+            StartCommand,
+            CliVerbArguments.DebugStateCommand,
+            CliVerbArguments.DebugStepOverCommand,
+            CliVerbArguments.DebugStepIntoCommand,
+            CliVerbArguments.DebugStepOutCommand,
+            CliVerbArguments.DebugContinueCommand,
+            CliVerbArguments.DebugContinueRetryCommand,
+            CliVerbArguments.DebugContinueIgnoreCommand,
+            CliVerbArguments.DebugResumeCommand,
+            CliVerbArguments.DebugBreakCommand,
+            CliVerbArguments.DebugRestartFromTopCommand,
+            SetBreakpointsCommand,
+            CliVerbArguments.CancelCommand)] string command,
         [Description("For command=start: workflow or coded file to debug, relative to the project root, e.g. 'Main.xaml'.")] string? filePath = null,
         [Description("For command=start: repeatable input arguments ('name=John', 'retries:=3', 'payload=@file.json'). Values containing double quotes are rejected — use key=@file.")] List<string>? inputArguments = null,
         [Description("For command=start or set-breakpoints: repeatable breakpoints as comma-joined key=value items, e.g. 'workflowFile=Main.xaml,activityIdRef=Assign_1' or with condition/hitCount/enabled. Replaces the whole set for set-breakpoints.")] List<string>? breakpoints = null,
         [Description("For mid-session commands: maximum seconds to wait for the next stable state before returning DebugState 'Running' (default 120, 0 for an instant probe on command=state).")] int? waitTimeoutSeconds = null,
-        [Description("For command=start: minimum workflow log level (Verbose, Trace, Information, Warning, Error, Critical).")] string? logLevel = null,
+        [Description("For command=start: minimum workflow log level (Verbose, Trace, Information, Warning, Error, Critical).")]
+        [AllowedValues(
+            CliVerbArguments.LogLevelVerbose,
+            CliVerbArguments.LogLevelTrace,
+            CliVerbArguments.LogLevelInformation,
+            CliVerbArguments.LogLevelWarning,
+            CliVerbArguments.LogLevelError,
+            CliVerbArguments.LogLevelCritical)] string? logLevel = null,
         [Description("For command=start: skip validation and build, assuming the project was already built.")] bool skipBuild = false,
         [Description("For command=start: collect per-activity profiling and return profilingOutputDirectory (.uistat files and screenshots). Requires a Studio Develop profile with EnableProfiling.")] bool profiling = false,
-        [Description("For command=start: profiling delivery mode, endOfRun (default) or stream.")] string? profilingMode = null,
+        [Description("For command=start: profiling delivery mode, endOfRun (default) or stream.")]
+        [AllowedValues(CliVerbArguments.ProfilingModeEndOfRun, CliVerbArguments.ProfilingModeStream)] string? profilingMode = null,
         [Description("Include the workflow's log entries in the response (default false). Logs are diagnostic context only — never a verdict.")] bool includeLogEntries = false,
         [Description("Optional CLI timeout in seconds (default 300, max 3600). Must exceed waitTimeoutSeconds by at least 30s or the CLI is killed before it can cancel cleanly.")] int? timeoutSeconds = null,
         CancellationToken cancellationToken = default) {

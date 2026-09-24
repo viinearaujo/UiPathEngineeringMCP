@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
@@ -22,8 +23,10 @@ public sealed class SearchCodebaseTool {
     public async Task<ToolResult> SearchCodebase(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Case-insensitive substring to search for, e.g. 'queue'.")] string query,
-        [Description("Search mode: text, symbol, activity, or workflow.")] string mode,
-        [Description("Optional kind filter for symbol mode: method, property, field, class, interface.")] string? kind = null,
+        [Description("Search mode: text, symbol, activity, or workflow.")]
+        [AllowedValues("text", "symbol", "activity", "workflow")] string mode,
+        [Description("Optional kind filter for symbol mode: method, property, field, class, interface.")]
+        [AllowedValues("method", "property", "field", "class", "interface")] string? kind = null,
         CancellationToken cancellationToken = default) {
         var sw = Stopwatch.StartNew();
 

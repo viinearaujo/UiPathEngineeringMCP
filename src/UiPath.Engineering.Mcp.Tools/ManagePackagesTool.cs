@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
@@ -28,7 +29,8 @@ public sealed class ManagePackagesTool {
     [McpServerTool(UseStructuredContent = true), Description("Manages the project's NuGet dependencies through the UiPath CLI package verbs — the canonical path (uip rpa packages install|versions|inspect). Do NOT hand-edit project.json to add a dependency: there is no add-dependency verb, and patch_project_json(upsert_dependency) only rewrites the JSON without restoring or resolving. operation=install: one packageId (repeat with separate calls for several); omit version to resolve the latest compatible (preferred), pin only for a known constraint — install mutates the project and is blocked unless UiPathCli:EnableMutatingCommands is set. operation=versions: lists available versions, --include-prerelease by default since activity packages frequently ship -preview between stable releases carrying the freshest activity surface and .local/docs. operation=inspect: returns a package's public API as markdown (from a feed or a local .nupkg). Next: validate_project.")]
     public async Task<ToolResult> ManagePackages(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
-        [Description("Operation: install, versions, or inspect.")] string operation,
+        [Description("Operation: install, versions, or inspect.")]
+        [AllowedValues(Install, Versions, Inspect)] string operation,
         [Description("NuGet package id, e.g. 'UiPath.Excel.Activities'. Required for install and versions; for inspect use packageName instead.")] string? packageId = null,
         [Description("Version to pin for install, e.g. '24.10.3'. Omit to resolve the latest compatible automatically (preferred). Ignored by versions and inspect.")] string? version = null,
         [Description("For versions: include prerelease versions (default true). Activity packages frequently ship -preview carrying the newest activity surface.")] bool includePrerelease = true,

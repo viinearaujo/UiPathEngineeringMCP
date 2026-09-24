@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -27,8 +28,10 @@ public sealed class GetAnalyzerRulesTool {
     [McpServerTool(UseStructuredContent = true), Description("Lists the Workflow Analyzer rules ENABLED for a project (uip rpa analyzer-rules list): rule id, severity, scope, title, recommendation, docs URL, and configured parameters. These are the best-practice rules validate_project enforces; this tool reports the rules themselves, not the violations. Rule id prefix: ST-* = built-in Studio rule, MA-* = package-shipped rule. Always pass a scope — the unscoped call enumerates every rule across every package and can take a minute or more. Call it on demand (the user asks about the project's analyzer rules, or the same rule family keeps failing validate/build); validate_project already reports violations with rule ids and recommendations. Next: validate_project.")]
     public async Task<ToolResult> GetAnalyzerRules(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
-        [Description("Scope filter: Activity, Workflow, Project, or Coded Workflow. Defaults to Workflow. Pass 'All' only deliberately — the unscoped call enumerates every installed package's rules and can take a minute or more.")] string scope = DefaultScope,
-        [Description("Optional minimum severity to return: error, warning, or info (default info, i.e. no filtering).")] string? minSeverity = null,
+        [Description("Scope filter: Activity, Workflow, Project, or Coded Workflow. Defaults to Workflow. Pass 'All' only deliberately — the unscoped call enumerates every installed package's rules and can take a minute or more.")]
+        [AllowedValues(CliVerbArguments.AnalyzerScopeActivity, CliVerbArguments.AnalyzerScopeWorkflow, CliVerbArguments.AnalyzerScopeProject, CliVerbArguments.AnalyzerScopeCodedWorkflow, AllScope)] string scope = CliVerbArguments.AnalyzerScopeWorkflow,
+        [Description("Optional minimum severity to return: error, warning, or info (default info, i.e. no filtering).")]
+        [AllowedValues(SeverityError, SeverityWarning, SeverityInfo)] string? minSeverity = null,
         [Description("Optional CLI timeout in seconds (default 300, max 3600). Raise it for an unscoped call on a large package set.")] int? timeoutSeconds = null,
         CancellationToken cancellationToken = default) {
 
@@ -107,12 +110,16 @@ public sealed class GetAnalyzerRulesTool {
     }
 
     private const string SuggestedTool = "validate_project";
-    private const string DefaultScope = "Workflow";
+    private const string DefaultScope = CliVerbArguments.AnalyzerScopeWorkflow;
     private const string AllScope = "All";
-    private const string LowestSeverity = "info";
+    private const string LowestSeverity = SeverityInfo;
+
+    private const string SeverityError = "error";
+    private const string SeverityWarning = "warning";
+    private const string SeverityInfo = "info";
 
     private static readonly string[] AnalyzerScopes = [.. CliVerbArguments.AnalyzerRuleScopes, AllScope];
-    private static readonly string[] Severities = ["error", "warning", LowestSeverity];
+    private static readonly string[] Severities = [SeverityError, SeverityWarning, LowestSeverity];
 
     private static IReadOnlyList<AnalyzerRule> FilterBySeverity(IReadOnlyList<AnalyzerRule> rules, string minSeverity) {
         var minimum = SeverityRank(minSeverity);

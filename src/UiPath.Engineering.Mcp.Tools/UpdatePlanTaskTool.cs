@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -23,7 +24,8 @@ public sealed class UpdatePlanTaskTool {
     public Task<ToolResult> UpdatePlanTask(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("ID of the task to update (e.g. 'task-1').")] string taskId,
-        [Description("New status: pending, in_progress, done, or blocked.")] string status,
+        [Description("New status: pending, in_progress, done, or blocked.")]
+        [AllowedValues(PlanTask.Pending, PlanTask.InProgress, PlanTask.Done, PlanTask.Blocked)] string status,
         [Description("Optional notes to attach to the task.")] string? notes = null,
         CancellationToken cancellationToken = default) {
 

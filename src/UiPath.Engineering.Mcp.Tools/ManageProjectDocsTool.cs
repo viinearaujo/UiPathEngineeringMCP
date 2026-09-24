@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
@@ -15,6 +16,7 @@ public sealed class ManageProjectDocsTool {
     public const string Write = "write";
     public const string Delete = "delete";
     public const string Search = "search";
+    public const string ContextKind = "context";
 
     private readonly IFilesystemProvider _filesystem;
     private readonly ProjectKnowledgeStore _knowledge;
@@ -41,8 +43,10 @@ public sealed class ManageProjectDocsTool {
     [McpServerTool(UseStructuredContent = true), Description("Manages project docs-as-code: list, write, delete, or search knowledge articles and ADRs. kind is memory, adr, context, or all. Search is keyword/excerpt only. Next: validate_project_docs.")]
     public async Task<ToolResult> ManageProjectDocs(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
-        [Description("Operation: list, write, delete, or search.")] string action,
-        [Description("Doc kind: memory, adr, context, or all.")] string kind = ProjectDocsSearch.KindAll,
+        [Description("Operation: list, write, delete, or search.")]
+        [AllowedValues(List, Write, Delete, Search)] string action,
+        [Description("Doc kind: memory, adr, context, or all.")]
+        [AllowedValues(ProjectKnowledgeStore.Kind, ProjectAdrStore.Kind, ContextKind, ProjectDocsSearch.KindAll)] string kind = ProjectDocsSearch.KindAll,
         [Description("Knowledge id (kebab-case) or ADR id (NNNN-slug). Required for delete; optional for ADR update.")] string? id = null,
         [Description("Title for write.")] string? title = null,
         [Description("Markdown body for write. ADRs must include Context, Decision, and Consequences headings.")] string? content = null,
@@ -62,7 +66,7 @@ public sealed class ManageProjectDocsTool {
             return actionError;
         }
 
-        var kindChoices = new[] { ProjectKnowledgeStore.Kind, ProjectAdrStore.Kind, "context", ProjectDocsSearch.KindAll };
+        var kindChoices = new[] { ProjectKnowledgeStore.Kind, ProjectAdrStore.Kind, ContextKind, ProjectDocsSearch.KindAll };
         var kindValue = string.IsNullOrWhiteSpace(kind) ? ProjectDocsSearch.KindAll : kind;
         if (ToolArgs.ParseChoice(kindValue, "kind", kindChoices, sw, out var normalizedKind) is { } kindError) {
             return kindError;

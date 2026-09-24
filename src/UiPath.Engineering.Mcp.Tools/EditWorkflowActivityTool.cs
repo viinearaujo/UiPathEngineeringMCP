@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
@@ -20,11 +21,13 @@ public sealed class EditWorkflowActivityTool {
     public ToolResult EditWorkflowActivity(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,
-        [Description("Operation to perform: insert, replace, or remove.")] string operation,
+        [Description("Operation to perform: insert, replace, or remove.")]
+        [AllowedValues(XamlActivityEditor.Insert, XamlActivityEditor.Replace, XamlActivityEditor.Remove)] string operation,
         [Description("DisplayName of the activity to target (for insert: the container). Optional when activityId is supplied; when both are supplied the DisplayName is verified against the ID-resolved activity.")] string? displayName = null,
         [Description("XAML fragment for insert/replace, e.g. '<ui:LogMessage DisplayName=\"Log\" Message=\"Hi\" />'. Unprefixed WF activities and the ui:/x: prefixes are understood without declarations.")] string? fragment = null,
         [Description("Optional activity type (e.g. 'Sequence') to disambiguate when several activities share the DisplayName.")] string? activityType = null,
-        [Description("For insert only: where to add the fragment inside the container — first or last (default).")] string position = XamlActivityEditor.Last,
+        [Description("For insert only: where to add the fragment inside the container — first or last (default).")]
+        [AllowedValues(XamlActivityEditor.First, XamlActivityEditor.Last)] string position = XamlActivityEditor.Last,
         [Description("Activity ID from find_activity, e.g. 'sequence.1/if.1' — the preferred way to target an activity.")] string? activityId = null) {
 
         var sw = Stopwatch.StartNew();

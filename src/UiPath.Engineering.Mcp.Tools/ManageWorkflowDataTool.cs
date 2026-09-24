@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
@@ -20,8 +21,10 @@ public sealed class ManageWorkflowDataTool {
     public ToolResult ManageWorkflowData(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,
-        [Description("Operation to perform: add, remove, or rename.")] string operation,
-        [Description("What to manage: variable or argument.")] string kind,
+        [Description("Operation to perform: add, remove, or rename.")]
+        [AllowedValues(WorkflowSurfaceEditor.Add, WorkflowSurfaceEditor.Remove, WorkflowSurfaceEditor.Rename)] string operation,
+        [Description("What to manage: variable or argument.")]
+        [AllowedValues(WorkflowSurfaceEditor.Variable, WorkflowSurfaceEditor.Argument)] string kind,
         [Description("Name of the variable or argument to add, remove, or rename.")] string name,
         [Description("Type for add, e.g. 'String', 'Int32', 'System.Data.DataTable'. BCL primitives render as x:-prefixed tokens.")] string? type = null,
         [Description("For arguments only: direction In (default), Out, or In/Out.")] string direction = "In",

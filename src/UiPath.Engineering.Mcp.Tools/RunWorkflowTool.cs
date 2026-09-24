@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
@@ -31,10 +32,18 @@ public sealed class RunWorkflowTool {
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Workflow or coded file to run, relative to the project root, e.g. 'Main.xaml'. Resolved and verified inside the project before it is passed to the CLI.")] string filePath,
         [Description("Optional repeatable input arguments: 'name=John', 'retries:=3' (raw JSON), or 'payload=@file.json'. Values containing double quotes are rejected — write them to a UTF-8 file and use key=@file.")] List<string>? inputArguments = null,
-        [Description("Optional minimum workflow log level to include: Verbose, Trace, Information, Warning, Error, or Critical.")] string? logLevel = null,
+        [Description("Optional minimum workflow log level to include: Verbose, Trace, Information, Warning, Error, or Critical.")]
+        [AllowedValues(
+            CliVerbArguments.LogLevelVerbose,
+            CliVerbArguments.LogLevelTrace,
+            CliVerbArguments.LogLevelInformation,
+            CliVerbArguments.LogLevelWarning,
+            CliVerbArguments.LogLevelError,
+            CliVerbArguments.LogLevelCritical)] string? logLevel = null,
         [Description("Skip the validation and build steps, assuming the project was already built. Use for rapid re-execution when nothing changed.")] bool skipBuild = false,
         [Description("Collect per-activity profiling data and return profilingOutputDirectory (the run's .uistat files and screenshots). Requires a Studio Develop profile with EnableProfiling; needs Studio Desktop.")] bool profiling = false,
-        [Description("Profiling delivery mode: endOfRun (default, one summary at completion) or stream (live per-activity entries).")] string? profilingMode = null,
+        [Description("Profiling delivery mode: endOfRun (default, one summary at completion) or stream (live per-activity entries).")]
+        [AllowedValues(CliVerbArguments.ProfilingModeEndOfRun, CliVerbArguments.ProfilingModeStream)] string? profilingMode = null,
         [Description("Include the workflow's log entries in the response (default false). Logs are diagnostic context only — never a verdict.")] bool includeLogEntries = false,
         [Description("Optional CLI timeout in seconds (default 300, max 3600). Raise it for a cold headless Studio restore (30-90s) or a long-running workflow.")] int? timeoutSeconds = null,
         CancellationToken cancellationToken = default) {

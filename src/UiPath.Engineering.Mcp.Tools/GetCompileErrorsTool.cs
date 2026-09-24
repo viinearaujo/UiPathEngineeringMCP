@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -20,7 +21,8 @@ public sealed class GetCompileErrorsTool {
     [McpServerTool(UseStructuredContent = true), Description("Fast in-memory C# compiler diagnostics (Roslyn) without a UiPath CLI build. Do not use for XAML, and do not use as the agent-loop green gate (that is validate_project). For an authoritative CLI build, call validate_project(build:true). Next: edit_workflow_file.")]
     public async Task<ToolResult> GetCompileErrors(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
-        [Description("Minimum severity to include: 'error' (default), 'warning', or 'all'.")] string? severity = null,
+        [Description("Minimum severity to include: 'error' (default), 'warning', or 'all'.")]
+        [AllowedValues("error", "warning", "all")] string? severity = null,
         CancellationToken cancellationToken = default) {
         var sw = Stopwatch.StartNew();
 

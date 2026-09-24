@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
@@ -22,7 +23,8 @@ public sealed class CreateCodedWorkflowTool {
     public ToolResult AddCodedWorkflow(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Class name for the new file; must be a valid C# identifier and becomes the file stem (<ClassName>.cs). Paths belong in relativeFolder, not in className.")] string className,
-        [Description("'workflow' for a Coded Workflow entry point, 'test' for a coded test case (fileInfoCollection only; Process projects default to Tests\\), 'source' for a plain helper class.")] string kind = "workflow",
+        [Description("'workflow' for a Coded Workflow entry point, 'test' for a coded test case (fileInfoCollection only; Process projects default to Tests\\), 'source' for a plain helper class.")]
+        [AllowedValues(CodedFileKind.Workflow, CodedFileKind.Test, CodedFileKind.Source)] string kind = "workflow",
         [Description("Optional project-relative folder (e.g. 'Tests' or 'Models'). Omitted: Process + kind=test defaults to Tests; otherwise project root. Pass an empty string to force the project root.")] string? relativeFolder = null) {
 
         var sw = Stopwatch.StartNew();

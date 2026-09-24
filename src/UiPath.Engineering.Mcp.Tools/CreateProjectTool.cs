@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -21,8 +22,10 @@ public sealed class CreateProjectTool {
     public async Task<ToolResult> CreateProject(
         [Description("Name of the new UiPath project (also becomes the project folder name).")] string name,
         [Description("Absolute path to the parent directory where the project folder is created. Must be inside the allowed roots.")] string parentDirectory,
-        [Description("Expression language: CSharp or VisualBasic. Immutable after creation.")] string expressionLanguage = "CSharp",
-        [Description("Target framework: Windows or Portable. Immutable after creation.")] string targetFramework = "Windows",
+        [Description("Expression language: CSharp or VisualBasic. Immutable after creation.")]
+        [AllowedValues("CSharp", "VisualBasic")] string expressionLanguage = "CSharp",
+        [Description("Target framework: Windows or Portable. Immutable after creation.")]
+        [AllowedValues("Windows", "Portable")] string targetFramework = "Windows",
         [Description("Optional project description.")] string description = "") {
 
         var sw = Stopwatch.StartNew();

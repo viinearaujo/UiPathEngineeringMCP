@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
@@ -20,7 +21,8 @@ public sealed class ManageProjectFileTool {
     [McpServerTool(UseStructuredContent = true), Description("Creates, edits, or deletes a .md/.json/.txt file inside a UiPath project. Does not write project.json, implementation-plan files, docs/knowledge, docs/adr, or secret-looking names. Prefer patch_project_json for project.json and manage_project_docs for knowledge/ADRs. Next: validate_project.")]
     public ToolResult ManageProjectFile(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
-        [Description("Operation: write, edit, or delete.")] string action,
+        [Description("Operation: write, edit, or delete.")]
+        [AllowedValues(Write, Edit, Delete)] string action,
         [Description("Path of the file relative to the project root, e.g. 'docs/notes.md'.")] string relativePath,
         [Description("Full file content for write; ignored for delete.")] string? content = null,
         [Description("For edit: exact text to find.")] string? oldString = null,

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
@@ -31,7 +32,8 @@ public sealed class InsertActivitiesTool {
         [Description("JSON activity spec describing what to insert, e.g. { \"name\": \"Sequence\", \"children\": [...] }. Run validate_activity_spec on it first.")] string specJson,
         [Description("DisplayName of the container activity that receives the new activities. Optional when activityId is supplied.")] string? displayName = null,
         [Description("Activity ID of the container, from find_activity — a WorkflowViewState.IdRef or a structural path.")] string? activityId = null,
-        [Description("Where to add the activities inside the container — first or last (default).")] string position = XamlActivityEditor.Last,
+        [Description("Where to add the activities inside the container — first or last (default).")]
+        [AllowedValues(XamlActivityEditor.First, XamlActivityEditor.Last)] string position = XamlActivityEditor.Last,
         [Description("Optional activity type (e.g. 'Sequence') to disambiguate when several activities share the DisplayName.")] string? activityType = null,
         CancellationToken cancellationToken = default) {
 
