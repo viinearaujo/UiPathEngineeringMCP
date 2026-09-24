@@ -73,4 +73,43 @@ public class ActivityCatalogTests {
         Assert.True(ActivityCatalog.TryGet("Click", out var shortName));
         Assert.Equal("NClick", shortName!.Name);
     }
+
+    // The identity index used to exist only on this static catalog: ListActivityCatalog
+    // — which backs ActivityCatalog.Fallback and every Merged catalog, and is what
+    // get_activity_metadata and validate_activity_spec actually hold — indexed by
+    // spec name alone. Callers there hold the emitted element name, so they got
+    // ACTIVITY_NOT_FOUND for activities the catalog contains.
+    [Theory]
+    [InlineData("InterruptibleWhile")]
+    [InlineData("InterruptibleDoWhile")]
+    public void ListActivityCatalog_ResolvesTheEmittedElementName(string emitted) =>
+        Assert.True(new ListActivityCatalog(ActivityCatalog.All, "test").TryGet(emitted, out _));
+
+    [Theory]
+    [InlineData("InterruptibleWhile")]
+    [InlineData("InterruptibleDoWhile")]
+    public void Fallback_ResolvesTheEmittedElementName(string emitted) {
+        Assert.True(ActivityCatalog.Fallback.TryGet(emitted, out var viaCatalog));
+        Assert.True(ActivityCatalog.TryGet(emitted, out var viaStatic));
+        Assert.Equal(viaStatic!.Name, viaCatalog!.Name);
+    }
+
+    // The short UIA alias is deliberately NOT on the catalog index. XamlCatalogGuard
+    // resolves XAML element names through it with namespace-blind local-name matching,
+    // so indexing the bare "Click" would make ui:Click (legacy) and the mobile Click
+    // look like the modern uix:NClick. It stays a launcher convenience on the static
+    // TryGet, where the caller supplies its own namespace.
+    [Theory]
+    [InlineData("Click")]
+    [InlineData("TypeInto")]
+    public void ListActivityCatalog_DoesNotResolveTheShortUiaAlias(string alias) =>
+        Assert.False(new ListActivityCatalog(ActivityCatalog.All, "test").TryGet(alias, out _));
+
+    [Theory]
+    [InlineData("Click", "NClick")]
+    [InlineData("TypeInto", "NTypeInto")]
+    public void StaticCatalog_StillResolvesTheShortUiaAliasForLaunching(string alias, string expected) {
+        Assert.True(ActivityCatalog.TryGet(alias, out var schema));
+        Assert.Equal(expected, schema!.Name);
+    }
 }

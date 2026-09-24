@@ -191,8 +191,12 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
 
         foreach (var hit in discovered) {
             var converted = ToSchema(hit, projectPackages);
+            // The fallback index is name-only, so a discovery hit can only match a
+            // curated schema by its spec name. Alias resolution is the catalog's job,
+            // not this dictionary's — the resulting ListActivityCatalog indexes
+            // aliases itself.
             if (byName.TryGetValue(converted.Name, out var existing)) {
-                byName[converted.Name] = MergeSchema(existing, converted);
+                byName[existing.Name] = MergeSchema(existing, converted);
             } else {
                 byName[converted.Name] = converted;
             }

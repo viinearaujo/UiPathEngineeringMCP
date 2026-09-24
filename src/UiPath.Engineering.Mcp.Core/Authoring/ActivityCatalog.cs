@@ -182,14 +182,23 @@ public static class ActivityCatalog {
     // ("Click", "TypeInto") resolves to the same schema.
     private static readonly IReadOnlyDictionary<string, ActivitySchema> ByName = BuildLookup(All);
 
-    private static IReadOnlyDictionary<string, ActivitySchema> BuildLookup(IReadOnlyList<ActivitySchema> schemas) {
+    // Shared with ListActivityCatalog, which needs the same spec-name/element-name
+    // index. Excludes the short toolbox alias — see BuildIdentityLookup.
+    internal static IReadOnlyDictionary<string, ActivitySchema> BuildIdentityLookup(IReadOnlyList<ActivitySchema> schemas) {
         var map = new Dictionary<string, ActivitySchema>(StringComparer.OrdinalIgnoreCase);
         foreach (var schema in schemas) {
             map.TryAdd(schema.Name, schema);
             if (!string.Equals(schema.RenderName, schema.Name, StringComparison.OrdinalIgnoreCase)) {
                 map.TryAdd(schema.RenderName, schema);
             }
+        }
 
+        return map;
+    }
+
+    private static IReadOnlyDictionary<string, ActivitySchema> BuildLookup(IReadOnlyList<ActivitySchema> schemas) {
+        var map = new Dictionary<string, ActivitySchema>(BuildIdentityLookup(schemas), StringComparer.OrdinalIgnoreCase);
+        foreach (var schema in schemas) {
             var render = schema.RenderName;
             if (render.StartsWith('N') && render.Length > 1 && char.IsUpper(render[1])) {
                 map.TryAdd(render[1..], schema);
