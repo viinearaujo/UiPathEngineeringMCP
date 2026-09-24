@@ -81,6 +81,8 @@ Do not plan any of these for the HTTP transport:
 
 Progress is the exception because a progress notification is scoped to the `ProgressToken` of the in-flight request and travels back on that request's own response stream — it is not an unsolicited server-to-client message. It is the only long-call feedback channel the HTTP transport offers. Long CLI-backed calls (`validate_project` with `pack:true`, `create_project`, `build_workflow`) can take tens of seconds, so the client must carry a timeout generous enough for them; without progress notifications there is nothing to poll in the meantime.
 
+Every CLI-backed tool therefore takes an `IProgress<ProgressNotificationValue>` parameter that the SDK binds and excludes from the tool's JSON schema — it is not a callable input, so a client never passes it. A client that sends a progress token on the call receives an opening notification before the CLI process starts and one when each verb returns; a client that does not gets no-ops. The reporting tools are `validate_project`, `build_workflow`, `run_workflow`, `control_debug_session`, `compile_project`, `verify_work`, `create_project`, `manage_packages`, `get_analyzer_rules`, and `get_object_repository`.
+
 Recovering any of the unavailable capabilities requires opting the server out of the current protocol revision, which costs HTTP interoperability with clients on `2026-07-28` and later. The client-driven loop is the design: the server is passive, tools are one-shot request/response, and the harness owns sequencing and retries.
 
 Stdio (`--stdio`) is a separate process with a persistent bidirectional stream, so it is unaffected by all of the above.

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -46,9 +47,11 @@ public sealed class RunWorkflowTool {
         [AllowedValues(CliVerbArguments.ProfilingModeEndOfRun, CliVerbArguments.ProfilingModeStream)] string? profilingMode = null,
         [Description("Include the workflow's log entries in the response (default false). Logs are diagnostic context only — never a verdict.")] bool includeLogEntries = false,
         [Description("Optional CLI timeout in seconds (default 300, max 3600). Raise it for a cold headless Studio restore (30-90s) or a long-running workflow.")] int? timeoutSeconds = null,
+        [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
+        var reporter = CliToolSupport.ProgressFor(progress, $"Starting uip rpa run for '{filePath}' (a cold headless Studio start can take 30-90s).");
 
         if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } projectFailure) {
             return projectFailure;
@@ -85,6 +88,7 @@ public sealed class RunWorkflowTool {
             CliVerbArguments.RpaVerb, tokens, projectPath,
             timeoutSeconds: CliToolSupport.ClampTimeout(timeoutSeconds), cancellationToken);
 
+        reporter.Step($"The run returned; verdict: {(outcome.Verdict?.Succeeded == true ? "success" : "not a clean completion")}.");
         return BuildResult(outcome, relativePath!, profiling, includeLogEntries, sw);
     }
 

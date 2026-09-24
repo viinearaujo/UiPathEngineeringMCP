@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -40,9 +41,11 @@ public sealed class ManagePackagesTool {
         [Description("For inspect: absolute path to a local .nupkg, inspected without downloading. Must be inside Projects:AllowedRoots.")] string? nupkgPath = null,
         [Description("For install: optional path to a JSON file of additional NuGet feed sources ([{\"Url\":\"...\"}]). Must be inside Projects:AllowedRoots.")] string? nugetSourcesConfigPath = null,
         [Description("Optional CLI timeout in seconds (default 300, max 3600). Raise it when a cold NuGet restore is slow.")] int? timeoutSeconds = null,
+        [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
+        var reporter = CliToolSupport.ProgressFor(progress, $"Running the package {operation} verb.");
 
         if (ToolArgs.ParseChoice(operation, "operation", Operations, sw, out var parsedOperation) is { } operationError) {
             return operationError;
@@ -52,11 +55,14 @@ public sealed class ManagePackagesTool {
             return projectFailure;
         }
 
-        return parsedOperation switch {
+        var result = parsedOperation switch {
             Install => await InstallAsync(projectPath, packageId, version, nugetSourcesConfigPath, timeoutSeconds, sw, cancellationToken),
             Versions => await VersionsAsync(projectPath, packageId, includePrerelease, timeoutSeconds, sw, cancellationToken),
             _ => await InspectAsync(projectPath, packageName, packageVersion, feedUrl, nupkgPath, timeoutSeconds, sw, cancellationToken)
         };
+
+        reporter.Step($"'{parsedOperation}' returned.");
+        return result;
     }
 
     private const string Install = "install";

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Docs;
@@ -37,9 +38,11 @@ public sealed class VerifyWorkTool {
         [Description("Implementation-plan task IDs to verify and update (e.g. ['task-1']).")] List<string>? taskIds = null,
         [Description("Additional project-relative files that must exist for verification to pass.")] List<string>? expectedFiles = null,
         [Description("Run CLI build as part of verification? Default false. Prefer validate_project(build:false) plus update_plan_task for the agent loop.")] bool build = false,
+        [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
+        var reporter = CliToolSupport.ProgressFor(progress, "Rebuilding the project model, then running uip rpa validate.", total: 3);
 
         if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } guardFailure) {
             return guardFailure;
@@ -69,8 +72,10 @@ public sealed class VerifyWorkTool {
 
         // Fresh model so the checks below see the post-edit state of the project.
         var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
+        reporter.Step("Project model rebuilt.");
 
         var cliResult = await _cliProvider.ValidateAsync(projectPath, validate: true, build: build, pack: false, cancellationToken);
+        reporter.Step(cliResult.Success ? "validate passed." : "validate reported errors.");
 
         var expected = new List<string>();
         if (expectedFiles is not null) {

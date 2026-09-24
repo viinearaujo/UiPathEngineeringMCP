@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -33,9 +34,11 @@ public sealed class GetAnalyzerRulesTool {
         [Description("Optional minimum severity to return: error, warning, or info (default info, i.e. no filtering).")]
         [AllowedValues(SeverityError, SeverityWarning, SeverityInfo)] string? minSeverity = null,
         [Description("Optional CLI timeout in seconds (default 300, max 3600). Raise it for an unscoped call on a large package set.")] int? timeoutSeconds = null,
+        [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
+        var reporter = CliToolSupport.ProgressFor(progress, "Reading Workflow Analyzer rules (a scoped call is fast; scope=All can take a minute).");
 
         if (ToolArgs.ParseChoice(scope, "scope", AnalyzerScopes, sw, out var parsedScope) is { } scopeError) {
             return scopeError;
@@ -70,6 +73,7 @@ public sealed class GetAnalyzerRulesTool {
         }
 
         var rules = AnalyzerRulesParser.ParseData(envelope.Data);
+        reporter.Step($"Returned {rules.Count} rule(s).");
         var filtered = FilterBySeverity(rules, parsedSeverity!);
         var warnings = new List<string>();
 

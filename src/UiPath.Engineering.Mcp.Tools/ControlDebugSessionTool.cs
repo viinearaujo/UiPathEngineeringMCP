@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -62,9 +63,11 @@ public sealed class ControlDebugSessionTool {
         [AllowedValues(CliVerbArguments.ProfilingModeEndOfRun, CliVerbArguments.ProfilingModeStream)] string? profilingMode = null,
         [Description("Include the workflow's log entries in the response (default false). Logs are diagnostic context only — never a verdict.")] bool includeLogEntries = false,
         [Description("Optional CLI timeout in seconds (default 300, max 3600). Must exceed waitTimeoutSeconds by at least 30s or the CLI is killed before it can cancel cleanly.")] int? timeoutSeconds = null,
+        [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
+        var reporter = CliToolSupport.ProgressFor(progress, $"Sending debug command '{command}' (the wait can take up to the CLI timeout).");
 
         if (ToolArgs.ParseChoice(command, "command", Commands, sw, out var parsedCommand) is { } commandError) {
             return commandError;
@@ -135,6 +138,7 @@ public sealed class ControlDebugSessionTool {
             CliVerbArguments.RpaVerb, tokens, projectPath,
             timeoutSeconds: CliToolSupport.ClampTimeout(timeoutSeconds), cancellationToken);
 
+        reporter.Step($"Debug command '{parsedCommand}' returned.");
         return BuildResult(outcome, parsedCommand!, relativePath ?? filePath, profiling, includeLogEntries, sw);
     }
 

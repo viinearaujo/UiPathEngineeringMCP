@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -31,15 +32,18 @@ public sealed class ValidateProjectTool {
         [Description("Run validate (project diagnostics)?")] bool validate = true,
         [Description("Run build (compile gate)? Default false. Pass true for an authoritative CLI compile.")] bool build = false,
         [Description("Run pack?")] bool pack = false,
+        [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token and excludes it from the tool's JSON schema; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
+        var reporter = CliToolSupport.ProgressFor(progress, "Starting uip rpa validate/build/pack.", total: 3);
 
         if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } guardFailure) {
             return guardFailure;
         }
 
         var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, cancellationToken);
+        ReportSteps(reporter, cliResult);
         var diagnostics = ProjectDiagnostics(projectPath, cliResult);
         var (boundaryErrors, boundaryWarning) = await BoundaryErrors(projectPath, cancellationToken);
         var errors = cliResult.Errors.Concat(boundaryErrors.Select(e => $"{e.ErrorCode}: {e.Message} Fix: {e.FixHint}")).ToList();
@@ -79,6 +83,19 @@ public sealed class ValidateProjectTool {
         var mapped = ValidateDiagnosticMapper.Map(projectPath, _filesystem, cliResult.Diagnostics);
         return mapped.Select(ToPayload).ToList();
     }
+
+    // One progress step per CLI verb the tool asked for, in execution order. A step that was not
+    // requested is reported as skipped so the step count still lines up.
+    private static void ReportSteps(CliToolSupport.CliProgress reporter, UiPathCliResult result) {
+        Report(reporter, result.Validate, "validate");
+        Report(reporter, result.Build, "build");
+        Report(reporter, result.Pack, "pack");
+    }
+
+    private static void Report(CliToolSupport.CliProgress reporter, CliStepResult step, string name) =>
+        reporter.Step(step.Executed
+            ? $"{name} {(step.Success ? "succeeded" : "reported errors")}."
+            : $"{name} was not requested.");
 
     private static object ToPayload(ValidateFixDiagnostic diagnostic) => new {
         activityId = diagnostic.ActivityId,

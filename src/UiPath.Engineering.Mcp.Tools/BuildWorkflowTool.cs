@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Authoring;
@@ -30,9 +31,11 @@ public sealed class BuildWorkflowTool {
         [Description("Path of the .xaml file to create relative to the project root, e.g. 'Workflows/Process.xaml'.")] string relativePath,
         [Description("JSON activity spec describing the workflow, e.g. { \"name\": \"Sequence\", \"children\": [...] }. Run validate_activity_spec on it first.")] string specJson,
         [Description("Allow replacing an existing file at relativePath. When false (default), an existing file is never overwritten.")] bool overwrite = false,
+        [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
+        var reporter = CliToolSupport.ProgressFor(progress, "Resolving the project's activity catalog (may query the CLI), then rendering the XAML.", total: 3);
 
         if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } guardFailure) {
             return guardFailure;
@@ -57,6 +60,7 @@ public sealed class BuildWorkflowTool {
         }
 
         var catalog = await _catalogResolver.ResolveAsync(projectPath, cancellationToken);
+        reporter.Step($"Activity catalog resolved ({catalog.All.Count} activities).");
         var settings = await ProjectXamlSettings.ResolveAsync(_projectModelBuilder, projectPath, cancellationToken);
         var xamlClass = XamlWorkflowTemplates.ToXamlClassName(relativePath);
         var build = XamlBuilder.RenderWorkflowFile(spec!, xamlClass, catalog, settings);
@@ -67,6 +71,7 @@ public sealed class BuildWorkflowTool {
         var directory = Path.GetDirectoryName(targetPath)!;
         _filesystem.CreateDirectory(directory);
         _filesystem.WriteAllText(targetPath, build.Xaml!);
+        reporter.Step("XAML rendered and written.");
 
         var activitiesUsed = new List<string>();
         ValidateActivitySpecTool.CollectActivities(spec!, activitiesUsed, catalog);

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -26,9 +27,11 @@ public sealed class CreateProjectTool {
         [AllowedValues("CSharp", "VisualBasic")] string expressionLanguage = "CSharp",
         [Description("Target framework: Windows or Portable. Immutable after creation.")]
         [AllowedValues("Windows", "Portable")] string targetFramework = "Windows",
-        [Description("Optional project description.")] string description = "") {
+        [Description("Optional project description.")] string description = "",
+        [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null) {
 
         var sw = Stopwatch.StartNew();
+        var reporter = CliToolSupport.ProgressFor(progress, "Running uip rpa init (a cold headless Studio start can take 30-90s).");
 
         if (string.IsNullOrWhiteSpace(name)) {
             return ToolResults.Failure("Project name is required.", sw);
@@ -58,6 +61,8 @@ public sealed class CreateProjectTool {
             $"--description \"{description}\" --output json";
 
         var cliResult = await _cliProvider.RunAsync("rpa", arguments);
+
+        reporter.Step("uip rpa init returned.");
 
         // 'uip rpa init' can report failure while still creating the project files
         // (documented partial-success behavior), so the created artifact is the

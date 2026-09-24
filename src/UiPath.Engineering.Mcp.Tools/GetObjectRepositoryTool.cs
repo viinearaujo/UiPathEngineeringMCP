@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -34,9 +35,11 @@ public sealed class GetObjectRepositoryTool {
         [Description("Optional case-insensitive substring to filter nodes by name (matches apps, screens, and elements).")] string? query = null,
         [Description("Optional maximum tree depth to return (0 = unlimited, default). Set to 1 for just apps, 2 for apps+screens.")] int? maxDepth = null,
         [Description("Optional CLI timeout in seconds (default 300, max 3600).")] int? timeoutSeconds = null,
+        [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
+        var reporter = CliToolSupport.ProgressFor(progress, "Reading the Object Repository over Studio IPC.");
 
         if (ToolArgs.ParseChoice(source, "source", Sources, sw, out var parsedSource) is { } sourceError) {
             return sourceError;
@@ -81,6 +84,8 @@ public sealed class GetObjectRepositoryTool {
             return CliToolSupport.EnvelopeFailure(envelope, cli.Summary, sw, SuggestedTool,
                 "Both Object Repository read verbs require an open project over Studio IPC. Confirm the path points at the project.json folder and the project opens cleanly, then retry once.");
         }
+
+        reporter.Step("Object Repository read returned.");
 
         if (isLibrary) {
             return LibraryPayload(ObjectRepositoryParser.ParseLibraries(envelope.Data), cli, query, maxDepth, sw);

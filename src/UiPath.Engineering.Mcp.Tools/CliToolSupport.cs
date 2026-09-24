@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using ModelContextProtocol;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -282,4 +283,50 @@ internal static class CliToolSupport {
 
     public static string Truncate(string value, int max = 60) =>
         value.Length <= max ? value : value[..max] + "...";
+
+    /// <summary>
+    /// Reports progress for a CLI-backed tool call. A CLI invocation is the whole cost of these
+    /// tools (24-91s, plus a ~22s Studio cold start), so a notification before the process starts
+    /// and one when it returns is the feedback that tells the client the call is alive. Progress
+    /// is scoped to the in-flight request's progress token, so it works over the stateless HTTP
+    /// transport even though no unsolicited server-to-client message is possible there.
+    /// </summary>
+    /// <remarks>
+    /// Constructed with the number of steps the tool will report. A null
+    /// <paramref name="progress"/> is tolerated: the SDK only supplies one when the client sent a
+    /// progress token, so a client that does not ask for progress gets no-ops.
+    /// </remarks>
+    public sealed class CliProgress {
+        private readonly IProgress<ProgressNotificationValue>? _progress;
+        private readonly int _total;
+        private int _step;
+
+        public CliProgress(IProgress<ProgressNotificationValue>? progress, int total) {
+            _progress = progress;
+            _total = total <= 0 ? 1 : total;
+        }
+
+        /// <summary>Reports the opening step, e.g. before the CLI process starts.</summary>
+        public void Start(string message) => Report(_step, message);
+
+        /// <summary>Advances one step and reports, e.g. when a CLI verb returns.</summary>
+        public void Step(string message) {
+            _step++;
+            Report(_step, message);
+        }
+
+        private void Report(int value, string message) =>
+            _progress?.Report(new ProgressNotificationValue {
+                Progress = Math.Clamp(value, 0, _total),
+                Total = _total,
+                Message = message
+            });
+    }
+
+    /// <summary>Starts a CLI progress scope for the common single-CLI-call tool.</summary>
+    public static CliProgress ProgressFor(IProgress<ProgressNotificationValue>? progress, string startingMessage, int total = 2) {
+        var scope = new CliProgress(progress, total);
+        scope.Start(startingMessage);
+        return scope;
+    }
 }
