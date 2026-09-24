@@ -54,6 +54,13 @@ public static class XamlActivityLocator {
         XElement parent, string? parentId, int depth, List<LocatedActivity> results, ref int ordinal, string? slot) {
         foreach (var child in parent.Elements()) {
             var local = child.Name.LocalName;
+            // Designer state is opaque: the ViewState dictionary holds only
+            // keyed property values (av:Point, av:Size, …), never activities, so
+            // the whole subtree is skipped instead of being walked for IDs.
+            if (XamlWorkflowParser.IsViewStateDictionary(child)) {
+                continue;
+            }
+
             if (local.Contains('.') || XamlWorkflowParser.NonActivityElements.Contains(local)) {
                 // An attached-property container is transparent for identity: it
                 // shares the parent's ordinal counter and depth. Its slot name is

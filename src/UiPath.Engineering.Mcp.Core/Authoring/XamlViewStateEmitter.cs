@@ -178,6 +178,7 @@ public static class XamlViewStateEmitter {
     private static bool IsActivity(XElement element) {
         var local = element.Name.LocalName;
         return !local.Contains('.')
-            && !XamlWorkflowParser.NonActivityElements.Contains(local);
+            && !XamlWorkflowParser.NonActivityElements.Contains(local)
+            && !XamlWorkflowParser.IsWithinViewState(element);
     }
 }

@@ -18,8 +18,28 @@ public sealed class XamlWorkflowParser {
         "InArgument", "OutArgument", "InOutArgument", "Literal",
         "DelegateInArgument", "DelegateOutArgument", "DelegateInReference", "DelegateOutReference",
         "ActivityAction", "Catch", "String", "Boolean", "Int32", "Int64", "Double",
-        "Object", "Null", "VisualBasicValue", "VisualBasicReference", "CSharpValue", "CSharpReference"
+        "Object", "Null", "VisualBasicValue", "VisualBasicReference", "CSharpValue", "CSharpReference",
+        // WPF value types Studio serializes as ViewState dictionary values
+        // (av:Point / av:Size / av:PointCollection / av:Thickness / av:Rect …).
+        // They never name an activity; listed so a namespace-blind classifier
+        // excludes them even when the enclosing ViewState is not recognised.
+        "Point", "Size", "PointCollection", "Rect", "Rectangle", "Thickness"
     };
+
+    /// <summary>
+    /// The designer-state dictionary Studio writes on an activity:
+    /// <c>sap:WorkflowViewStateService.ViewState</c>. Every child is a property
+    /// value keyed by <c>x:Key</c> (av:Point, av:Size, av:PointCollection,
+    /// av:Thickness, x:Boolean, x:Double, …) — never an activity — so both element
+    /// classifiers treat the whole subtree as opaque rather than assigning it an
+    /// IdRef/HintSize or a structural activity path.
+    /// </summary>
+    internal static bool IsViewStateDictionary(XElement element) =>
+        element.Name.LocalName.Equals("WorkflowViewStateService.ViewState", StringComparison.Ordinal);
+
+    /// <summary>True when the element is a value inside a ViewState dictionary, so not an activity.</summary>
+    internal static bool IsWithinViewState(XElement element) =>
+        element.Ancestors().Any(IsViewStateDictionary);
 
     public WorkflowModel Parse(string fileName, string filePath, string xamlContent) {
         XDocument doc;

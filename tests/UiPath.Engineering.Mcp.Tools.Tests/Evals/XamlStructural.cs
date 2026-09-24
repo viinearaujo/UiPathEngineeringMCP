@@ -108,7 +108,7 @@ internal sealed class Structural {
     public static bool IsActivity(XElement element) =>
         !element.Name.LocalName.Contains('.')
         && !XamlWorkflowParser.NonActivityElements.Contains(element.Name.LocalName)
-        && !element.Ancestors().Any(a => a.Name.LocalName == "WorkflowViewStateService.ViewState");
+        && !XamlWorkflowParser.IsWithinViewState(element);
 
     /// <summary>
     /// sap2010:WorkflowViewState.IdRef on every activity, and unique across the

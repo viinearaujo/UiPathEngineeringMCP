@@ -66,6 +66,41 @@ public class XamlViewStateEmitterTests {
     }
 
     [Fact]
+    public void Apply_DoesNotTreatViewStateCoordinateValuesAsActivities() {
+        // A Flowchart node's ViewState holds av:Point / av:Size values. They are
+        // designer state, not activities: stamping them with an IdRef/HintSize made
+        // XamlCatalogGuard report "Point"/"Size" as unknown activities and refuse
+        // the next write of every diagram file.
+        var doc = Doc("""
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:av="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowStep x:Name="__ReferenceID0">
+                <sap:WorkflowViewStateService.ViewState>
+                  <av:Point x:Key="ShapeLocation">170,110</av:Point>
+                  <av:Size x:Key="ShapeSize">262,60</av:Size>
+                  <av:PointCollection x:Key="ConnectorLocation">300,170 300,220</av:PointCollection>
+                </sap:WorkflowViewStateService.ViewState>
+              </FlowStep>
+            </Activity>
+            """);
+
+        XamlViewStateEmitter.Apply(doc);
+
+        foreach (var local in new[] { "Point", "Size", "PointCollection" }) {
+            var value = doc.Root!.Descendants().Single(e => e.Name.LocalName == local);
+            Assert.Null(value.Attribute(XamlViewStateEmitter.Sap2010 + "WorkflowViewState.IdRef"));
+            Assert.Null(value.Attribute(XamlViewStateEmitter.Sap + "VirtualizedContainerService.HintSize"));
+        }
+
+        // The node itself is still an activity and still gets its designer state.
+        var step = doc.Root!.Descendants().Single(e => e.Name.LocalName == "FlowStep");
+        Assert.Equal("FlowStep_1",
+            step.Attribute(XamlViewStateEmitter.Sap2010 + "WorkflowViewState.IdRef")!.Value);
+    }
+
+    [Fact]
     public void Apply_SequenceGetsIsExpandedViewState() {
         var doc = Doc(TwoOfAType);
 

@@ -265,6 +265,31 @@ public class XamlActivityLocatorTests {
     }
 
     [Fact]
+    public void Locate_IgnoresViewStateDictionaryValues() {
+        // Studio's designer state lives in a ViewState dictionary whose children are
+        // keyed Av values (Point/Size/PointCollection). None is an activity, so none
+        // receives a structural path.
+        const string xaml = """
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:av="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowStep x:Name="__ReferenceID0">
+                <sap:WorkflowViewStateService.ViewState>
+                  <av:Point x:Key="ShapeLocation">170,110</av:Point>
+                  <av:Size x:Key="ShapeSize">262,60</av:Size>
+                </sap:WorkflowViewStateService.ViewState>
+              </FlowStep>
+            </Activity>
+            """;
+
+        var activities = Locate(xaml);
+
+        Assert.DoesNotContain(activities, a => a.Element.Name.LocalName is "Point" or "Size" or "ViewState");
+        Assert.Equal("flowstep.1", Assert.Single(activities).Id);
+    }
+
+    [Fact]
     public void Locate_AssignsPreOrderDocumentOrderIndex() {
         var activities = Locate(MixedXaml);
 
