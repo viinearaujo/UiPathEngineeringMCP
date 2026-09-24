@@ -1,5 +1,56 @@
 # Agent Handoff — Studio Fidelity Gap Closure
 
+## Continuation — fidelity plan closed (HEAD `f1b2b56`)
+
+Read this section first. The sections below are the 2026-09-24 00:10 snapshot.
+
+HEAD is `f1b2b56` — "Resolve loop activities by their emitted element name on every catalog path". The working tree was clean. The external plan at `C:\Users\arauj\.cursor\plans\studio_fidelity_gap_closure_055ad035.plan.md` was not updated in-repo; the commits below are the closure record. Do not edit that plan.
+
+Re-verify before trusting a number:
+
+```powershell
+cd C:\Users\arauj\Documents\UiPathEngineeringMCP
+dotnet build UiPath.Engineering.Mcp.sln --nologo
+dotnet test  UiPath.Engineering.Mcp.sln --configuration Release --nologo
+```
+
+Pass `--configuration Release` without `--no-build`, or build Release first. The snapshot's 565 / 277 / 431 / 39 counts are not current. The committed eval scorecard at `tests/UiPath.Engineering.Mcp.Tools.Tests/Evals/scorecards/scorecard.md` is 17/17 structural passes and 0 unexpected escape-hatch successes, including the Switch case the snapshot left red.
+
+The snapshot's remaining todos, closed in its order:
+
+- `p1-xmembers` — `decc1f3`. Spec workflow arguments render as `<x:Members>`, and expression rewrites follow a rename.
+- `p1-default-xaml` — `46f02ea`. Discovered activities take their property surface from `activities get-default-xaml`. `ActivityCatalog.CommonActivityCard` is the 13-activity allowlist. `MaxPackageQueries` is 32, and packages past that budget are named in a truncation warning.
+- `p1-uipath-loops` — `ef6ad53`, then `f1b2b56`. Loop wraps, package stamps, and modern Excel/UIA activities landed first. Spec name and the element name Studio emits now share one index, so `InterruptibleWhile` resolves on `ListActivityCatalog` (including `ActivityCatalog.Fallback` and every merged catalog).
+- `p2-schema-soundness` — `0b1fdc6`. `ActivitySchemaReflector` reads the full settable surface through `MetadataLoadContext`. A typo is rejected when that surface is complete.
+- `p2-uia-reachable` — `ef6ad53`, with the eval flip in `8e9b6aa`. Eval 08 requires a declared `uix:` namespace, `uix:NApplicationCard` / `uix:NClick` (never `d1p1:`), and a `TODO Indicate` round-trip. Eval 08b still refuses a genuinely unknown activity.
+- `p3d-slot-identity` and `p3-blank-template` — `9af918d`. Branch slots keep their identity on read. The blank workflow template has a real display name and import block.
+- `p3-viewstate-idref` — `271b973`. `WorkflowViewState` `IdRef`, `HintSize`, and Sequence `ViewState` are emitted.
+- `p3-annotations` — `04b6d3d`. The workflow description is read from the root activity annotation Studio writes it on.
+- `p4-flowchart-statemachine` — `51bd3f0`. Flowchart and StateMachine author structure-first, and the parser is graph-aware. `0e5431d` recorded the ViewState `Point`/`Size` misclassification as a skipped structural finding; `8a2bc9f` fixed it, so built diagrams pass the catalog guard.
+- `p5-activity-metadata` and `p5-knowledge-search` — `3ca1cb4`. `get_activity_metadata`, `search_activity_docs`, and `search_uipath_knowledge` (excerpts), plus `uipath://activity/{projectPath}/{name}` and `uipath://idioms/{name}`.
+- `p7-allowedvalues` — `0a13395`. Closed-set parameters advertise `AllowedValuesAttribute`, so the protocol schema emits an enum.
+- `p7-progress` — `fa9510a`. Every CLI-backed tool reports progress on the in-flight request token.
+- `p7-contract` — `1cbeeba`. `get_code_context` rejects an empty locator before analysis. `generate_documentation` walks the full activity outline. A corrupt plan returns `PLAN_INVALID` instead of throwing `JsonException`. Plan save honors its cancellation token.
+- `p8-fidelity-evals` — `8e9b6aa`. `GoldenEvalHarness` parses emitted XAML and asserts shape. The substring `Contains` check is gone, which is what made the earlier P0 defects durable.
+- `p9-housekeeping` — already on `b89cf8f`: `FingerprintedCache<T>`, per-key semaphores kept for the cache lifetime, Roslyn cache max 8 (`CSharpAnalysisCache.DefaultMaxEntries`), the repo `McpServerOptions` bridged into the SDK `ServerInfo`, and `docs/tool-api-style-guide.md`. The snapshot's "workers still running" note is stale.
+
+After the snapshot, the vendored skill was repaired and is part of this baseline: `5f3205f` re-applied the coded-first divergence, `37b25b9` added a test that fails if a `uip skills install` restores XAML-first wording, and `b254959` moved the two deleted `project-structure-guide.md` rows to `references/environment-setup.md`.
+
+Still in force:
+
+- Do not run `uip --help`. The self-updater rewrites `.agents/skills/`.
+- After any skill reinstall, re-apply `.agents/skills/LOCAL-DIVERGENCE-uipath-rpa.md`. The regression test names the offending file and line.
+- The short UIA alias `Click` (for `NClick`) stays off `ListActivityCatalog`. `XamlCatalogGuard` matches element names without a namespace, so indexing the bare alias would accept legacy `ui:Click` and the mobile `Click` as modern `uix:NClick`. The alias remains on `ActivityCatalog.TryGet` only.
+- `ModelContextProtocol` is still `2.0.0-preview.3`. That bump is the only item this handoff leaves open, and it is a later, isolated change behind the host tests.
+- Do not hard-code a tool count. `CopilotConnectorTools` is the source.
+- Two types are named `McpServerOptions`: the repo type in `UiPath.Engineering.Mcp.Core.Configuration`, and the SDK type in `ModelContextProtocol.Server`.
+
+No new phase is opened from this file. The fidelity todos listed in the snapshot are closed.
+
+---
+
+# Agent Handoff — Studio Fidelity Gap Closure
+
 Written 2026-09-24 for an agent starting with clean context.
 
 ## Start here
