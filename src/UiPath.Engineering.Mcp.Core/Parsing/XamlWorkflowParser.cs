@@ -123,7 +123,8 @@ public sealed class XamlWorkflowParser {
                 Type = local,
                 Depth = located.Depth,
                 Order = located.Order,
-                Line = located.Line
+                Line = located.Line,
+                Annotation = ReadAnnotation(element)
             };
             model.Activities.Add(activity);
             byId[located.Id] = activity;
@@ -196,6 +197,11 @@ public sealed class XamlWorkflowParser {
 
     private static string ExtractTypeArguments(XElement element) =>
         element.Attributes().FirstOrDefault(a => a.Name.LocalName == "TypeArguments")?.Value ?? string.Empty;
+
+    // sap2010:Annotation.AnnotationText, whichever prefix the file bound it to.
+    private static string? ReadAnnotation(XElement element) =>
+        element.Attributes()
+            .FirstOrDefault(a => a.Name.LocalName == "Annotation.AnnotationText")?.Value;
 
     private static string ExtractInnerType(string argumentType) {
         var start = argumentType.IndexOf('(');

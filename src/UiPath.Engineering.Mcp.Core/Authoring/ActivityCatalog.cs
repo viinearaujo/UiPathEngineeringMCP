@@ -3,55 +3,186 @@ using System.Diagnostics.CodeAnalysis;
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
 public static class ActivityCatalog {
-    private static readonly (string Prefix, string Ns) Wf = ("", "http://schemas.microsoft.com/netfx/2009/xaml/activities");
-    private static readonly (string Prefix, string Ns) Ui = ("ui", "http://schemas.uipath.com/workflow/activities");
+    internal static readonly (string Prefix, string Ns) Wf = ("", "http://schemas.microsoft.com/netfx/2009/xaml/activities");
+    internal static readonly (string Prefix, string Ns) Ui = ("ui", "http://schemas.uipath.com/workflow/activities");
+    internal static readonly (string Prefix, string Ns) Uix = ("uix", "http://schemas.uipath.com/workflow/activities/uix");
+    internal static readonly (string Prefix, string Ns) ModernExcel =
+        ("ueab", "clr-namespace:UiPath.Excel.Activities.Business;assembly=UiPath.Excel.Activities");
 
-    private static readonly HashSet<string> ExcelActivities = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "ForEachRow", "ReadRange", "WriteRange"
-    };
+    public const string SystemPackage = "UiPath.System.Activities";
+    public const string ExcelPackage = "UiPath.Excel.Activities";
+    public const string UiaPackage = "UiPath.UIAutomation.Activities";
 
-    private static ActivitySchema S(string name, (string Prefix, string Ns) ns, bool container, params PropertySchema[] props) =>
-        new(name, ns.Prefix, ns.Ns, container, props,
-            PackageId: ExcelActivities.Contains(name) ? "UiPath.Excel.Activities" : "UiPath.System.Activities");
+    // ---- leaf-activity factories (no body) -----------------------------------
+    //
+    // A framework WF activity: no NuGet package supplies it, it lives in the
+    // default activities namespace, and its CLR type is System.Activities.Statements.
+    private static ActivitySchema Leaf(string name, params PropertySchema[] props) =>
+        new(name, Wf.Prefix, Wf.Ns, false, props, FullTypeName: $"System.Activities.Statements.{name}");
+
+    // A UiPath.Core.Activities leaf supplied by UiPath.System.Activities.
+    private static ActivitySchema UiLeaf(string name, params PropertySchema[] props) =>
+        new(name, Ui.Prefix, Ui.Ns, false, props,
+            PackageId: SystemPackage, FullTypeName: $"UiPath.Core.Activities.{name}");
+
+    // A UiPath.Core.Activities leaf supplied by a package other than
+    // UiPath.System.Activities (the classic Excel family).
+    private static ActivitySchema UiLeafPackaged(string packageId, string fullTypeName, string name, params PropertySchema[] props) =>
+        new(name, Ui.Prefix, Ui.Ns, false, props, PackageId: packageId, FullTypeName: fullTypeName);
+    // A modern Excel "X" leaf: a clr-namespace alias, no scope body of its own.
+    private static ActivitySchema ModernExcelLeaf(string name, params PropertySchema[] props) =>
+        new(name, ModernExcel.Prefix, ModernExcel.Ns, false, props,
+            PackageId: ExcelPackage, FullTypeName: $"UiPath.Excel.Activities.Business.{name}");
+
+    // ---- container-activity factories ----------------------------------------
+
+    private static ActivitySchema Container(string name, BodyDescriptor? body, params PropertySchema[] props) =>
+        new(name, Wf.Prefix, Wf.Ns, true, props,
+            FullTypeName: $"System.Activities.Statements.{name}", Body: body);
+
+    // A UiPath.Core.Activities container. <paramref name="element"/> is the emitted
+    // element when the toolbox label differs from the type (the "While" item emits
+    // InterruptibleWhile).
+    private static ActivitySchema UiContainer(
+        string name, BodyDescriptor body, string? element = null, string? fullType = null, params PropertySchema[] props) =>
+        new(name, Ui.Prefix, Ui.Ns, true, props,
+            PackageId: SystemPackage,
+            FullTypeName: fullType ?? $"UiPath.Core.Activities.{element ?? name}",
+            Body: body, ElementName: element);
+
+    private static ActivitySchema UiContainerPackaged(
+        string packageId, string fullTypeName, string name, BodyDescriptor body, params PropertySchema[] props) =>
+        new(name, Ui.Prefix, Ui.Ns, true, props, PackageId: packageId, FullTypeName: fullTypeName, Body: body);
+
+    private static ActivitySchema ModernExcelContainer(string name, BodyDescriptor body, params PropertySchema[] props) =>
+        new(name, ModernExcel.Prefix, ModernExcel.Ns, true, props,
+            PackageId: ExcelPackage, FullTypeName: $"UiPath.Excel.Activities.Business.{name}", Body: body);
+
+    private static ActivitySchema UiaLeaf(string name, params PropertySchema[] props) =>
+        new(name, Uix.Prefix, Uix.Ns, false, props,
+            PackageId: UiaPackage, FullTypeName: $"UiPath.UIAutomationNext.Activities.{name}");
+
+    private static ActivitySchema UiaContainer(string name, BodyDescriptor body, params PropertySchema[] props) =>
+        new(name, Uix.Prefix, Uix.Ns, true, props,
+            PackageId: UiaPackage, FullTypeName: $"UiPath.UIAutomationNext.Activities.{name}", Body: body);
+
+    // ---- property helpers ----------------------------------------------------
 
     private static PropertySchema E(string name, bool required = true) => new(name, required, PropertyKind.Expression);
     private static PropertySchema L(string name, bool required = false) => new(name, required, PropertyKind.Literal);
     private static PropertySchema T(string name, bool required = true) => new(name, required, PropertyKind.TypeArgument);
 
+    private static PropertySchema Enum(string name, params string[] allowed) =>
+        new(name, false, PropertyKind.Literal, AllowedValues: allowed);
+
     public static IReadOnlyList<ActivitySchema> All { get; } =
     [
-        S("Sequence", Wf, true, L("DisplayName")),
+        // ---- framework control flow ----
+        // Sequence's content property takes its children directly (no property
+        // element), so it has no body descriptor: the generic renderer emits them.
+        Container("Sequence", body: null, L("DisplayName")),
         // TypeArgument selects the preferred generic Assign<T> form; omitting it
         // renders the non-generic object/object Assign.
-        S("Assign", Wf, false, L("DisplayName"), T("TypeArgument", required: false), E("To"), E("Value")),
-        S("If", Wf, true, L("DisplayName"), E("Condition")),
-        S("Switch", Wf, true, L("DisplayName"), E("Expression"), T("TypeArgument")),
-        S("ForEach", Wf, true, L("DisplayName"), E("Values"), T("TypeArgument"), L("ItemName")),
-        S("ForEachRow", Ui, true, L("DisplayName"), E("DataTable")),
-        S("While", Wf, true, L("DisplayName"), E("Condition")),
-        S("DoWhile", Wf, true, L("DisplayName"), E("Condition")),
-        S("TryCatch", Wf, true, L("DisplayName")),
-        S("LogMessage", Ui, false, L("DisplayName"), E("Message"), L("Level")),
-        S("WriteLine", Wf, false, L("DisplayName"), E("Text")),
-        S("InvokeWorkflowFile", Ui, false, L("DisplayName"), L("WorkflowFileName", required: true)),
-        S("Delay", Wf, false, L("DisplayName"), E("Duration")),
-        S("Throw", Wf, false, L("DisplayName"), E("Exception")),
-        S("Rethrow", Wf, false, L("DisplayName")),
-        S("RetryScope", Ui, true, L("DisplayName"), L("NumberOfRetries"), L("RetryInterval")),
-        S("BuildDataTable", Ui, false, L("DisplayName"), E("DataTable")),
-        S("AddDataRow", Ui, false, L("DisplayName"), E("DataTable"), E("ArrayRow")),
-        S("ReadRange", Ui, false, L("DisplayName"), L("Range"), L("SheetName"), E("DataTable")),
-        S("WriteRange", Ui, false, L("DisplayName"), L("Range"), L("SheetName"), E("DataTable")),
+        new ActivitySchema("Assign", Wf.Prefix, Wf.Ns, false,
+            [L("DisplayName"), T("TypeArgument", required: false), E("To"), E("Value")],
+            FullTypeName: "System.Activities.Statements.Assign`1"),
+        Container("If", new BodyDescriptor(BodyShape.Branches, "Then"),
+            L("DisplayName"), E("Condition")),
+        Container("Switch", new BodyDescriptor(BodyShape.Branches, "Cases"),
+            L("DisplayName"), E("Expression"), T("TypeArgument")),
+        Container("TryCatch", new BodyDescriptor(BodyShape.Branches, "Try"),
+            L("DisplayName")),
+        Leaf("WriteLine", L("DisplayName"), E("Text")),
+        Leaf("Delay", L("DisplayName"), E("Duration")),
+        Leaf("Throw", L("DisplayName"), E("Exception")),
+        Leaf("Rethrow", L("DisplayName")),
+
+        // ---- UiPath loop wraps (Studio emits these, not the framework types) ----
+        UiContainer("While", new BodyDescriptor(BodyShape.Activity, "Body"), element: "InterruptibleWhile",
+            props: [L("DisplayName"), E("Condition"), L("MaxIterations")]),
+        UiContainer("DoWhile", new BodyDescriptor(BodyShape.Activity, "Body"), element: "InterruptibleDoWhile",
+            props: [L("DisplayName"), E("Condition"), L("MaxIterations")]),
+        UiContainer("ForEach", new BodyDescriptor(BodyShape.TypedAction, "Body", "System.Collections.IEnumerable", "item"),
+            element: "ForEach", fullType: "UiPath.Core.Activities.ForEach`1",
+            props: [L("DisplayName"), E("Values"), T("TypeArgument"), L("ItemName"), L("MaxIterations")]),
+
+        // ---- UiPath System package data + logging ----
+        UiContainer("ForEachRow", new BodyDescriptor(BodyShape.TypedAction, "Body", "System.Data.DataRow", "CurrentRow"),
+            props: [L("DisplayName"), E("DataTable")]),
+        UiLeaf("LogMessage", L("DisplayName"), E("Message"), Enum("Level", "Trace", "Info", "Warn", "Error", "Fatal")),
+        UiLeaf("InvokeWorkflowFile", L("DisplayName"), L("WorkflowFileName", required: true)),
+        UiContainer("RetryScope", new BodyDescriptor(BodyShape.UntypedAction, "ActivityBody"),
+            props: [L("DisplayName"), L("NumberOfRetries"), L("RetryInterval"), L("ContinueOnError")]),
+        UiLeaf("BuildDataTable", L("DisplayName"), E("DataTable")),
+        UiLeaf("AddDataRow", L("DisplayName"), E("DataTable"), E("ArrayRow")),
         // InvokeCode binds its parameters through the .Arguments dictionary and
         // takes no activity body, so it is not a container.
-        S("InvokeCode", Ui, false, L("DisplayName"), L("Code", required: true), L("Language")),
+        new ActivitySchema("InvokeCode", Ui.Prefix, Ui.Ns, false,
+            [L("DisplayName"), L("Code", required: true), Enum("Language", "VBNet", "CSharp"), L("ContinueOnError")],
+            PackageId: SystemPackage, FullTypeName: "UiPath.Core.Activities.InvokeCode",
+            Body: new BodyDescriptor(BodyShape.ArgumentDictionary, "Arguments")),
+
+        // ---- classic Excel (COM-interop; standalone, no scope) ----
+        UiLeafPackaged(ExcelPackage, "UiPath.Excel.Activities.ReadRange", "ReadRange",
+            L("DisplayName"), L("Range"), L("SheetName"), L("WorkbookPath"), E("DataTable"), L("AddHeaders")),
+        UiLeafPackaged(ExcelPackage, "UiPath.Excel.Activities.WriteRange", "WriteRange",
+            L("DisplayName"), L("Range"), L("SheetName"), L("WorkbookPath"), L("StartingCell"), E("DataTable")),
+
+        // ---- modern Excel (Portable-safe; the family that works in Portable projects) ----
+        ModernExcelContainer("ExcelApplicationCard",
+            new BodyDescriptor(BodyShape.TypedAction, "Body", "UiPath.Excel.IWorkbookQuickHandle", "Excel"),
+            L("DisplayName"), E("WorkbookPath"), L("CreateNewFile"), L("AutoSave"), L("ReadOnly")),
+        ModernExcelLeaf("ReadRangeX",
+            L("DisplayName"), E("Range"), E("SaveTo"), L("AddHeaders")),
+        ModernExcelLeaf("WriteRangeX",
+            L("DisplayName"), E("Source"), E("Destination"), L("Append"), L("ExcludeHeaders"), L("IgnoreEmptySource")),
+        ModernExcelContainer("ExcelForEachRowX",
+            new BodyDescriptor(BodyShape.TypedAction, "Body", "System.Data.DataRow", "CurrentRow"),
+            L("DisplayName"), E("Range")),
+
+        // ---- UI Automation (the documented placeholder-selector path) ----
+        // The Rule-24 wrap lives in the Body slot; selectors stay unset until a
+        // developer runs Indicate, which is why Target is not marked required.
+        UiaContainer("NApplicationCard", new BodyDescriptor(BodyShape.ActivityCollection, "Body"),
+            L("DisplayName"), L("ApplicationWindow"), Enum("InteractionMode", "HardwareEvents", "Simulate", "DebuggerApi"), L("Target")),
+        UiaLeaf("NClick",
+            L("DisplayName"), L("Target"), Enum("ClickType", "Single", "Double", "Down", "Up"),
+            L("KeyModifiers"), L("WaitForReady"), L("HealingAgentBehavior")),
+        UiaLeaf("NDoubleClick",
+            L("DisplayName"), L("Target"), L("WaitForReady"), L("HealingAgentBehavior")),
+        UiaLeaf("NTypeInto",
+            L("DisplayName"), L("Target"), E("Text"), L("ClickBeforeTyping"),
+            Enum("EmptyFieldMode", "None", "SingleLine", "MultiLine"), L("WaitForReady"), L("HealingAgentBehavior")),
+        UiaLeaf("NGetText",
+            L("DisplayName"), L("Target"), E("TextString"), L("HealingAgentBehavior")),
+        UiaLeaf("NGoToUrl",
+            L("DisplayName"), L("Url"), L("WaitForReady"), L("HealingAgentBehavior")),
     ];
 
     public static IActivityCatalog Fallback { get; } = new ListActivityCatalog(All, "fallback");
 
-    private static readonly IReadOnlyDictionary<string, ActivitySchema> ByName =
-        All.ToDictionary(s => s.Name, StringComparer.OrdinalIgnoreCase);
+    // Keyed by both the spec name and the emitted element name, so a spec may say
+    // either "While" (the toolbox label) or "InterruptibleWhile" (the type Studio
+    // serializes). UIA classes carry an "N" prefix, so the short toolbox name
+    // ("Click", "TypeInto") resolves to the same schema.
+    private static readonly IReadOnlyDictionary<string, ActivitySchema> ByName = BuildLookup(All);
+
+    private static IReadOnlyDictionary<string, ActivitySchema> BuildLookup(IReadOnlyList<ActivitySchema> schemas) {
+        var map = new Dictionary<string, ActivitySchema>(StringComparer.OrdinalIgnoreCase);
+        foreach (var schema in schemas) {
+            map.TryAdd(schema.Name, schema);
+            if (!string.Equals(schema.RenderName, schema.Name, StringComparison.OrdinalIgnoreCase)) {
+                map.TryAdd(schema.RenderName, schema);
+            }
+
+            var render = schema.RenderName;
+            if (render.StartsWith('N') && render.Length > 1 && char.IsUpper(render[1])) {
+                map.TryAdd(render[1..], schema);
+            }
+        }
+
+        return map;
+    }
 
     public static bool TryGet(string name, [NotNullWhen(true)] out ActivitySchema? schema) =>
         ByName.TryGetValue(name, out schema);
@@ -72,10 +203,19 @@ public static class ActivityCatalog {
         return best;
     }
 
+    // Framework System.Activities.Statements types: the default activities namespace.
     internal static readonly HashSet<string> WorkflowFoundationNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Sequence", "Assign", "If", "Switch", "ForEach", "While", "DoWhile",
-        "TryCatch", "WriteLine", "Delay", "Throw", "Rethrow"
+        "Sequence", "Assign", "If", "Switch", "TryCatch", "WriteLine", "Delay", "Throw", "Rethrow"
+    };
+
+    // UiPath.Core.Activities types: the ui: namespace. Used to classify a
+    // discovered activity that did not report one.
+    internal static readonly HashSet<string> UiPathCoreNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "While", "DoWhile", "ForEach", "InterruptibleWhile", "InterruptibleDoWhile",
+        "ForEachRow", "LogMessage", "InvokeWorkflowFile", "InvokeCode", "RetryScope",
+        "BuildDataTable", "AddDataRow", "ReadRange", "WriteRange"
     };
 
     // Rule 21a's fast-path card: the 13 built-in activities whose surface the
@@ -117,6 +257,11 @@ public static class ActivityCatalog {
             ["AddDataRow.ArrayRow"] = ("x:Object[]", ArgumentDirection.In),
             ["ReadRange.DataTable"] = ("sd:DataTable", ArgumentDirection.Out),
             ["WriteRange.DataTable"] = ("sd:DataTable", ArgumentDirection.In),
+            ["ExcelApplicationCard.WorkbookPath"] = ("x:String", ArgumentDirection.In),
+            ["ReadRangeX.SaveTo"] = ("sd:DataTable", ArgumentDirection.Out),
+            ["WriteRangeX.Source"] = ("sd:DataTable", ArgumentDirection.In),
+            ["NTypeInto.Text"] = ("x:String", ArgumentDirection.In),
+            ["NGetText.TextString"] = ("x:String", ArgumentDirection.Out),
         };
 
     internal static bool AcceptsArgumentDictionary(string activityName) =>

@@ -46,7 +46,7 @@ public class Rule24SequenceWrapTests {
     }
 
     [Fact]
-    public void ForEach_BodyIsSequenceWrapped() {
+    public void ForEach_BodyIsSequenceWrappedAndUsesTheUiPathWrap() {
         var spec = new ActivitySpec {
             Name = "ForEach",
             Properties = new() { ["values"] = "[rows]", ["typeArgument"] = "String" },
@@ -56,6 +56,7 @@ public class Rule24SequenceWrapTests {
         var result = XamlBuilder.RenderFragment(spec);
 
         Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<ui:ForEach", result.Xaml);
         Assert.Contains("<Sequence DisplayName=\"Body\">", result.Xaml);
     }
 
@@ -108,10 +109,12 @@ public class Rule24SequenceWrapTests {
             Children = [new ActivitySpec { Name = "Sequence", Children = [Leaf(), Leaf("second")] }]
         };
 
+        // Studio's While toolbox item emits ui:InterruptibleWhile with a single
+        // .Body slot; the Rule 24 wrap is the one Sequence inside it.
         var result = XamlBuilder.RenderFragment(spec);
 
         Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
-        Assert.Contains("<While.Body>", result.Xaml);
+        Assert.Contains("<ui:InterruptibleWhile.Body>", result.Xaml);
         Assert.Equal(1, Count(result.Xaml!, "<Sequence"));
     }
 

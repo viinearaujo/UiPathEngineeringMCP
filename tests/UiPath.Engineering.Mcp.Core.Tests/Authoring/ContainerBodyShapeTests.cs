@@ -51,8 +51,8 @@ public class ContainerBodyShapeTests {
     }
 
     [Theory]
-    [InlineData("While", "<While.Body>")]
-    [InlineData("DoWhile", "<DoWhile.Body>")]
+    [InlineData("While", "<ui:InterruptibleWhile.Body>")]
+    [InlineData("DoWhile", "<ui:InterruptibleDoWhile.Body>")]
     public void WhileAndDoWhile_TakeASingleSequenceWrappedBody(string activity, string bodyElement) {
         var spec = new ActivitySpec {
             Name = activity,
@@ -65,6 +65,26 @@ public class ContainerBodyShapeTests {
         Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
         Assert.Contains(bodyElement, result.Xaml);
         Assert.Contains("<Sequence DisplayName=\"Body\">", result.Xaml);
+    }
+
+    [Theory]
+    [InlineData("While", "<ui:InterruptibleWhile")]
+    [InlineData("DoWhile", "<ui:InterruptibleDoWhile")]
+    public void WhileAndDoWhile_EmitTheUiPathWrapStudioEmits(string activity, string element) {
+        var spec = new ActivitySpec {
+            Name = activity,
+            Properties = new() { ["condition"] = "[n < 3]" },
+            Children = [Child()]
+        };
+
+        var result = XamlBuilder.RenderFragment(spec);
+
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains(element, result.Xaml);
+        // The framework types do not support breakpoints/step control and are no
+        // longer what the catalog stamps.
+        Assert.DoesNotContain("<While ", result.Xaml);
+        Assert.DoesNotContain("<DoWhile ", result.Xaml);
     }
 
     [Fact]

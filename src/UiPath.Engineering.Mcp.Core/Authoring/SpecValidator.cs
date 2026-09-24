@@ -109,13 +109,21 @@ public static class SpecValidator {
 
         if (spec.Properties is not null) {
             foreach (var (name, value) in spec.Properties) {
-                if (!lookup.TryGetValue(name, out var property)) continue; // unknown properties are tolerated
+                if (!lookup.TryGetValue(name, out var property)) continue; // unknown properties are rendered as a passthrough attribute with a warning
                 var mismatch = FormMismatch(property, value, context);
                 if (mismatch is not null) {
                     errors.Add(new ToolError(
                         ToolErrorCodes.SpecValueFormMismatch,
                         $"Property \"{name}\" of \"{schema.Name}\" at {path}: {mismatch}",
                         $"Use the correct form for \"{property.Name}\": {CorrectForm(property, context)}."));
+                    continue;
+                }
+
+                if (AllowedValueMismatch(property, value) is { } allowed) {
+                    errors.Add(new ToolError(
+                        ToolErrorCodes.SpecValueFormMismatch,
+                        $"Property \"{name}\" of \"{schema.Name}\" at {path}: {allowed}",
+                        $"Set \"{property.Name}\" to one of: {string.Join(", ", property.AllowedValues!)}."));
                 }
             }
         }
@@ -129,18 +137,18 @@ public static class SpecValidator {
 
         // While / DoWhile take exactly one Activity body: a second child has no
         // slot to go into, and the XAML loader rejects it.
-        if (spec.Children is { Count: > 1 } && IsSingleBody(schema.Name)) {
+        if (spec.Children is { Count: > 1 } && TakesSingleBody(schema)) {
             errors.Add(new ToolError(
                 ToolErrorCodes.SpecInvalidNesting,
                 $"Activity \"{schema.Name}\" at {path} takes a single Activity body but has {spec.Children.Count} children.",
                 $"Wrap the {spec.Children.Count} activities in one Sequence and make that the only child: {{ \"name\": \"Sequence\", \"children\": [...] }}."));
         }
 
-        if (spec.Variables is { Count: > 0 } && !isRoot) {
+        if (spec.Variables is { Count: > 0 } && !isRoot && !IsSequence(schema)) {
             errors.Add(new ToolError(
                 ToolErrorCodes.SpecInvalidNesting,
-                $"Activity \"{schema.Name}\" at {path} declares variables, which are only allowed on the root spec.",
-                "Move the 'variables' list to the root spec."));
+                $"Activity \"{schema.Name}\" at {path} declares variables; only a Sequence can own a variable scope.",
+                "Move the 'variables' list onto this activity's enclosing Sequence, or wrap the activities in a Sequence that declares them."));
         }
 
         if (spec.Imports is { Count: > 0 } && !isRoot) {
@@ -290,8 +298,13 @@ public static class SpecValidator {
         _ => "Remove the children, or nest them inside a container activity such as Sequence."
     };
 
-    private static bool IsSingleBody(string activityName) =>
-        activityName is "While" or "DoWhile";
+    private static bool TakesSingleBody(ActivitySchema schema) =>
+        schema.Body?.Shape == BodyShape.Activity;
+
+    // A Sequence owns a <Sequence.Variables> block wherever it sits, so a nested
+    // Sequence may scope variables to itself.
+    private static bool IsSequence(ActivitySchema schema) =>
+        string.Equals(schema.RenderName, "Sequence", StringComparison.OrdinalIgnoreCase);
 
     internal static bool IsKnownDirection(string? direction) {
         if (string.IsNullOrWhiteSpace(direction)) {
@@ -306,6 +319,19 @@ public static class SpecValidator {
 
     private static bool ContainsProperty(Dictionary<string, string> properties, string name) =>
         properties.ContainsKey(name) || properties.Keys.Any(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
+
+    private static string? AllowedValueMismatch(PropertySchema property, string value) {
+        if (property.AllowedValues is not { Count: > 0 } allowed) {
+            return null;
+        }
+
+        // A literal property holding an expression is already reported as a form
+        // mismatch; do not pile a second error on the same value.
+        var candidate = value.Trim();
+        return allowed.Any(a => string.Equals(a, candidate, StringComparison.OrdinalIgnoreCase))
+            ? null
+            : $"value \"{value}\" is not one of the allowed values.";
+    }
 
     private static string? FormMismatch(PropertySchema property, string value, Context context) {
         var wrapped = ExpressionValue.IsBracketWrapped(value);

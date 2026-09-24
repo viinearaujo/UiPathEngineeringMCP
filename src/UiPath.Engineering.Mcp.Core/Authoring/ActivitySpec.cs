@@ -12,6 +12,13 @@ public sealed class ActivitySpec {
     public List<ArgumentMappingSpec>? Arguments { get; set; } // InvokeWorkflowFile and InvokeCode only
     public List<string>? Imports { get; set; }           // root spec only — expression namespaces
 
+    /// <summary>
+    /// Studio annotation text, rendered as
+    /// <c>sap2010:Annotation.AnnotationText</c>. Studio shows it as the node's
+    /// description in the designer and the Outline pane.
+    /// </summary>
+    public string? Annotation { get; set; }
+
     // The workflow's own argument declarations, rendered as <x:Property> children
     // of the root <x:Members>. Root spec only. Distinct from Arguments, which are
     // the In/Out bindings of a single InvokeWorkflowFile / InvokeCode call.

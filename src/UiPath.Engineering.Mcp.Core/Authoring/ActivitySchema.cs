@@ -36,7 +36,11 @@ public enum BodyShape {
     /// <summary>A property element holding <c>ActivityAction&lt;T&gt;</c> + <c>DelegateInArgument</c>, as on ForEachRow.Body.</summary>
     TypedAction,
     /// <summary>Parameters arrive as an <c>&lt;Arguments&gt;</c> dictionary rather than as a body.</summary>
-    ArgumentDictionary
+    ArgumentDictionary,
+    /// <summary>The body is a <c>.Body</c> property element holding a bare <c>Sequence</c> (UiPath scope cards, e.g. NApplicationCard).</summary>
+    ActivityCollection,
+    /// <summary>Named branch slots on one activity (If.Then/.Else, Switch cases/.Default, TryCatch.Try/Catches/Finally).</summary>
+    Branches
 }
 
 /// <summary>
@@ -69,4 +73,13 @@ public sealed record ActivitySchema(
     string Name, string Prefix, string XmlNamespace, bool IsContainer,
     IReadOnlyList<PropertySchema> Properties, bool Experimental = false,
     string? PackageId = null, string? PackageVersion = null, string? FullTypeName = null,
-    BodyDescriptor? Body = null);
+    BodyDescriptor? Body = null, string? ElementName = null) {
+    /// <summary>
+    /// The XML element local name to emit. Differs from <see cref="Name"/> only
+    /// where Studio's toolbox label is not the emitted type: the "While",
+    /// "Do While", and "For Each" toolbox items emit
+    /// <c>InterruptibleWhile</c> / <c>InterruptibleDoWhile</c> / <c>ForEach</c>.
+    /// Lookups accept both names.
+    /// </summary>
+    public string RenderName => ElementName ?? Name;
+}

@@ -113,6 +113,25 @@ public class XamlWorkflowParserTests {
     }
 
     [Fact]
+    public void Parse_ExtractsPerActivityAnnotations() {
+        const string xaml = """
+        <Activity x:Class="Main"
+                  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation">
+          <Sequence DisplayName="Main" sap2010:Annotation.AnnotationText="Entry point">
+            <WriteLine DisplayName="Say" Text="hi" sap2010:Annotation.AnnotationText="Diagnostic echo" />
+          </Sequence>
+        </Activity>
+        """;
+
+        var model = Parse(xaml);
+
+        Assert.Equal("Entry point", model.Activities.Single(a => a.Type == "Sequence").Annotation);
+        Assert.Equal("Diagnostic echo", model.Activities.Single(a => a.Type == "WriteLine").Annotation);
+    }
+
+    [Fact]
     public void Parse_AssignsIdsParentLinksAndOrder() {
         var model = Parse();
 

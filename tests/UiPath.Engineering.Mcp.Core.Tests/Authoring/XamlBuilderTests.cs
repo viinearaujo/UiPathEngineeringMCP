@@ -26,11 +26,13 @@ public class XamlBuilderTests {
             Children = [new ActivitySpec { Name = "LogMessage", Properties = new() { ["message"] = "[row(0).ToString()]" } }]
         };
         var result = XamlBuilder.RenderFragment(spec);
-        Assert.Contains("<ForEach x:TypeArguments=\"sd:DataRow\"", result.Xaml);
+        // Studio's For Each toolbox item emits ui:ForEach, not the framework type.
+        Assert.Contains("<ui:ForEach x:TypeArguments=\"sd:DataRow\"", result.Xaml);
         Assert.Contains("<DelegateInArgument x:TypeArguments=\"sd:DataRow\" Name=\"row\" />", result.Xaml);
         Assert.Contains("<ui:LogMessage", result.Xaml);
         // The declared alias must resolve: System.Data types are not in the x: schema.
         Assert.Contains("xmlns:sd=\"clr-namespace:System.Data;assembly=System.Data\"", result.Xaml);
+        Assert.Contains("xmlns:ui=\"http://schemas.uipath.com/workflow/activities\"", result.Xaml);
     }
 
     [Fact]
@@ -218,5 +220,144 @@ public class XamlBuilderTests {
             }]
         };
         Assert.Contains(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
+    }
+
+    [Fact]
+    public void RenderFragment_NApplicationCard_RendersBodyWithUixPrefix() {
+        var spec = new ActivitySpec {
+            Name = "NApplicationCard",
+            Properties = new() { ["interactionMode"] = "HardwareEvents" },
+            Children = [
+                new ActivitySpec { Name = "NClick", Properties = new() { ["displayName"] = "TODO Indicate — Click Login" } },
+                new ActivitySpec { Name = "NTypeInto", Properties = new() { ["text"] = "[user]", ["displayName"] = "TODO Indicate — Type Username" } }
+            ]
+        };
+
+        var result = XamlBuilder.RenderFragment(spec);
+
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<uix:NApplicationCard", result.Xaml);
+        Assert.Contains("<uix:NApplicationCard.Body>", result.Xaml);
+        Assert.Contains("<uix:NClick", result.Xaml);
+        Assert.Contains("<uix:NTypeInto", result.Xaml);
+        Assert.Contains("xmlns:uix=\"http://schemas.uipath.com/workflow/activities/uix\"", result.Xaml);
+        // A uix: element must never serialize under a generated d1p1: prefix.
+        Assert.DoesNotContain("d1p1:", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderFragment_NGetText_RendersOutputExpressionAsAPropertyElementInCSharp() {
+        var spec = new ActivitySpec {
+            Name = "NGetText",
+            Properties = new() { ["textString"] = "statusText" }
+        };
+
+        var result = XamlBuilder.RenderFragment(spec, ActivityCatalog.Fallback,
+            new ProjectXamlSettings { ExpressionLanguage = ExpressionLanguage.CSharp });
+
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<uix:NGetText.TextString>", result.Xaml);
+        Assert.Contains("<OutArgument x:TypeArguments=\"x:String\">", result.Xaml);
+        Assert.Contains("<CSharpReference x:TypeArguments=\"x:String\">statusText</CSharpReference>", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderFragment_ExcelApplicationCard_RendersTypedBodyAndAliases() {
+        var spec = new ActivitySpec {
+            Name = "ExcelApplicationCard",
+            Properties = new() { ["workbookPath"] = "\"book.xlsx\"" },
+            Children = [new ActivitySpec { Name = "ReadRangeX", Properties = new() { ["range"] = "\"A1:B2\"", ["saveTo"] = "[dt]" } }]
+        };
+
+        var result = XamlBuilder.RenderFragment(spec);
+
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<ueab:ExcelApplicationCard", result.Xaml);
+        Assert.Contains("<ueab:ExcelApplicationCard.Body>", result.Xaml);
+        Assert.Contains("<ActivityAction x:TypeArguments=\"ue:IWorkbookQuickHandle\">", result.Xaml);
+        Assert.Contains("<DelegateInArgument x:TypeArguments=\"ue:IWorkbookQuickHandle\" Name=\"Excel\" />", result.Xaml);
+        Assert.Contains("xmlns:ueab=\"clr-namespace:UiPath.Excel.Activities.Business;assembly=UiPath.Excel.Activities\"", result.Xaml);
+        Assert.Contains("xmlns:ue=\"clr-namespace:UiPath.Excel;assembly=UiPath.Excel.Activities\"", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderFragment_ForEach_ItemNameOverrideWinsOverTheDescriptorDefault() {
+        var spec = new ActivitySpec {
+            Name = "ForEach",
+            Properties = new() { ["values"] = "[rows]", ["typeArgument"] = "String", ["itemName"] = "row" },
+            Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "[row]" } }]
+        };
+
+        var result = XamlBuilder.RenderFragment(spec);
+
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<DelegateInArgument x:TypeArguments=\"x:String\" Name=\"row\" />", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderFragment_Annotation_RendersSap2010AnnotationText() {
+        var spec = new ActivitySpec {
+            Name = "Sequence",
+            Annotation = "Reads the invoice queue",
+            Children = [new ActivitySpec {
+                Name = "WriteLine",
+                Properties = new() { ["text"] = "\"hi\"" },
+                Annotation = "Diagnostic echo"
+            }]
+        };
+
+        var result = XamlBuilder.RenderFragment(spec);
+
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("sap2010:Annotation.AnnotationText=\"Reads the invoice queue\"", result.Xaml);
+        Assert.Contains("sap2010:Annotation.AnnotationText=\"Diagnostic echo\"", result.Xaml);
+        Assert.Contains("xmlns:sap2010=\"http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation\"", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderWorkflowFile_NoAnnotation_DeclaresNoSap2010InFragment() {
+        var spec = new ActivitySpec {
+            Name = "Sequence",
+            Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"hi\"" } }]
+        };
+
+        var result = XamlBuilder.RenderFragment(spec);
+
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.DoesNotContain("sap2010:", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderFragment_NestedSequence_MayDeclareItsOwnVariables() {
+        var spec = new ActivitySpec {
+            Name = "Sequence",
+            Children = [new ActivitySpec {
+                Name = "Sequence",
+                Variables = [new VariableSpec { Name = "local", Type = "Int32" }],
+                Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "[local]" } }]
+            }]
+        };
+
+        Assert.Empty(SpecValidator.Validate(spec));
+        var result = XamlBuilder.RenderFragment(spec);
+
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        Assert.Contains("<Sequence.Variables>", result.Xaml);
+        Assert.Contains("<Variable x:TypeArguments=\"x:Int32\" Name=\"local\" />", result.Xaml);
+    }
+
+    [Fact]
+    public void Validate_VariablesOnNonSequence_IsRejected() {
+        var spec = new ActivitySpec {
+            Name = "Sequence",
+            Children = [new ActivitySpec {
+                Name = "If",
+                Properties = new() { ["condition"] = "[flag]" },
+                Variables = [new VariableSpec { Name = "v", Type = "Int32" }]
+            }]
+        };
+
+        var error = Assert.Single(SpecValidator.Validate(spec), e => e.ErrorCode == ToolErrorCodes.SpecInvalidNesting);
+        Assert.Contains("Sequence", error.FixHint);
     }
 }

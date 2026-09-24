@@ -9,6 +9,8 @@ public sealed class ActivityModel {
     public string? ParentId { get; init; }
     public string DisplayName { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
+    /// <summary>Studio annotation (<c>sap2010:Annotation.AnnotationText</c>) on this activity, if any.</summary>
+    public string? Annotation { get; init; }
     public int Depth { get; init; }
     public int Order { get; init; }
     public int Line { get; init; }
