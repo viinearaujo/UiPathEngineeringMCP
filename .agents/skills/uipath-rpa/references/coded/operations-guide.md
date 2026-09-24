@@ -4,7 +4,7 @@ Detailed step-by-step procedures for all operations on UiPath coded workflow pro
 
 ## Initialize a New Coded Project
 
-Use this procedure ONLY when the user explicitly asked for a coded project ("coded", ".cs", "C# workflow"). For ambiguous "create a workflow" / "automate X" requests, default to XAML — see [../coded-vs-xaml-guide.md](../coded-vs-xaml-guide.md).
+This is the default procedure for a new project or an ambiguous "create a workflow" / "automate X" request. Use the XAML procedure only for REFramework / orchestration wiring, a XAML-only capability, or an explicit XAML ask — see [../coded-vs-xaml-guide.md](../coded-vs-xaml-guide.md).
 
 There is no "create a coded project" command. `init` always scaffolds XAML; coded mode is a post-scaffold step (add `.cs` files, update `entryPoints`). For the canonical `init` documentation — flag semantics, scaffolding behavior, how `--expression-language` works — see [../environment-setup.md § Step 0.3: Creating a New Project](../environment-setup.md#step-03-creating-a-new-project).
 

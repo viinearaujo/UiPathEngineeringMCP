@@ -46,11 +46,11 @@ If you encounter auth errors (401, 403, "not authenticated") during any phase, p
 
 **`--expression-language` is independent of coded vs XAML.** It controls VB vs C# syntax inside XAML activity expressions — not whether the project has `.cs` workflow files. Coded workflows (`.cs` with `[Workflow]` / `[TestCase]`) work fine in both `VisualBasic` and `CSharp` projects.
 
-**To work in coded mode**, scaffold the project (always XAML), then add `.cs` workflow files following [coded/operations-guide.md § Add a Workflow File](coded/operations-guide.md#add-a-workflow-file-to-existing-project) and update `entryPoints` in `project.json`. The scaffolded `Main.xaml` / `TestCase.xaml` can stay alongside your `.cs` files — `.xaml` and `.cs` workflows coexist freely.
+**Coded is the default mode for a new project.** Scaffold the project (always XAML), then add `.cs` workflow files following [coded/operations-guide.md § Add a Workflow File](coded/operations-guide.md#add-a-workflow-file-to-existing-project) and update `entryPoints` in `project.json`. The scaffolded `Main.xaml` / `TestCase.xaml` can stay alongside your `.cs` files — `.xaml` and `.cs` workflows coexist freely.
 
 **First, decide which template to use** — see [§ Template selection](#template-selection) below **before** running any `init` command. Defaulting to `--template-id BlankTemplate` is correct only when the user did not name a template or domain pattern.
 
-### For XAML Projects (default for new projects)
+### For XAML Projects
 
 ```bash
 uip rpa init \
@@ -69,7 +69,7 @@ uip rpa init \
 
 **`--studio-dir`:** Optional. Headless Studio does not need it. Pass it only when you have explicitly forced Studio Desktop (`UIPATH_RPA_TOOL_USE_STUDIO=1`, or invoking `diff`/`focus-activity`) and Studio's auto-detection from the registry fails.
 
-### For Coded Projects (only when the user explicitly requested coded)
+### For Coded Projects
 
 Run the **same** `init` command as for an XAML project (above) — there is no separate coded form. After it scaffolds, add `.cs` workflow files per [coded/operations-guide.md § Add a Workflow File](coded/operations-guide.md#add-a-workflow-file-to-existing-project) and update `entryPoints` in `project.json`. The scaffolded `Main.xaml` / `TestCase.xaml` can stay — remove it only if the user explicitly asks for a coded-only project.
 
@@ -336,7 +336,7 @@ Dependencies use NuGet version constraint syntax:
 
 When creating a project, **proactively design the right file structure** based on the task complexity. Do not put everything into a single root workflow file. Use your best judgment to split the project into multiple files following good software engineering practices.
 
-For the coded vs XAML decision, see [coded-vs-xaml-guide.md](coded-vs-xaml-guide.md). For new projects, the default is XAML — examples below lead with XAML and note where the coded equivalent differs.
+For the coded vs XAML decision, see [coded-vs-xaml-guide.md](coded-vs-xaml-guide.md). For new projects, the default is coded — examples below cover both modes and note where the XAML equivalent differs.
 
 ### Guidelines
 
@@ -478,7 +478,7 @@ OrderProcessing/
 
 ### Project Structure Decision Tree
 
-**First — coded or XAML?** For new projects, default to XAML unless the user explicitly said "coded" or named a coded-specific trigger (custom data models, complex algorithms, unit tests on business logic). See [coded-vs-xaml-guide.md](coded-vs-xaml-guide.md). The root workflow is `Main.xaml` for XAML projects and `Main.cs` for coded projects — substitute accordingly below.
+**First — coded or XAML?** For new projects, default to coded unless the ask is REFramework / orchestration wiring, a XAML-only capability, or an explicit XAML request. See [coded-vs-xaml-guide.md](coded-vs-xaml-guide.md). The root workflow is `Main.xaml` for XAML projects and `Main.cs` for coded projects — substitute accordingly below.
 
 **Is it a single, simple task?**
 - ✅ Yes → Single root workflow

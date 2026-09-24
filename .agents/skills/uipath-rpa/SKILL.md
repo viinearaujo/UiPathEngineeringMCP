@@ -53,18 +53,18 @@ For modern projects, determine whether this is a **coded** or **XAML** project:
 1. **Coded mode** — `.cs` files with `[Workflow]` or `[TestCase]` attributes exist AND no `.xaml` workflow files (beyond scaffolded `Main.xaml`)
 2. **XAML mode** — `.xaml` workflow files exist AND no coded workflow `.cs` files
 3. **Hybrid** — Both exist → consult [coded-vs-xaml-guide.md](references/coded-vs-xaml-guide.md) to pick the right mode for each new file; default to matching the user's current request
-4. **New project** — Neither exists → **default to XAML.** Switch to coded only when the user explicitly says "coded", ".cs", "C# workflow", "coded test case", or names a coded-specific trigger (custom data models / DTOs, unit-testable business logic). For all other phrasings ("create a workflow", "automate X", "build an automation"), use XAML. See [coded-vs-xaml-guide.md](references/coded-vs-xaml-guide.md) for the full decision flowchart.
+4. **New project** — Neither exists → **default to coded.** For all phrasings ("create a workflow", "automate X", "build an automation"), create a `.cs` workflow. Use XAML only for REFramework / orchestration wiring, an explicit XAML request, or a XAML-only capability (IS connector dynamic activity config). See [coded-vs-xaml-guide.md](references/coded-vs-xaml-guide.md) for the full decision flowchart.
 
 **Routing:** Once mode is determined, use the Task Navigation table below to find the right reference files. For guidance on **choosing** between coded and XAML approaches, see [coded-vs-xaml-guide.md](references/coded-vs-xaml-guide.md). For Legacy projects, follow [references/legacy/legacy-mode-guide.md](references/legacy/legacy-mode-guide.md) instead.
 
 ## Authoring Mode Selection
 
-**Default to matching the project's existing mode.** For new projects or ambiguous cases, **default to XAML** — it is the more common mode, has the widest activity coverage, and is the unmarked term in user vocabulary ("create a workflow" means XAML; "create a coded workflow" means coded). Switch to coded only on explicit user phrasing or a coded-specific trigger from the table below.
+**Default to matching the project's existing mode.** For new projects or ambiguous cases, **default to coded.** Switch to XAML only for REFramework / orchestration wiring, a XAML-only capability, or an explicit XAML request.
 
 | Scenario | Mode | Why |
 |----------|------|-----|
-| Standard RPA (Excel, email, file ops) | **XAML** (default) | Direct activity support, no code needed |
-| UI automation | **XAML** (default) | Full activity support; coded also works via `uiAutomation` service |
+| Standard RPA (Excel, email, file ops) | **Coded** (default) | Reach the same activities through the matching `CodedWorkflow` service, with typed models |
+| UI automation | **Coded** (default) | `uiAutomation` service + Object Repository descriptors |
 | Integration Service connectors (XAML) | **XAML** | IS connector activities use XAML-specific dynamic activity config |
 | No matching activity for a subtask | **Coded fallback** | Small .cs invoked from XAML via `Invoke Workflow File` |
 | Complex data transforms, HTTP, parsing | **Coded** | C# is more natural than nested XAML activities |
