@@ -77,6 +77,50 @@ public class GenerateDocumentationToolTests {
     }
 
     [Fact]
+    public async Task GenerateDocumentation_IncludesActivitiesNestedTwoOrMoreDeep() {
+        // The parser links parents to children; the outline must follow Children, not Depth,
+        // or anything below the second level stays invisible in generated docs.
+        var deepest = new ActivityModel { Id = "sequence.1/if.1/then.1", ParentId = "sequence.1/if.1", DisplayName = "Log deep", Type = "LogMessage", Depth = 2 };
+        var ifNode = new ActivityModel {
+            Id = "sequence.1/if.1",
+            ParentId = "sequence.1",
+            DisplayName = "Decide",
+            Type = "If",
+            Depth = 1,
+            Children = [deepest]
+        };
+        var root = new ActivityModel { Id = "sequence.1", DisplayName = "Main", Type = "Sequence", Depth = 0, Children = [ifNode] };
+
+        var model = new UiPathProjectModel {
+            ProjectName = "testProcess",
+            ProjectPath = "/projects/testProcess",
+            MainWorkflow = "Main.xaml",
+            Workflows = [
+                new WorkflowModel {
+                    FileName = "Main.xaml",
+                    IsMain = true,
+                    Activities = [root, ifNode, deepest]
+                }
+            ]
+        };
+
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var tool = new GenerateDocumentationTool(fs, new FakeProjectModelBuilder { Model = model });
+
+        var result = await tool.GenerateDocumentation("/projects/testProcess");
+
+        Assert.Equal("success", result.Status);
+        Assert.Contains("Log deep", FindActivityOutline(result.Data));
+    }
+
+    private static string FindActivityOutline(object? data) {
+        var json = System.Text.Json.JsonSerializer.Serialize(data);
+        var marker = "\"ActivityOutline\":";
+        var at = json.IndexOf(marker, StringComparison.Ordinal);
+        return at < 0 ? string.Empty : json[at..];
+    }
+
+    [Fact]
     public async Task GenerateDocumentation_WhenWorkflowHasParseError_IncludedInOutput() {
         var model = BuildModel();
         model.Workflows[1].HasParseError = true;

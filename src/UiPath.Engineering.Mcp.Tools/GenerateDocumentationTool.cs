@@ -46,8 +46,8 @@ public sealed class GenerateDocumentationTool {
                 ArgumentNames = w.Arguments.Select(a => a.Name).ToList(),
                 VariableCount = w.Variables.Count,
                 ActivityOutline = w.Activities
-                    .Where(a => a.Depth <= 1)
-                    .Select(a => new { a.DisplayName, a.Type, a.Depth })
+                    .Where(a => a.ParentId is null)
+                    .Select(ToActivityNode)
                     .ToList(),
                 InvokedWorkflows = w.InvokeWorkflows.Select(i => i.TargetWorkflow).ToList(),
                 LogMessageCount = w.LogMessages.Count,
@@ -66,4 +66,17 @@ public sealed class GenerateDocumentationTool {
             $"Documentation data generated for project '{model.ProjectName}' ({model.Workflows.Count} workflows, {model.Risks.Count} risks).",
             data, sw);
     }
+
+    // The full activity hierarchy, nesting to any depth. Depth <= 1 truncated the outline to
+    // the root plus its direct children, so anything inside an If/ForEach/TryCatch was
+    // invisible in the generated docs.
+    private static object ToActivityNode(ActivityModel activity) => new {
+        activity.Id,
+        activity.DisplayName,
+        activity.Type,
+        activity.Depth,
+        activity.Line,
+        activity.Annotation,
+        children = activity.Children.Select(ToActivityNode).ToList()
+    };
 }

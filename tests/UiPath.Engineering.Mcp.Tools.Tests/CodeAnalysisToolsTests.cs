@@ -84,6 +84,31 @@ public class CodeAnalysisToolsTests {
         Assert.Equal(6, analysis.LastLine);
     }
 
+    [Fact]
+    public async Task GetCodeContext_NoLocator_IsRejectedWithoutCallingTheAnalyzer() {
+        var analysis = new FakeCSharpAnalysisService();
+        var tool = new GetCodeContextTool(ProjectFilesystem(), analysis);
+
+        var result = await tool.GetCodeContext("/projects/testProcess");
+
+        Assert.Equal("error", result.Status);
+        Assert.Null(analysis.LastSymbol);
+        Assert.Null(analysis.LastFile);
+        Assert.Contains("symbol", result.Errors[0]);
+    }
+
+    [Fact]
+    public async Task GetCodeContext_FileWithoutLine_IsRejectedWithoutCallingTheAnalyzer() {
+        var analysis = new FakeCSharpAnalysisService();
+        var tool = new GetCodeContextTool(ProjectFilesystem(), analysis);
+
+        var result = await tool.GetCodeContext("/projects/testProcess", file: "Flow.cs");
+
+        Assert.Equal("error", result.Status);
+        Assert.Null(analysis.LastFile);
+        Assert.Contains("'line'", result.Errors[0]);
+    }
+
     // --- find_code_references ---
 
     [Fact]

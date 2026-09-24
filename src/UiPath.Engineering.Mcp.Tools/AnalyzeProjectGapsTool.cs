@@ -40,7 +40,10 @@ public sealed class AnalyzeProjectGapsTool {
         }
 
         var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
-        var plan = _planStore.Load(projectPath);
+        if (ToolResults.LoadPlanOrFail(_planStore, projectPath, sw, out var plan) is { } planFailure) {
+            return planFailure;
+        }
+
         var docsFindings = _docsValidator.Validate(projectPath, model);
         var gaps = ProjectGapAnalyzer.Analyze(model, plan, docsFindings, _filesystem);
 

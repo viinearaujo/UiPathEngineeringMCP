@@ -5,7 +5,7 @@ using UiPath.Engineering.Mcp.Core.Planning;
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
 // The plan tools persist through ImplementationPlanStore on the real filesystem,
-// so each class uses a temp directory as the project root while PathGuard checks
+// so each class uses a temp directory as the project root while path checks
 // still go through FakeFilesystemProvider.
 public class CreateImplementationPlanToolTests : IDisposable {
     private readonly string _projectPath = Path.Combine(Path.GetTempPath(), "mcp-create-plan-" + Guid.NewGuid().ToString("N"));
@@ -162,6 +162,17 @@ public class UpdatePlanTaskToolTests : IDisposable {
 
         Assert.Equal("error", result.Status);
         Assert.Equal(PlanTask.Pending, _store.Load(_projectPath)!.Tasks[0].Status);
+    }
+
+    [Fact]
+    public async Task UpdatePlanTask_WhenPlanIsCorrupt_ReturnsPlanInvalidInsteadOfThrowing() {
+        var jsonPath = ImplementationPlanStore.GetJsonPath(_projectPath);
+        _fs.FileContents[jsonPath] = "{not-json";
+
+        var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains("PLAN_INVALID", result.Errors[0]);
     }
 
     [Fact]

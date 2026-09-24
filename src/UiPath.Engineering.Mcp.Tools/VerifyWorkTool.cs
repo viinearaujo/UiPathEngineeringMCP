@@ -45,7 +45,10 @@ public sealed class VerifyWorkTool {
             return guardFailure;
         }
 
-        var plan = _planStore.Load(projectPath);
+        if (ToolResults.LoadPlanOrFail(_planStore, projectPath, sw, out var plan) is { } planFailure) {
+            return planFailure;
+        }
+
         var tasks = new List<PlanTask>();
         if (taskIds is { Count: > 0 }) {
             if (plan is null) {

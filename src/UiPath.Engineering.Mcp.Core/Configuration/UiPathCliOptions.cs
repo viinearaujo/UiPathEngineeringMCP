@@ -4,7 +4,7 @@ public sealed class UiPathCliOptions {
     public int DefaultTimeoutSeconds { get; init; } = 300;
     public bool IncludeRawOutput { get; init; }
 
-    // run_uip_cli allowlist. Only these top-level uip verbs may execute.
+    // run_ui_path_cli allowlist. Only these top-level uip verbs may execute.
     public string[] AllowedVerbs { get; init; } = ["rpa", "solution"];
 
     // Subcommands of an allowed verb that run without EnableMutatingCommands.
@@ -33,6 +33,6 @@ public sealed class UiPathCliOptions {
 
     public Dictionary<string, string>? Environment { get; init; }
 
-    // Character cap applied to each of stdout/stderr in run_uip_cli responses.
+    // Character cap applied to each of stdout/stderr in run_ui_path_cli responses.
     public int MaxOutputChars { get; init; } = 32768;
 }

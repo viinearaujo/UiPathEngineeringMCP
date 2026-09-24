@@ -30,22 +30,63 @@ public sealed class ImplementationPlanStore {
 
     public bool Exists(string projectPath) => _filesystem.FileExists(GetJsonPath(projectPath));
 
+    /// <summary>
+    /// Loads the plan, returning null when it does not exist or cannot be read. Callers that
+    /// must tell "no plan" apart from "corrupt plan" use <see cref="TryLoad"/>.
+    /// </summary>
     public ImplementationPlan? Load(string projectPath) {
-        var jsonPath = GetJsonPath(projectPath);
-        if (!_filesystem.FileExists(jsonPath)) {
-            return null;
-        }
-
-        return JsonSerializer.Deserialize<ImplementationPlan>(_filesystem.ReadAllText(jsonPath));
+        TryLoad(projectPath, out var plan, out _);
+        return plan;
     }
 
-    public void Save(string projectPath, ImplementationPlan plan) {
+    /// <summary>
+    /// Loads the plan without throwing. A missing file yields <c>(false, null, null)</c>; a file
+    /// that exists but cannot be parsed or read yields <c>(true, null, "reason")</c> so the caller
+    /// can report the corruption instead of silently degrading to "no plan", which is what the
+    /// bare <c>JsonSerializer.Deserialize</c> did when it threw out of analyze_project_gaps and
+    /// get_implementation_plan.
+    /// </summary>
+    public bool TryLoad(string projectPath, out ImplementationPlan? plan, out string? error) {
+        plan = null;
+        error = null;
+        var jsonPath = GetJsonPath(projectPath);
+        if (!_filesystem.FileExists(jsonPath)) {
+            return false;
+        }
+
+        try {
+            plan = JsonSerializer.Deserialize<ImplementationPlan>(_filesystem.ReadAllText(jsonPath));
+            if (plan is null) {
+                error = "docs/implementation-plan.json deserialized to null.";
+                return true;
+            }
+
+            return true;
+        } catch (Exception ex) when (
+            ex is JsonException
+            or IOException
+            or UnauthorizedAccessException
+            or NotSupportedException) {
+            error = $"docs/implementation-plan.json could not be read: {ex.Message}";
+            return true;
+        }
+    }
+
+    public void Save(string projectPath, ImplementationPlan plan) =>
+        SaveAsync(projectPath, plan).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Cancellable save. Honours the token while waiting for the per-project write lock and
+    /// before touching disk, so a cancelled request does not queue behind another writer.
+    /// </summary>
+    public async Task SaveAsync(string projectPath, ImplementationPlan plan, CancellationToken cancellationToken = default) {
         plan.UpdatedUtc = DateTimeOffset.UtcNow;
 
         var key = Path.GetFullPath(projectPath);
         var gate = _saveLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        gate.Wait();
+        await gate.WaitAsync(cancellationToken);
         try {
+            cancellationToken.ThrowIfCancellationRequested();
             _filesystem.CreateDirectory(Path.Combine(projectPath, PlanDirectoryName));
             _filesystem.WriteAllText(GetJsonPath(projectPath), JsonSerializer.Serialize(plan, JsonOptions));
             _filesystem.WriteAllText(GetMarkdownPath(projectPath), RenderMarkdown(plan));

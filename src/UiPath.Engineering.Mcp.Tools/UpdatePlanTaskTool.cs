@@ -21,7 +21,7 @@ public sealed class UpdatePlanTaskTool {
     }
 
     [McpServerTool(UseStructuredContent = true), Description("Updates the status (pending/in_progress/done/blocked) and optional notes of a single task in the project's implementation plan. The plan is a scratchpad; marking done is not blocked on docs or ADR freshness. Next: analyze_project_gaps.")]
-    public Task<ToolResult> UpdatePlanTask(
+    public async Task<ToolResult> UpdatePlanTask(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("ID of the task to update (e.g. 'task-1').")] string taskId,
         [Description("New status: pending, in_progress, done, or blocked.")]
@@ -29,28 +29,30 @@ public sealed class UpdatePlanTaskTool {
         [Description("Optional notes to attach to the task.")] string? notes = null,
         CancellationToken cancellationToken = default) {
 
-        _ = cancellationToken;
         var sw = Stopwatch.StartNew();
 
         if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } guardFailure) {
-            return Task.FromResult(guardFailure);
+            return guardFailure;
         }
 
         if (ToolArgs.ParseChoice(status, "status", [PlanTask.Pending, PlanTask.InProgress, PlanTask.Done, PlanTask.Blocked], sw, out var parsedStatus) is { } statusError) {
-            return Task.FromResult(statusError);
+            return statusError;
         }
 
-        var plan = _planStore.Load(projectPath);
+        if (ToolResults.LoadPlanOrFail(_planStore, projectPath, sw, out var plan) is { } planFailure) {
+            return planFailure;
+        }
+
         if (plan is null) {
-            return Task.FromResult(ToolResults.Failure(
+            return ToolResults.Failure(
                 "No implementation plan found for this project.",
                 "Create one first with create_implementation_plan.",
-                sw));
+                sw);
         }
 
         var task = plan.Tasks.FirstOrDefault(t => string.Equals(t.Id, taskId, StringComparison.OrdinalIgnoreCase));
         if (task is null) {
-            return Task.FromResult(ToolResults.Failure($"Task '{taskId}' not found in the implementation plan.", sw));
+            return ToolResults.Failure($"Task '{taskId}' not found in the implementation plan.", sw);
         }
 
         task.Status = parsedStatus;
@@ -58,8 +60,8 @@ public sealed class UpdatePlanTaskTool {
             task.Notes = notes;
         }
 
-        _planStore.Save(projectPath, plan);
+        await _planStore.SaveAsync(projectPath, plan, cancellationToken);
 
-        return Task.FromResult(ToolResults.Ok($"Task '{task.Id}' updated to '{parsedStatus}'.", task, sw));
+        return ToolResults.Ok($"Task '{task.Id}' updated to '{parsedStatus}'.", task, sw);
     }
 }

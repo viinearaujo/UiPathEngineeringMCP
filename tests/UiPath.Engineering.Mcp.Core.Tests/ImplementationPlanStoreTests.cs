@@ -37,6 +37,43 @@ public class ImplementationPlanStoreTests {
     }
 
     [Fact]
+    public void Load_WhenPlanIsCorrupt_DoesNotThrowAndReturnsNull() {
+        var jsonPath = ImplementationPlanStore.GetJsonPath(_projectPath);
+        _fs.FileContents[jsonPath] = "{not-json";
+
+        // Load is the tolerant accessor: a corrupt file must not throw out of the tools.
+        Assert.Null(_store.Load(_projectPath));
+    }
+
+    [Fact]
+    public void TryLoad_WhenPlanIsCorrupt_ReportsTheReason() {
+        var jsonPath = ImplementationPlanStore.GetJsonPath(_projectPath);
+        _fs.FileContents[jsonPath] = "{not-json";
+
+        Assert.True(_store.TryLoad(_projectPath, out var plan, out var error));
+        Assert.Null(plan);
+        Assert.NotNull(error);
+        Assert.Contains("implementation-plan.json", error);
+    }
+
+    [Fact]
+    public void TryLoad_WhenPlanIsMissing_ReportsNoError() {
+        Assert.False(_store.TryLoad(_projectPath, out var plan, out var error));
+        Assert.Null(plan);
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TryLoad_WhenPlanIsValid_ReturnsItWithoutError() {
+        _store.Save(_projectPath, SamplePlan());
+
+        Assert.True(_store.TryLoad(_projectPath, out var plan, out var error));
+        Assert.Null(error);
+        Assert.NotNull(plan);
+        Assert.Equal(2, plan.Tasks.Count);
+    }
+
+    [Fact]
     public void Save_WritesJsonAndMarkdownMirror() {
         _store.Save(_projectPath, SamplePlan());
 

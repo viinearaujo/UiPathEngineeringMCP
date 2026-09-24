@@ -27,7 +27,10 @@ public sealed class GetImplementationPlanTool {
             return guardFailure;
         }
 
-        var plan = _planStore.Load(projectPath);
+        if (ToolResults.LoadPlanOrFail(_planStore, projectPath, sw, out var plan) is { } planFailure) {
+            return planFailure;
+        }
+
         if (plan is null) {
             return ToolResults.Failure(
                 "No implementation plan found for this project.",

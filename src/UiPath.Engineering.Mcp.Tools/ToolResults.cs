@@ -3,6 +3,7 @@ using System.Text.Json;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
+using UiPath.Engineering.Mcp.Core.Planning;
 
 namespace UiPath.Engineering.Mcp.Tools;
 
@@ -77,6 +78,26 @@ internal static class ToolResults {
     // Resolves a project-relative path and verifies it stays inside the project directory.
     public static bool TryResolveWithinProject(string projectPath, string relativePath, out string targetPath) =>
         PathPolicy.TryResolveProjectRelative(projectPath, relativePath, out targetPath);
+
+    // Loads the implementation plan, turning a corrupt plan file into a structured failure.
+    // Returns null when the plan loaded (or is simply absent); returns the failure result the
+    // caller should return when the file exists but could not be read.
+    public static ToolResult? LoadPlanOrFail(
+        ImplementationPlanStore planStore,
+        string projectPath,
+        Stopwatch sw,
+        out ImplementationPlan? plan) {
+        planStore.TryLoad(projectPath, out plan, out var loadError);
+        if (loadError is null) {
+            return null;
+        }
+
+        plan = null;
+        return Failure(new ToolError(
+            ToolErrorCodes.PlanInvalid,
+            loadError,
+            "Fix or delete docs/implementation-plan.json, then recreate it with create_implementation_plan."), sw);
+    }
 
     // Maps the standard project-model failure modes to structured results so tools
     // never leak raw exceptions to the MCP client.
