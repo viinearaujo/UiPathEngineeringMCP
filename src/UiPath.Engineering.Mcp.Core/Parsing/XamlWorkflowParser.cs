@@ -61,9 +61,17 @@ public sealed class XamlWorkflowParser {
             return model;
         }
 
-        // Studio surfaces a workflow-level annotation as the description of the workflow.
-        model.Description = doc.Root.Attributes()
-            .FirstOrDefault(a => a.Name.LocalName == "Annotation.AnnotationText")?.Value;
+        // Studio attaches the workflow-level annotation to the workflow's root
+        // ACTIVITY — the first activity child of <Activity>: a Sequence, Flowchart,
+        // or StateMachine, which Studio shows as the workflow description. The
+        // <Activity> wrapper carries no annotation: UiPath's own ReFrameWork writes
+        // <Sequence DisplayName="Process" sap2010:Annotation.AnnotationText="…">, and
+        // the repo's XAML File Anatomy
+        // (references/xaml/xaml-basics-and-rules.md) shows the wrapper with no
+        // designer/annotation state. Reading only the wrapper left Description null
+        // for every Studio-authored workflow and for every spec-built one, because
+        // the builder renders the spec's root annotation on the body element.
+        model.Description = ReadWorkflowAnnotation(doc);
 
         ExtractArguments(doc, model);
         ExtractVariables(doc, model);
@@ -225,6 +233,32 @@ public sealed class XamlWorkflowParser {
     private static string? ReadAnnotation(XElement element) =>
         element.Attributes()
             .FirstOrDefault(a => a.Name.LocalName == "Annotation.AnnotationText")?.Value;
+
+    // The workflow description: the root activity's annotation. The <Activity>
+    // wrapper itself is not annotated; the attribute sits on the first activity
+    // child (Sequence / Flowchart / StateMachine), which Studio labels as the
+    // workflow description. A wrapper-level annotation is still honored, so a file
+    // written by an older or third-party tool keeps its description.
+    internal static string? ReadWorkflowAnnotation(XDocument doc) {
+        if (doc.Root is null) {
+            return null;
+        }
+
+        foreach (var element in doc.Root.Elements()) {
+            var local = element.Name.LocalName;
+            if (local.Contains('.') || NonActivityElements.Contains(local)) {
+                continue;
+            }
+
+            if (ReadAnnotation(element) is { } annotation) {
+                return annotation;
+            }
+
+            break;
+        }
+
+        return ReadAnnotation(doc.Root);
+    }
 
     // x:Name, the node identity a Flowchart / StateMachine wires its links to.
     private static string? ReadNodeName(XElement element) =>

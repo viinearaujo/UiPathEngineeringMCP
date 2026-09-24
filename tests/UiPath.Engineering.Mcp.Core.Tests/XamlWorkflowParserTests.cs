@@ -132,6 +132,58 @@ public class XamlWorkflowParserTests {
     }
 
     [Fact]
+    public void Parse_ReadsWorkflowDescriptionFromTheRootActivityAnnotation() {
+        // Studio annotates the root ACTIVITY (the Sequence / Flowchart /
+        // StateMachine child of <Activity>), not the <Activity> wrapper itself. The
+        // model must surface that as the workflow Description.
+        const string xaml = """
+        <Activity x:Class="Process" mc:Ignorable="sap sap2010"
+                  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation">
+          <TextExpression.NamespacesForImplementation />
+          <Sequence DisplayName="Process" sap2010:Annotation.AnnotationText="Processes one transaction." />
+        </Activity>
+        """;
+
+        var model = Parse(xaml);
+
+        Assert.Equal("Processes one transaction.", model.Description);
+    }
+
+    [Fact]
+    public void Parse_ReadsWorkflowDescriptionFromADiagramRootActivity() {
+        // A Flowchart root carries the workflow annotation the same way.
+        const string xaml = """
+        <Activity x:Class="Flow"
+                  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation">
+          <Flowchart DisplayName="Flow" sap2010:Annotation.AnnotationText="Routes the batches." />
+        </Activity>
+        """;
+
+        Assert.Equal("Routes the batches.", Parse(xaml).Description);
+    }
+
+    [Fact]
+    public void Parse_StillReadsAWrapperLevelAnnotation() {
+        // A third-party or older file may annotate the <Activity> wrapper; that
+        // description is honored when the root activity carries none.
+        const string xaml = """
+        <Activity x:Class="Legacy" sap2010:Annotation.AnnotationText="Wrapper description."
+                  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation">
+          <Sequence DisplayName="Main" />
+        </Activity>
+        """;
+
+        Assert.Equal("Wrapper description.", Parse(xaml).Description);
+    }
+
+    [Fact]
     public void Parse_PreservesFlowchartGraphWiring() {
         const string xaml = """
         <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"

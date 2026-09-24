@@ -865,13 +865,10 @@ internal static class GoldenEvalTasks {
             structural.RequireAnnotationRoundTrip(rootSequence, "root note");
         }
 
-        // NOTE (gap, not asserted): the parser sources WorkflowModel.Description
-        // from the root <Activity> element (XamlWorkflowParser.cs:44-46) while the
-        // builder renders the spec's annotation on the body element. A spec-built
-        // workflow therefore carries a visible annotation but no
-        // WorkflowModel.Description, so ProjectGapAnalyzer's description-coverage
-        // and workflow-no-description rules still fire on it. Reported as a
-        // production finding; the evals below cover the round-trip that IS defined.
+        // WorkflowModel.Description round-trip: the root activity annotation is the
+        // workflow-level description, so a spec-built workflow is documented rather
+        // than leaving ProjectGapAnalyzer's description-coverage and
+        // workflow-no-description rules firing on a workflow that visibly has one.
         var parsed = new XamlWorkflowParser().Parse("Assign.xaml", "Assign.xaml", xaml);
         var parsedAssign = parsed.Activities.FirstOrDefault(a => a.Type == "Assign");
         structural.Require(parsedAssign?.Annotation == "assign note",
@@ -879,6 +876,8 @@ internal static class GoldenEvalTasks {
         var parsedRoot = parsed.Activities.FirstOrDefault(a => a.Type == "Sequence");
         structural.Require(parsedRoot?.Annotation == "root note",
             $"the root Sequence annotation did not round-trip into ActivityModel.Annotation (got \"{parsedRoot?.Annotation}\")");
+        structural.Require(parsed.Description == "root note",
+            $"the root annotation did not populate WorkflowModel.Description (got \"{parsed.Description}\")");
         structural.Require(parsed.Arguments.Any(a => a.Name == "in_Path" && a.Direction == "In" && a.Type == "x:String"),
             "the in_Path argument did not round-trip into WorkflowModel.Arguments");
 

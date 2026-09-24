@@ -1,6 +1,7 @@
 using System.Text.Json;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Authoring;
+using UiPath.Engineering.Mcp.Core.Parsing;
 
 namespace UiPath.Engineering.Mcp.Core.Tests.Authoring;
 
@@ -315,6 +316,33 @@ public class XamlBuilderTests {
         Assert.Contains("sap2010:Annotation.AnnotationText=\"Reads the invoice queue\"", result.Xaml);
         Assert.Contains("sap2010:Annotation.AnnotationText=\"Diagnostic echo\"", result.Xaml);
         Assert.Contains("xmlns:sap2010=\"http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation\"", result.Xaml);
+    }
+
+    [Fact]
+    public void RenderWorkflowFile_RootAnnotation_LandsOnTheRootActivityAndPopulatesDescription() {
+        // The workflow annotation belongs on the root ACTIVITY element (where Studio
+        // writes it), not on the <Activity> wrapper — and it must read back as
+        // WorkflowModel.Description.
+        var spec = new ActivitySpec {
+            Name = "Sequence",
+            Annotation = "Reads the invoice queue.",
+            Children = [new ActivitySpec { Name = "WriteLine", Properties = new() { ["text"] = "\"hi\"" } }]
+        };
+
+        var result = XamlBuilder.RenderWorkflowFile(spec, "Workflows_Read");
+
+        Assert.True(result.Success, string.Join(";", result.Errors.Select(e => e.Message)));
+        var doc = System.Xml.Linq.XDocument.Parse(result.Xaml!);
+        var activity = doc.Root!;
+        Assert.Null(activity.Attribute(XamlViewStateEmitter.Sap2010 + "Annotation.AnnotationText"));
+        var rootSequence = activity.Elements().Single(e => e.Name.LocalName == "Sequence");
+        Assert.Equal("Reads the invoice queue.",
+            rootSequence.Attribute(XamlViewStateEmitter.Sap2010 + "Annotation.AnnotationText")!.Value);
+
+        // The parser surfaces it as the workflow description, so gap analysis and
+        // generated docs no longer see an undocumented workflow that visibly has one.
+        var model = new XamlWorkflowParser().Parse("Workflows_Read.xaml", "Workflows_Read.xaml", result.Xaml!);
+        Assert.Equal("Reads the invoice queue.", model.Description);
     }
 
     [Fact]
