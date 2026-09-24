@@ -87,6 +87,12 @@ public static class XamlBuilder {
                 new XAttribute(XNamespace.Xmlns + "sap2010", Renderer.Sap2010.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "x", Renderer.X.NamespaceName));
 
+            // Flowchart / StateMachine ViewState uses WPF coordinate types, so the
+            // av: prefix is declared on the root when a diagram is present.
+            if (UsesDiagram(spec)) {
+                root.Add(new XAttribute(XNamespace.Xmlns + "av", ViewStateNamespaces.Av));
+            }
+
             // Root variables live on a Sequence; wrap a non-Sequence root so they
             // still have a valid home.
             var effective = spec;
@@ -137,6 +143,20 @@ public static class XamlBuilder {
         ToolErrorCodes.XamlRenderFailed,
         $"Failed to render the spec as XAML: {ex.Message}",
         "Fix the offending property values and retry; run validate_activity_spec for detailed property guidance.");
+
+    // True when the spec (or any nested spec) is a Flowchart or StateMachine, so
+    // the root declares the WPF av: prefix their ViewState uses.
+    private static bool UsesDiagram(ActivitySpec spec) {
+        if (spec.Flowchart is not null || spec.StateMachine is not null) {
+            return true;
+        }
+
+        return (spec.Children ?? []).Any(UsesDiagram)
+            || (spec.Else ?? []).Any(UsesDiagram)
+            || (spec.Default ?? []).Any(UsesDiagram)
+            || (spec.Cases ?? []).Any(c => (c.Children ?? []).Any(UsesDiagram))
+            || (spec.Catches ?? []).Any(c => (c.Children ?? []).Any(UsesDiagram));
+    }
 
     // ViewState binds scg: and x:, so the root must declare scg:. sap/sap2010 are
     // already declared on the <Activity> root; scg: is not.
@@ -414,6 +434,8 @@ public static class XamlBuilder {
                 "Switch" => RenderSwitch(spec, schema),
                 "TryCatch" => RenderTryCatch(spec, schema),
                 "Assign" => RenderAssign(spec, schema),
+                "Flowchart" when spec.Flowchart is not null => RenderFlowchart(spec, schema),
+                "StateMachine" when spec.StateMachine is not null => RenderStateMachine(spec, schema),
                 _ when ActivityCatalog.AcceptsArgumentDictionary(schema.Name) => RenderArguments(spec, schema),
                 _ => RenderByBodyShape(spec, schema),
             };
@@ -579,6 +601,203 @@ public static class XamlBuilder {
                 WrappedBody(spec.Children, "Body")));
             return element;
         }
+
+        // ---- Flowchart / StateMachine graphs --------------------------------------
+
+        // A Flowchart has no nested body: its nodes are the Flowchart.Nodes
+        // collection, which is built from the DIRECT children of <Flowchart>
+        // (Rule 20 structure-first). Nesting one node inside another's .Next would
+        // leave it unregistered and unrendered, so every node is emitted as a
+        // sibling and linked with <x:Reference>.
+        private XElement RenderFlowchart(ActivitySpec spec, ActivitySchema schema) {
+            var flowchart = spec.Flowchart!;
+            var element = new XElement(Ns(schema) + schema.RenderName, Attributes(spec, schema));
+            element.Add(new XAttribute(XNamespace.Xmlns + "av", ViewStateNamespaces.Av));
+
+            if (!string.IsNullOrWhiteSpace(flowchart.Start)) {
+                element.Add(new XElement(Wf + "Flowchart.StartNode", Reference(flowchart.Start!)));
+            }
+
+            foreach (var node in flowchart.Nodes ?? []) {
+                element.Add(RenderFlowNode(node, schema));
+            }
+
+            return element;
+        }
+
+        private XElement RenderFlowNode(FlowNodeSpec node, ActivitySchema schema) {
+            return (node.Type ?? "Step").Trim().ToLowerInvariant() switch {
+                "decision" => RenderFlowDecision(node),
+                "switch" => RenderFlowSwitch(node),
+                _ => RenderFlowStep(node),
+            };
+        }
+
+        private XElement RenderFlowStep(FlowNodeSpec node) {
+            var element = new XElement(Wf + "FlowStep",
+                new XAttribute(X + "Name", ReferenceName(node.Id)));
+            element.Add(ShapeViewState(node.ShapeLocation, node.ShapeSize));
+            if (node.Activity is { } activity) {
+                element.Add(Element(activity, includeVariables: IsSequence(activity)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(node.Next)) {
+                element.Add(new XElement(Wf + "FlowStep.Next", Reference(node.Next!)));
+            }
+
+            return element;
+        }
+
+        private XElement RenderFlowDecision(FlowNodeSpec node) {
+            var element = new XElement(Wf + "FlowDecision", new XAttribute(X + "Name", ReferenceName(node.Id)));
+            element.Add(ShapeViewState(node.ShapeLocation, node.ShapeSize));
+            if (!string.IsNullOrWhiteSpace(node.DisplayName)) {
+                element.Add(new XAttribute("DisplayName", node.DisplayName!));
+            }
+
+            AddCondition(element, "FlowDecision.Condition", node.Condition);
+            if (node.True is { Length: > 0 }) {
+                element.Add(new XElement(Wf + "FlowDecision.True", Reference(node.True)));
+            }
+
+            if (node.False is { Length: > 0 }) {
+                element.Add(new XElement(Wf + "FlowDecision.False", Reference(node.False)));
+            }
+
+            return element;
+        }
+
+        private XElement RenderFlowSwitch(FlowNodeSpec node) {
+            var token = string.IsNullOrWhiteSpace(node.TypeArgument) ? "x:Object" : TypeToken.Render(node.TypeArgument!);
+            UseAliasesIn(token);
+            var element = new XElement(Wf + "FlowSwitch",
+                new XAttribute(X + "Name", ReferenceName(node.Id)),
+                new XAttribute(X + "TypeArguments", token));
+            element.Add(ShapeViewState(node.ShapeLocation, node.ShapeSize));
+            if (!string.IsNullOrWhiteSpace(node.DisplayName)) {
+                element.Add(new XAttribute("DisplayName", node.DisplayName!));
+            }
+
+            AddCondition(element, "FlowSwitch.Expression", node.Expression);
+            foreach (var switchCase in node.Cases ?? []) {
+                var target = new XElement(Wf + "FlowSwitchCase");
+                target.Add(new XAttribute(X + "Key", switchCase.Key));
+                if (switchCase.Target is { Length: > 0 }) {
+                    target.Add(Reference(switchCase.Target));
+                }
+
+                element.Add(target);
+            }
+
+            if (node.Default is { Length: > 0 }) {
+                element.Add(new XElement(Wf + "FlowSwitch.Default", Reference(node.Default)));
+            }
+
+            return element;
+        }
+
+        private void AddCondition(XElement owner, string propertyName, string? expression) {
+            if (string.IsNullOrWhiteSpace(expression)) {
+                return;
+            }
+
+            var known = propertyName.Contains("Condition", StringComparison.Ordinal)
+                ? ("x:Boolean", ArgumentDirection.In)
+                : (DeclaredTypeArgumentFromExpression(expression) ?? "x:Object", ArgumentDirection.In);
+            UseAliasesIn(known.Item1);
+            var argument = new XElement(Wf + "InArgument", new XAttribute(X + "TypeArguments", known.Item1));
+            AddBinding(argument, expression, known.Item1, known.Item2);
+            owner.Add(new XElement(Wf + propertyName, argument));
+        }
+
+        // A FlowSwitch.Expression's type is its own TypeArgument, already rendered
+        // as the activity's x:TypeArguments; the argument repeats it.
+        private static string? DeclaredTypeArgumentFromExpression(string _) => null;
+
+        // A StateMachine's States are its direct children; each transition points
+        // at its destination with <x:Reference>.
+        private XElement RenderStateMachine(ActivitySpec spec, ActivitySchema schema) {
+            var machine = spec.StateMachine!;
+            var element = new XElement(Ns(schema) + schema.RenderName, Attributes(spec, schema));
+            element.Add(new XAttribute(XNamespace.Xmlns + "av", ViewStateNamespaces.Av));
+
+            if (!string.IsNullOrWhiteSpace(machine.Start)) {
+                element.Add(new XAttribute("InitialState", $"{{x:Reference {ReferenceName(machine.Start!)}}}"));
+            }
+
+            foreach (var state in machine.States ?? []) {
+                element.Add(RenderState(state));
+            }
+
+            return element;
+        }
+
+        private XElement RenderState(StateSpec state) {
+            var kind = string.IsNullOrWhiteSpace(state.Kind) ? "State" : state.Kind!;
+            var element = new XElement(Wf + kind,
+                new XAttribute(X + "Name", ReferenceName(state.Id)));
+            if (!string.IsNullOrWhiteSpace(state.DisplayName)) {
+                element.Add(new XAttribute("DisplayName", state.DisplayName!));
+            }
+
+            element.Add(ShapeViewState(state.ShapeLocation, state.ShapeSize));
+
+            if (state.Activities is { Count: > 0 }) {
+                var entry = new XElement(Wf + kind + ".Entry",
+                    WrappedBody(state.Activities, displayName: null));
+                element.Add(entry);
+            }
+
+            foreach (var transition in state.Transitions ?? []) {
+                element.Add(RenderTransition(transition));
+            }
+
+            return element;
+        }
+
+        private XElement RenderTransition(StateTransitionSpec transition) {
+            var element = new XElement(Wf + "Transition");
+            if (!string.IsNullOrWhiteSpace(transition.DisplayName)) {
+                element.Add(new XAttribute("DisplayName", transition.DisplayName!));
+            }
+
+            element.Add(ShapeViewState(transition.ShapeLocation, transition.ShapeSize));
+            if (transition.To is { Length: > 0 }) {
+                element.Add(new XElement(Wf + "Transition.To", Reference(transition.To)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(transition.Condition)) {
+                var argument = new XElement(Wf + "InArgument", new XAttribute(X + "TypeArguments", "x:Boolean"));
+                AddBinding(argument, transition.Condition, "x:Boolean", ArgumentDirection.In);
+                element.Add(new XElement(Wf + "Transition.Condition", argument));
+            }
+
+            return element;
+        }
+
+        // <x:Reference>__ReferenceIDn</x:Reference>. Node ids are normalized so a
+        // caller may pass either the raw id or a namespaced one.
+        private static XElement Reference(string target) =>
+            new(X + "Reference", ReferenceName(target));
+
+        private static string ReferenceName(string target) {
+            var name = target.Trim();
+            return name.StartsWith("__ReferenceID", StringComparison.Ordinal) ? name : "__ReferenceID" + name;
+        }
+
+        // Rule 20: ShapeLocation + ShapeSize are mandatory on every node so Studio
+        // does not stack them at (0,0). Missing coordinates get a deterministic
+        // default that keeps the node visible.
+        private XElement ShapeViewState(string? location, string? size) =>
+            new(Sap + "WorkflowViewStateService.ViewState",
+                new XElement(Scg + "Dictionary",
+                    new XAttribute(X + "TypeArguments", "x:String, x:Object"),
+                    new XElement(ViewStateNamespaces.PointName,
+                        new XAttribute(X + "Key", "ShapeLocation"),
+                        location ?? "170,110"),
+                    new XElement(ViewStateNamespaces.SizeName,
+                        new XAttribute(X + "Key", "ShapeSize"),
+                        size ?? "262,60")));
 
         private XElement RenderAssign(ActivitySpec spec, ActivitySchema schema) {
             var typed = TypedAssign(spec);

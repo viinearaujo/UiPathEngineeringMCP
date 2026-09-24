@@ -18,6 +18,20 @@ public sealed class ActivityModel {
     /// wrapped branch from a bare one without changing the structural-path ID.
     /// </summary>
     public string? Slot { get; init; }
+    /// <summary>
+    /// The node's <c>x:Name</c> (<c>__ReferenceIDn</c> on a Flowchart /
+    /// StateMachine node). Null for a node in a plain child list.
+    /// </summary>
+    public string? NodeName { get; init; }
+    /// <summary>
+    /// Outgoing graph links on a Flowchart / StateMachine node: the property
+    /// element that holds the link (<c>FlowStep.Next</c>, <c>FlowDecision.True</c>,
+    /// <c>Transition.To</c>, …) mapped to the referenced node's <c>x:Name</c>.
+    /// Populated only where the file wires nodes by <c>&lt;x:Reference&gt;</c>, so
+    /// the graph shape survives the read instead of being flattened away.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> GraphLinks { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
     public int Depth { get; init; }
     public int Order { get; init; }
     public int Line { get; init; }

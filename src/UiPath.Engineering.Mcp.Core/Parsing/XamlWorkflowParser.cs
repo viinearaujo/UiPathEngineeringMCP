@@ -125,7 +125,9 @@ public sealed class XamlWorkflowParser {
                 Order = located.Order,
                 Line = located.Line,
                 Annotation = ReadAnnotation(element),
-                Slot = located.Slot
+                Slot = located.Slot,
+                NodeName = ReadNodeName(element),
+                GraphLinks = ReadGraphLinks(element)
             };
             model.Activities.Add(activity);
             byId[located.Id] = activity;
@@ -203,6 +205,62 @@ public sealed class XamlWorkflowParser {
     private static string? ReadAnnotation(XElement element) =>
         element.Attributes()
             .FirstOrDefault(a => a.Name.LocalName == "Annotation.AnnotationText")?.Value;
+
+    // x:Name, the node identity a Flowchart / StateMachine wires its links to.
+    private static string? ReadNodeName(XElement element) =>
+        element.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml"))?.Value;
+
+    // Outgoing graph links: <FlowStep.Next><x:Reference>__ReferenceID1</x:Reference>.
+    // A parser that flattens these away cannot tell a flowchart's structure from a
+    // plain sequence, so the wiring is captured per node.
+    internal static IReadOnlyDictionary<string, string> ReadGraphLinks(XElement element) {
+        var links = new Dictionary<string, string>(StringComparer.Ordinal);
+        var owner = element.Name.LocalName;
+
+        // A Flowchart names its entry through Flowchart.StartNode, and a
+        // StateMachine through the InitialState attribute — both are links even
+        // though only the first is an element.
+        if (owner.Equals("StateMachine", StringComparison.Ordinal)) {
+            var initial = ReadReferenceTarget(element.Attribute("InitialState")?.Value);
+            if (initial is not null) {
+                links["InitialState"] = initial;
+            }
+        }
+
+        foreach (var child in element.Elements()) {
+            var local = child.Name.LocalName;
+            var dot = local.LastIndexOf('.');
+            if (dot <= 0 || dot == local.Length - 1
+                || !local[..dot].Equals(owner, StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+
+            var target = child.DescendantsAndSelf()
+                .FirstOrDefault(d => d.Name.LocalName == "Reference")?.Value;
+            if (!string.IsNullOrWhiteSpace(target)) {
+                links[local[(dot + 1)..]] = target.Trim();
+            }
+        }
+
+        return links;
+    }
+
+    // "{x:Reference __ReferenceID1}" -> "__ReferenceID1".
+    private static string? ReadReferenceTarget(string? attribute) {
+        if (string.IsNullOrWhiteSpace(attribute)) {
+            return null;
+        }
+
+        var text = attribute.Trim();
+        if (!text.StartsWith("{", StringComparison.Ordinal)) {
+            return text;
+        }
+
+        var space = text.IndexOf(' ');
+        return space >= 0 && space < text.Length - 1
+            ? text[(space + 1)..].TrimEnd('}')
+            : null;
+    }
 
     private static string ExtractInnerType(string argumentType) {
         var start = argumentType.IndexOf('(');

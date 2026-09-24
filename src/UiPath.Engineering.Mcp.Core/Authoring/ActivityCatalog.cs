@@ -92,6 +92,21 @@ public static class ActivityCatalog {
             L("DisplayName"), E("Expression"), T("TypeArgument")),
         Container("TryCatch", new BodyDescriptor(BodyShape.Branches, "Try"),
             L("DisplayName")),
+        // Flowchart and StateMachine are graph containers: their nodes live in the
+        // spec's flowchart/stateMachine object and are wired by x:Reference, not
+        // nested as children (Rule 20 structure-first).
+        Container("Flowchart", new BodyDescriptor(BodyShape.ActivityCollection, "Nodes"),
+            L("DisplayName")),
+        Container("StateMachine", new BodyDescriptor(BodyShape.ActivityCollection, "States"),
+            L("DisplayName"), L("InitialState")),
+        Container("FlowStep", new BodyDescriptor(BodyShape.Activity, "Activity"),
+            L("DisplayName")),
+        Container("State", new BodyDescriptor(BodyShape.ActivityCollection, "Entry"),
+            L("DisplayName")),
+        Leaf("FlowDecision", L("DisplayName"), E("Condition")),
+        Leaf("FlowSwitch", L("DisplayName"), E("Expression"), T("TypeArgument")),
+        Leaf("Transition", L("DisplayName"), E("Condition")),
+        Leaf("FinalState", L("DisplayName")),
         Leaf("WriteLine", L("DisplayName"), E("Text")),
         Leaf("Delay", L("DisplayName"), E("Duration")),
         Leaf("Throw", L("DisplayName"), E("Exception")),

@@ -132,6 +132,71 @@ public class XamlWorkflowParserTests {
     }
 
     [Fact]
+    public void Parse_PreservesFlowchartGraphWiring() {
+        const string xaml = """
+        <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                  xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+          <Flowchart DisplayName="Flow">
+            <Flowchart.StartNode>
+              <x:Reference>__ReferenceID0</x:Reference>
+            </Flowchart.StartNode>
+            <FlowStep x:Name="__ReferenceID0">
+              <ui:LogMessage DisplayName="Step 1" />
+              <FlowStep.Next>
+                <x:Reference>__ReferenceID1</x:Reference>
+              </FlowStep.Next>
+            </FlowStep>
+            <FlowDecision x:Name="__ReferenceID1">
+              <FlowDecision.True>
+                <x:Reference>__ReferenceID0</x:Reference>
+              </FlowDecision.True>
+            </FlowDecision>
+          </Flowchart>
+        </Activity>
+        """;
+
+        var model = Parse(xaml);
+
+        var flowStep = model.Activities.Single(a => a.Type == "FlowStep");
+        Assert.Equal("__ReferenceID0", flowStep.NodeName);
+        Assert.Equal("__ReferenceID1", flowStep.GraphLinks["Next"]);
+
+        var decision = model.Activities.Single(a => a.Type == "FlowDecision");
+        Assert.Equal("__ReferenceID0", decision.GraphLinks["True"]);
+
+        // The Flowchart itself carries the StartNode link.
+        var flowchart = model.Activities.Single(a => a.Type == "Flowchart");
+        Assert.Equal("__ReferenceID0", flowchart.GraphLinks["StartNode"]);
+    }
+
+    [Fact]
+    public void Parse_PreservesStateMachineInitialStateWiring() {
+        const string xaml = """
+        <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                  xmlns:ui="http://schemas.uipath.com/workflow/activities"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+          <StateMachine DisplayName="Machine" InitialState="{x:Reference __ReferenceID0}">
+            <State x:Name="__ReferenceID0" DisplayName="Idle">
+              <Transition DisplayName="go">
+                <Transition.To>
+                  <x:Reference>__ReferenceID1</x:Reference>
+                </Transition.To>
+              </Transition>
+            </State>
+          </StateMachine>
+        </Activity>
+        """;
+
+        var model = Parse(xaml);
+
+        var machine = model.Activities.Single(a => a.Type == "StateMachine");
+        Assert.Equal("__ReferenceID0", machine.GraphLinks["InitialState"]);
+        var transition = model.Activities.Single(a => a.Type == "Transition");
+        Assert.Equal("__ReferenceID1", transition.GraphLinks["To"]);
+    }
+
+    [Fact]
     public void Parse_AssignsIdsParentLinksAndOrder() {
         var model = Parse();
 
