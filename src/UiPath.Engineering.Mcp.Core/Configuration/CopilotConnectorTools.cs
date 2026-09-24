@@ -11,9 +11,11 @@ public static class CopilotConnectorTools {
 
     /// <summary>
     /// Copilot Studio connector cap. Bumped from 31 to 34 when the read-only CLI surface
-    /// (get_analyzer_rules, manage_packages, get_object_repository) joined the default connector.
+    /// (get_analyzer_rules, manage_packages, get_object_repository) joined the default connector,
+    /// and from 34 to 37 when the read-only metadata/knowledge surface joined it
+    /// (get_activity_metadata, search_activity_docs, search_uipath_knowledge).
     /// </summary>
-    public const int MaxDefaultCount = 34;
+    public const int MaxDefaultCount = 37;
 
     public static readonly string[] DefaultNames = [
         "analyze_project",
@@ -50,6 +52,9 @@ public static class CopilotConnectorTools {
         "get_analyzer_rules",
         "manage_packages",
         "get_object_repository",
+        "get_activity_metadata",
+        "search_activity_docs",
+        "search_uipath_knowledge",
     ];
 
     public static readonly string[] LeaveOffNames = [

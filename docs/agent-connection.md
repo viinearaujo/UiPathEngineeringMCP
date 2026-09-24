@@ -34,6 +34,15 @@ Leave-off names live in `CopilotConnectorTools.LeaveOffNames` (hatches and alias
 
 Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
 
+## Discoverability: `.local`, activity docs, and idioms
+
+`.local` is on the filesystem provider's ignore lists, so it never appears in `search_codebase` or the folder tree and generated code cannot leak into the project model or the authoring surfaces. It is still readable by an exact path (`.local/...` through `read_workflow_file`), and two tools read it directly:
+
+- `CSharpContextBuilder` supplies `.local/.codedworkflows/*.cs` to the Roslyn compilation, so the generated `Descriptors.<App>.<Screen>.<Element>` types resolve.
+- `search_activity_docs` indexes `{PROJECT_DIR}/.local/docs/packages` first — those are the docs the project's own installed packages ship, so they match the installed versions — then falls back to the vendored `.agents/skills/uipath-rpa/references/activity-docs` snapshot. It resolves the `.local` path through `PathPolicy.TryResolveProjectRelative`, the same canonicalizing sandbox used everywhere else, so the ignore lists stay intact and discovery is served by the tool instead of by unhiding the folder.
+
+`search_uipath_knowledge` covers the guide corpus plus the activity docs, and `uipath://idioms/{name}` serves the shipped Copilot idiom samples directly, so the prompt pack's manual "copy `docs/copilot-idioms/` into the target project" step is no longer required.
+
 ## Safe authoring loop
 
 ```text
@@ -108,8 +117,10 @@ URI templates (MCP resources):
 - `uipath://project/{projectPath}/plan`
 - `uipath://project/{projectPath}/workflow/{relativePath}`
 - `uipath://project/{projectPath}/knowledge`
+- `uipath://activity/{projectPath}/{name}` — one activity's full authoring surface as JSON. Substitute the literal `global` for `projectPath` to read the built-in fallback catalog.
+- `uipath://idioms/{name}` — a shipped Copilot idiom sample (`coded-workflow-try-log.md`, `thin-reframework-invoke.md`, `coded-testcase.md`). Read it over the resource instead of copying the sample into the target project.
 
-`projectPath` and `relativePath` must be percent-encoded, including forward slashes. A raw `C:/...` URI fails.
+`projectPath` and `relativePath` must be percent-encoded, including forward slashes. A raw `C:/...` URI fails. The `uipath://activity/...` template has no project requirement: `global` selects the built-in catalog, and any other value must be an allowed project directory.
 
 Worked example for a Windows project root:
 

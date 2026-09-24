@@ -41,6 +41,9 @@ public class CopilotConnectorToolsTests {
             "get_analyzer_rules",
             "manage_packages",
             "get_object_repository",
+            "get_activity_metadata",
+            "search_activity_docs",
+            "search_uipath_knowledge",
         }, CopilotConnectorTools.DefaultNames);
         Assert.Contains("recommend_activities", CopilotConnectorTools.DefaultNames);
         Assert.DoesNotContain("list_skills", CopilotConnectorTools.DefaultNames);

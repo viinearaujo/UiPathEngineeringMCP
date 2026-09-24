@@ -5,4 +5,10 @@ public sealed class SkillsOptions {
     public string SkillsRoot { get; init; } = ".agents/skills";
     // Character cap applied to any single skill file read.
     public int MaxSkillFileBytes { get; init; } = 65536;
+
+    // Shipped Copilot idiom samples. Resolved by walking up from the server's working
+    // directory (then the app base directory), so the same relative value works from a dev
+    // build and from the published output. Served as uipath://idioms/{name}, which removes
+    // the manual copy into every target project the prompt pack used to require.
+    public string CopilotIdiomsRoot { get; init; } = "docs/copilot-idioms";
 }
