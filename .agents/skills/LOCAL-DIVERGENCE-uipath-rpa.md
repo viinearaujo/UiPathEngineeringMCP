@@ -2,7 +2,10 @@
 
 This file is repo-authored and lives OUTSIDE the vendored tree so it survives a
 `uip skills install`. A copy is mirrored at `uipath-rpa/LOCAL-DIVERGENCE.md` for
-readers browsing the skill; that mirror is overwritten on reinstall, this file is not.
+readers browsing the skill; that mirror is overwritten on reinstall, this file is
+not. The mirror is `.gitignore`d rather than tracked, because the "Claim changed"
+column below quotes XAML-first phrasing and a tracked copy would trip the
+verification grep at the bottom of this file.
 
 `.agents/skills/uipath-rpa/` is a vendored snapshot installed from the UiPath skills
 marketplace on 2026-07-28 (`.uipath/.skills/manifest.json`). It is patched locally so the
@@ -34,8 +37,8 @@ claims. Re-apply every row below after any reinstall.
 | `references/environment-setup.md:49` | "To work in coded mode", scaffold then add `.cs` files | Coded is the default mode for a new project; scaffold then add `.cs` files |
 | `references/environment-setup.md:53` (heading) | For XAML Projects (default for new projects) | For XAML Projects |
 | `references/environment-setup.md:72` (heading) | For Coded Projects (only when the user explicitly requested coded) | For Coded Projects |
-| `references/project-structure-guide.md:5` | For new projects the default is XAML; examples lead with XAML | For new projects the default is coded; examples cover both modes |
-| `references/project-structure-guide.md:147` (decision tree, first question) | New projects default to XAML unless the user said "coded" or named a coded-specific trigger | New projects default to coded unless REFramework / orchestration wiring, a XAML-only capability, or an explicit XAML ask |
+| `references/project-structure-guide.md:5` — file deleted by the 2026-09-23 refresh, text now at `references/environment-setup.md:339` | For new projects the default is XAML; examples lead with XAML | For new projects the default is coded; examples cover both modes |
+| `references/project-structure-guide.md:147` — same, text now at `references/environment-setup.md:481` (decision tree, first question) | New projects default to XAML unless the user said "coded" or named a coded-specific trigger | New projects default to coded unless REFramework / orchestration wiring, a XAML-only capability, or an explicit XAML ask |
 
 ## Preserved upstream rules
 
