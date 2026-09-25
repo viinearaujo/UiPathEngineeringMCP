@@ -1,6 +1,6 @@
 # Copilot Studio skill packages
 
-Thin Agent Skills for the UiPath Engineering MCP. Each package is a `SKILL.md` that routes **advertised** MCP tools. The thick `uipath-rpa` playbook (~729 files under `.agents/skills/uipath-rpa/`) stays on the server; Copilot loads a reference with `read_skill("uipath-rpa", file: "references/...")`.
+Thin Agent Skills for the UiPath Engineering MCP. Each package is a `SKILL.md` that routes **advertised** MCP tools. The thick playbook is the vendored `uipath-rpa` tree on the server (`.agents/skills/uipath-rpa/`). Copilot loads a reference with `read_skill("uipath-rpa", file: "references/...")`.
 
 | Skill | Upload this folder |
 |-------|--------------------|

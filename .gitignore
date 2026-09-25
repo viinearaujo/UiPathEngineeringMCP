@@ -3,10 +3,14 @@ bin/
 obj/
 artifacts/
 
-# Rider / VS
+# Rider / VS / Cursor
 .vs/
 .idea/
 *.user
+.cursor/
+
+# Local agent handoff and historical plans
+documentation/
 
 # Dev tunnel / local secrets
 appsettings.Local.json

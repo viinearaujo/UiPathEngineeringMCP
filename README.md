@@ -10,7 +10,7 @@ A custom **.NET 10** Model Context Protocol (MCP) server that lets an AI client
 UiPath RPA projects over HTTP, reached from the outside world with **Microsoft Dev Tunnel**.
 
 This is the **MVP / POC (v4)** milestone. Tool names and the Copilot default set are listed under Toolkit; do not hard-code a count.
-The skills feed under `.agents/skills` is **RPA-only** — do not reinstall the full UiPath marketplace catalog.
+The skills feed under `.agents/skills` is **RPA-only**: `uipath-rpa` and `guided-implementation-loop`. Do not reinstall the full UiPath marketplace catalog.
 
 **What you can do tonight**
 
@@ -389,7 +389,16 @@ src/
   UiPath.Engineering.Mcp.Core/       # Models, config options, project.json + XAML parsing, dependency graph
   UiPath.Engineering.Mcp.Providers/  # Filesystem + UiPath CLI providers (structured CLI output parser)
   UiPath.Engineering.Mcp.Tools/      # [McpServerTool] classes (analyze/validate/explain/document/author)
+tests/                               # xUnit projects and shared fakes
+evals/                               # agent tasks and structural spec fixtures
+scripts/                             # run-local, dev tunnel, and remove helpers
+docs/                                # operator docs (connection, Copilot, idioms, tool API)
+.agents/skills/
+  uipath-rpa/                        # vendored RPA playbook served by read_skill
+  guided-implementation-loop/        # plan → implement → verify playbook
 ```
+
+`.cursor/` and `documentation/` are local and gitignored. They are not part of this repository. The remote skills tree is only the two playbooks above.
 
 <a id="notes-and-limits"></a>
 ## 📌 Notes and limits
@@ -449,6 +458,7 @@ future phase. The PowerShell provider is a planned phase, not yet implemented.
 <a id="further-reading"></a>
 ## 📚 Further reading
 
+- [docs/README.md](docs/README.md) — index of the operator docs
 - [docs/agent-connection.md](docs/agent-connection.md) — stdio, Inspector, and connection traps
 - [docs/copilot-prompts.md](docs/copilot-prompts.md) — prompt recipes
 - [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) — paste into Copilot Studio

@@ -32,7 +32,7 @@ HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only th
 
 Leave-off names live in `CopilotConnectorTools.LeaveOffNames` (hatches and aliases only): `write_workflow_file` (full-file overwrite on `ToolSurface=All` only), `edit_workflow_activity` (prefer `insert_activities`), `compile_project` → `validate_project(build:true)`, `verify_work` → `validate_project` then `update_plan_task`, `run_ui_path_cli`, `list_skills` (uploaded skills already name the playbooks), GitLab (`search_repository`, `create_work_items`). Do not leave `analyze_project_gaps` off the default connector.
 
-Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`.
+Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`. `Skills:SkillsRoot` (default `.agents/skills`) contains only `uipath-rpa` and `guided-implementation-loop`.
 
 ## Discoverability: `.local`, activity docs, and idioms
 
