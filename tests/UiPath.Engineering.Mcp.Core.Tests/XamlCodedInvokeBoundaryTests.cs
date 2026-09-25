@@ -26,11 +26,12 @@ public class XamlCodedInvokeBoundaryTests {
         CodedWorkflows = [.. coded]
     };
 
-    private static CodedWorkflowModel CodedWorkflow() => new() {
+    private static CodedWorkflowModel CodedWorkflow(params ArgumentModel[] arguments) => new() {
         FileName = "InvoiceFlow.cs",
         ClassName = "InvoiceFlow",
         Kind = CodedFileKind.Workflow,
-        IsCodedWorkflow = true
+        IsCodedWorkflow = true,
+        EntryArguments = [.. arguments]
     };
 
     private static CodedWorkflowModel SourceClass(string className, string ns = "", params string[] publicMethods) => new() {
@@ -57,7 +58,7 @@ public class XamlCodedInvokeBoundaryTests {
             MainInvoking("InvoiceFlow.cs", new ArgumentMappingModel {
                 Direction = "In", TargetArgument = "in_Value", Type = type, Expression = "[value]"
             }),
-            CodedWorkflow());
+            CodedWorkflow(new ArgumentModel { Name = "in_Value", Direction = "In", Type = "string" }));
 
         var gaps = XamlCodedInvokeBoundary.Lint(model);
 

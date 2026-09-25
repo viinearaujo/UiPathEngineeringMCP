@@ -173,6 +173,7 @@ public static class ProjectGapAnalyzer {
         }
 
         gaps.AddRange(XamlCodedInvokeBoundary.Lint(model));
+        gaps.AddRange(CodedExecuteArgumentGaps.Lint(model));
 
         // Plan cross-check: pending/in_progress tasks vs. the files they should produce.
         if (plan is not null && filesystem is not null) {
