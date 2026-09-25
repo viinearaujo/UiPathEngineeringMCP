@@ -36,6 +36,31 @@ public class HttpAuthEvaluatorTests {
     }
 
     [Fact]
+    public void IsAuthorized_WhenEnabled_AcceptsPreviousApiKey() {
+        var options = new HttpAuthOptions {
+            Enabled = true,
+            ApiKey = "current",
+            PreviousApiKey = "rotated"
+        };
+        Assert.True(HttpAuthEvaluator.IsAuthorized(options, "current", null));
+        Assert.True(HttpAuthEvaluator.IsAuthorized(options, "rotated", null));
+        Assert.True(HttpAuthEvaluator.IsAuthorized(options, null, "Bearer rotated"));
+        Assert.False(HttpAuthEvaluator.IsAuthorized(options, "other", null));
+    }
+
+    [Fact]
+    public void IsAuthorized_WhenPreviousApiKeyEmpty_IgnoresPrevious() {
+        var options = new HttpAuthOptions {
+            Enabled = true,
+            ApiKey = "current",
+            PreviousApiKey = ""
+        };
+        Assert.True(HttpAuthEvaluator.IsAuthorized(options, "current", null));
+        Assert.False(HttpAuthEvaluator.IsAuthorized(options, "", null));
+        Assert.False(HttpAuthEvaluator.IsAuthorized(options, "current-extra", null));
+    }
+
+    [Fact]
     public void ValidateHttpStartup_Development_AllowsAuthDisabled() {
         var options = new HttpAuthOptions { Enabled = false, ApiKey = "" };
         Assert.Null(HttpAuthEvaluator.ValidateHttpStartup(options, "Development"));

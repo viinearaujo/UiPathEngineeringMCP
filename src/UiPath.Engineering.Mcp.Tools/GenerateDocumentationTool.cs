@@ -17,7 +17,13 @@ public sealed class GenerateDocumentationTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Generates structured documentation data for a UiPath project: metadata, per-workflow summaries, dependency graph, and risks. Next: analyze_project.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Generate Documentation",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Leave-off. Structured documentation data (metadata, workflows, dependency graph, risks). Enable on ToolSurface=All for canvas skeleton. Next: analyze_project.")]
     public async Task<ToolResult> GenerateDocumentation(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {

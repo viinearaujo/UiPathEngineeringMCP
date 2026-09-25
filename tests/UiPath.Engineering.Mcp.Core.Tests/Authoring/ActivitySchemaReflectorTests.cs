@@ -2,7 +2,6 @@ using System.Reflection;
 using UiPath.Engineering.Mcp.Core.Authoring;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.Models;
-using Xunit.Abstractions;
 
 namespace UiPath.Engineering.Mcp.Core.Tests.Authoring;
 
@@ -125,5 +124,34 @@ public class ActivitySchemaReflectorTests {
         Assert.NotNull(surface);
         Assert.Contains(surface!, p => p.Name == "DisplayName");
         Assert.DoesNotContain(surface!, p => p.Name is "Equals" or "GetType" or "ToString");
+    }
+
+    [Fact]
+    public void CacheKey_PrefersPackageIdAndVersion() {
+        Assert.Equal(
+            "UiPath.Excel.Activities@3.5.0|UiPath.Excel.Activities.ReadRange",
+            ActivitySchemaReflector.CacheKey(
+                "UiPath.Excel.Activities.ReadRange",
+                "UiPath.Excel.Activities",
+                "3.5.0"));
+    }
+
+    [Fact]
+    public void PackagesFingerprint_ChangesWhenPackageSetChanges() {
+        var missingNuget = Path.Combine(Path.GetTempPath(), "mcp-nuget-missing-" + Guid.NewGuid().ToString("N"));
+        var a = ActivityCatalogResolver.PackagesFingerprint(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+                ["UiPath.System.Activities"] = "26.4.0"
+            },
+            packagesFolder: missingNuget);
+        var b = ActivityCatalogResolver.PackagesFingerprint(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+                ["UiPath.System.Activities"] = "26.4.0",
+                ["UiPath.Excel.Activities"] = "3.5.0"
+            },
+            packagesFolder: missingNuget);
+
+        Assert.NotEqual(a, b);
+        Assert.Contains("UiPath.System.Activities@26.4.0", a, StringComparison.Ordinal);
     }
 }

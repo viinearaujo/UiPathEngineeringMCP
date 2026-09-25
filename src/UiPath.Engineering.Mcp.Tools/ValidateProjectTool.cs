@@ -5,6 +5,7 @@ using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.GapAnalysis;
+using UiPath.Engineering.Mcp.Core.Jobs;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 using System.ComponentModel;
@@ -15,19 +16,28 @@ namespace UiPath.Engineering.Mcp.Tools;
 public sealed class ValidateProjectTool {
     private readonly IUiPathCliProvider _cliProvider;
     private readonly IFilesystemProvider _filesystem;
+    private readonly IBackgroundJobStore _jobs;
     private readonly IProjectModelBuilder? _modelBuilder;
 
     public ValidateProjectTool(
         IUiPathCliProvider cliProvider,
         IFilesystemProvider filesystem,
+        IBackgroundJobStore jobs,
         IProjectModelBuilder? modelBuilder = null) {
         _cliProvider = cliProvider;
         _filesystem = filesystem;
+        _jobs = jobs;
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Runs UiPath CLI validate / build / pack and returns structured per-step results plus diagnostics mapped to snapshot activity IDs. Each diagnostic is { activityId, property, message, specFix }. Agent green gate is validate:true (the default), pack:false, then analyze_project_gaps then update_plan_task. Do not use verify_work as the done gate. For an authoritative CLI compile, pass build:true (compile_project is a leave-off alias of that). Next: analyze_project_gaps.")]
-    public async Task<ToolResult> ValidateProject(
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Validate Project",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Starts uip validate/build/pack as a background job; returns {jobId,status:running} immediately. Poll get_job. Prefer check_work for the Copilot green gate. Next: get_job.")]
+    public Task<ToolResult> ValidateProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Run validate (project diagnostics)?")] bool validate = true,
         [Description("Run build (compile gate)? Default false. Pass true for an authoritative CLI compile.")] bool build = false,
@@ -36,14 +46,31 @@ public sealed class ValidateProjectTool {
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
-        var reporter = CliToolSupport.ProgressFor(progress, "Starting uip rpa validate/build/pack.", total: 3);
-
         if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } guardFailure) {
-            return guardFailure;
+            return Task.FromResult(guardFailure);
         }
 
-        var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, cancellationToken);
-        ReportSteps(reporter, cliResult);
+        // cancellationToken is honored only for this starter request (guards above); the job uses none.
+        _ = cancellationToken;
+
+        return Task.FromResult(CliToolSupport.StartBackgroundJob(
+            _jobs,
+            "validate_project",
+            async (jobProgress, jobCt) => {
+                jobProgress.Report("Starting uip rpa validate/build/pack.");
+                var cliResult = await _cliProvider.ValidateAsync(projectPath, validate, build, pack, jobCt);
+                jobProgress.Report(cliResult.Success ? "CLI finished successfully." : "CLI reported errors.");
+                return await BuildValidateResult(projectPath, cliResult, Stopwatch.StartNew(), jobCt);
+            },
+            progress,
+            sw));
+    }
+
+    internal async Task<ToolResult> BuildValidateResult(
+        string projectPath,
+        UiPathCliResult cliResult,
+        Stopwatch sw,
+        CancellationToken cancellationToken) {
         var diagnostics = ProjectDiagnostics(projectPath, cliResult);
         var (boundaryErrors, boundaryWarning) = await BoundaryErrors(projectPath, cancellationToken);
         var errors = cliResult.Errors.Concat(boundaryErrors.Select(e => $"{e.ErrorCode}: {e.Message} Fix: {e.FixHint}")).ToList();
@@ -83,19 +110,6 @@ public sealed class ValidateProjectTool {
         var mapped = ValidateDiagnosticMapper.Map(projectPath, _filesystem, cliResult.Diagnostics);
         return mapped.Select(ToPayload).ToList();
     }
-
-    // One progress step per CLI verb the tool asked for, in execution order. A step that was not
-    // requested is reported as skipped so the step count still lines up.
-    private static void ReportSteps(CliToolSupport.CliProgress reporter, UiPathCliResult result) {
-        Report(reporter, result.Validate, "validate");
-        Report(reporter, result.Build, "build");
-        Report(reporter, result.Pack, "pack");
-    }
-
-    private static void Report(CliToolSupport.CliProgress reporter, CliStepResult step, string name) =>
-        reporter.Step(step.Executed
-            ? $"{name} {(step.Success ? "succeeded" : "reported errors")}."
-            : $"{name} was not requested.");
 
     private static object ToPayload(ValidateFixDiagnostic diagnostic) => new {
         activityId = diagnostic.ActivityId,

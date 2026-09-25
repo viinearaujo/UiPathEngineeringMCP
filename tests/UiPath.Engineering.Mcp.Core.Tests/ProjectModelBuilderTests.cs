@@ -120,7 +120,9 @@ public class ProjectModelBuilderTests {
         Assert.True(coded.IsCodedWorkflow);
         Assert.Equal(CodedFileKind.Workflow, coded.Kind);
         Assert.Equal(["Execute"], coded.EntryMethods);
-        Assert.DoesNotContain(model.Risks, r => r.Contains("InvoiceFlow.cs"));
+        // Coded workflow nodes join the dependency graph; unused ones are orphans.
+        Assert.Contains(model.Workflows, w => w.FileName == "InvoiceFlow.cs");
+        Assert.Contains(model.Risks, r => r.Contains("Orphan workflow") && r.Contains("InvoiceFlow.cs"));
     }
 
     [Fact]

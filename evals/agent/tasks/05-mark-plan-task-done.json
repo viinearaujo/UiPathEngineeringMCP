@@ -1,0 +1,8 @@
+{
+  "id": "05-mark-plan-task-done",
+  "fixture": "with-plan",
+  "prompt": "Project path: {{projectPath}}. Call get_implementation_plan, then update_plan_task to set task-2 status to done with a short note. Do not recreate the plan.",
+  "assertions": [
+    { "type": "planTaskStatus", "taskId": "task-2", "status": "done" }
+  ]
+}

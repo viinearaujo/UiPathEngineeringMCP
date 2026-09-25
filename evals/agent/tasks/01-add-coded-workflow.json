@@ -1,0 +1,9 @@
+{
+  "id": "01-add-coded-workflow",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. Use analyze_project, then add_coded_workflow to create a coded workflow class named InvoiceFlow (kind=workflow). Prefer coded-first. When done, call validate_project with build false and pack false (or check_work if listed), then analyze_project_gaps.",
+  "assertions": [
+    { "type": "fileExists", "path": "InvoiceFlow.cs" },
+    { "type": "fileContains", "path": "InvoiceFlow.cs", "snippet": "class InvoiceFlow" }
+  ]
+}

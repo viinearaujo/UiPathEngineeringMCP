@@ -1,0 +1,8 @@
+{
+  "id": "08-edit-xaml-displayname",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. Use edit_workflow_file on Main.xaml to change DisplayName=\"Main Sequence\" to DisplayName=\"Agent Eval Main\". Exact string replace only.",
+  "assertions": [
+    { "type": "fileContains", "path": "Main.xaml", "snippet": "DisplayName=\"Agent Eval Main\"" }
+  ]
+}

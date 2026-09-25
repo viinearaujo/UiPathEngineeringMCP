@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Reflection;
+using System.Text;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.Models;
 
@@ -21,6 +23,10 @@ namespace UiPath.Engineering.Mcp.Core.Authoring;
 /// default, and required flag, plus the content property and the body slot the
 /// activity's <c>ContentProperty</c> attribute names.
 ///
+/// Successful surfaces are cached by package id + version + activity type name so
+/// MetadataLoadContext work is not repeated across catalog resolutions. Null
+/// results are not cached — a package may be installed later.
+///
 /// Every failure path returns null rather than throwing: a package that is not
 /// installed, an assembly that cannot be read, or a type that is not a concrete
 /// class all fall back to the starter-derived surface, which is strictly better
@@ -38,6 +44,9 @@ public static class ActivitySchemaReflector {
         "System.Activities.InOutArgument`1"
     };
 
+    private static readonly ConcurrentDictionary<string, IReadOnlyList<PropertySchema>> SchemaCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// The complete property surface of <paramref name="fullTypeName"/>, or null
     /// when the type cannot be resolved or read. Framework references and package
@@ -48,9 +57,21 @@ public static class ActivitySchemaReflector {
         string packagesFolder,
         IReadOnlyList<PackageModel> packages,
         string? targetFramework,
-        string? fullTypeName) {
+        string? fullTypeName,
+        string? packageId = null,
+        string? packageVersion = null) {
         if (string.IsNullOrWhiteSpace(fullTypeName) || packagesFolder.Length == 0) {
             return null;
+        }
+
+        var typeName = NormalizeTypeName(fullTypeName);
+        if (typeName.Length == 0 || IsFrameworkTypeName(typeName)) {
+            return null;
+        }
+
+        var cacheKey = CacheKey(typeName, packageId, packageVersion, packages);
+        if (SchemaCache.TryGetValue(cacheKey, out var cached)) {
+            return cached;
         }
 
         List<string> assemblyPaths;
@@ -63,8 +84,50 @@ public static class ActivitySchemaReflector {
             return null;
         }
 
-        return TryReadProperties(assemblyPaths, fullTypeName);
+        var surface = TryReadProperties(assemblyPaths, typeName);
+        if (surface is not null) {
+            SchemaCache[cacheKey] = surface;
+        }
+
+        return surface;
     }
+
+    /// <summary>Test seam: drop cached surfaces between isolation-sensitive tests.</summary>
+    internal static void ClearSchemaCache() => SchemaCache.Clear();
+
+    internal static string CacheKey(
+        string normalizedTypeName,
+        string? packageId,
+        string? packageVersion,
+        IReadOnlyList<PackageModel>? packages = null) {
+        if (!string.IsNullOrWhiteSpace(packageId)) {
+            return $"{packageId.Trim()}@{Strip(packageVersion)}|{normalizedTypeName}";
+        }
+
+        if (packages is null || packages.Count == 0) {
+            return $"?@?|{normalizedTypeName}";
+        }
+
+        var sb = new StringBuilder();
+        foreach (var package in packages
+            .OrderBy(p => p.Id, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(p => p.Version, StringComparer.OrdinalIgnoreCase)) {
+            if (string.IsNullOrWhiteSpace(package.Id)) {
+                continue;
+            }
+
+            sb.Append(package.Id.Trim())
+                .Append('@')
+                .Append(Strip(package.Version))
+                .Append(';');
+        }
+
+        sb.Append('|').Append(normalizedTypeName);
+        return sb.ToString();
+    }
+
+    private static string Strip(string? version) =>
+        string.IsNullOrWhiteSpace(version) ? "?" : version.Trim();
 
     /// <summary>
     /// The complete property surface of <paramref name="fullTypeName"/> read from an

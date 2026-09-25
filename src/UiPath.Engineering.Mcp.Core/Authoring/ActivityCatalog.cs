@@ -3,11 +3,11 @@ using System.Diagnostics.CodeAnalysis;
 namespace UiPath.Engineering.Mcp.Core.Authoring;
 
 public static class ActivityCatalog {
-    internal static readonly (string Prefix, string Ns) Wf = ("", "http://schemas.microsoft.com/netfx/2009/xaml/activities");
-    internal static readonly (string Prefix, string Ns) Ui = ("ui", "http://schemas.uipath.com/workflow/activities");
-    internal static readonly (string Prefix, string Ns) Uix = ("uix", "http://schemas.uipath.com/workflow/activities/uix");
+    internal static readonly (string Prefix, string Ns) Wf = ("", XamlNamespaces.WfUri);
+    internal static readonly (string Prefix, string Ns) Ui = ("ui", XamlNamespaces.UiUri);
+    internal static readonly (string Prefix, string Ns) Uix = ("uix", XamlNamespaces.UixUri);
     internal static readonly (string Prefix, string Ns) ModernExcel =
-        ("ueab", "clr-namespace:UiPath.Excel.Activities.Business;assembly=UiPath.Excel.Activities");
+        ("ueab", XamlNamespaces.ModernExcelUri);
 
     public const string SystemPackage = "UiPath.System.Activities";
     public const string ExcelPackage = "UiPath.Excel.Activities";

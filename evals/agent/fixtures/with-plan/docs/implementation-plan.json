@@ -1,0 +1,25 @@
+{
+  "Goal": "Agent eval scratchpad plan",
+  "CreatedUtc": "2026-01-01T00:00:00+00:00",
+  "UpdatedUtc": "2026-01-01T00:00:00+00:00",
+  "Tasks": [
+    {
+      "Id": "task-1",
+      "Title": "Add InvoiceFlow coded workflow",
+      "Description": "Create InvoiceFlow.cs via add_coded_workflow",
+      "Status": "pending",
+      "TargetFiles": ["InvoiceFlow.cs"],
+      "AcceptanceCriteria": ["InvoiceFlow.cs exists"],
+      "Notes": null
+    },
+    {
+      "Id": "task-2",
+      "Title": "Mark progress",
+      "Description": "Update status after work",
+      "Status": "pending",
+      "TargetFiles": [],
+      "AcceptanceCriteria": ["task-2 is done"],
+      "Notes": null
+    }
+  ]
+}

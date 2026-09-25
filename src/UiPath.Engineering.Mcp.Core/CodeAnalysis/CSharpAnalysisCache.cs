@@ -49,16 +49,21 @@ public sealed class CSharpAnalysisCache : ICSharpContextBuilder, IDisposable {
         int maxEntries,
         TimeSpan? ttl = null,
         TimeProvider? timeProvider = null,
-        ILogger<CSharpAnalysisCache>? logger = null) {
+        ILogger<CSharpAnalysisCache>? logger = null,
+        IProjectChangeWatcherFactory? watcherFactory = null) {
         _inner = inner;
         _filesystem = filesystem;
         _resolver = resolver;
+        // Reuse-when-clean is off: the fingerprint also covers NuGet folders and
+        // `.local/.codedworkflows` sources the project-file watcher does not see.
         _cache = new FingerprintedCache<CSharpAnalysisContext>(
             "C# analysis",
             maxEntries,
             ttl,
             timeProvider,
-            logger ?? NullLogger<CSharpAnalysisCache>.Instance);
+            logger ?? NullLogger<CSharpAnalysisCache>.Instance,
+            watcherFactory,
+            reuseWhenClean: false);
     }
 
     internal int CacheEntryCount => _cache.EntryCount;

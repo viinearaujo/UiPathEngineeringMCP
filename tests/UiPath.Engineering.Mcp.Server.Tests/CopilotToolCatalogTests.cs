@@ -56,10 +56,14 @@ public class CopilotToolCatalogTests {
         Assert.Contains("update_plan_task", CopilotConnectorTools.DefaultNames);
         Assert.Contains("insert_activities", CopilotConnectorTools.DefaultNames);
         Assert.Contains("analyze_project_gaps", CopilotConnectorTools.DefaultNames);
-        Assert.Contains("read_skill", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("search_knowledge", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("navigate_code", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("manage_project_content", CopilotConnectorTools.DefaultNames);
         Assert.Contains("create_implementation_plan", CopilotConnectorTools.DefaultNames);
-        Assert.Contains("recommend_activities", CopilotConnectorTools.DefaultNames);
-        Assert.Contains("manage_project_docs", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("check_work", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("get_job", CopilotConnectorTools.DefaultNames);
+        Assert.Contains("recommend_activities", CopilotConnectorTools.LeaveOffNames);
+        Assert.Contains("generate_documentation", CopilotConnectorTools.LeaveOffNames);
         Assert.Contains("list_skills", CopilotConnectorTools.LeaveOffNames);
     }
 

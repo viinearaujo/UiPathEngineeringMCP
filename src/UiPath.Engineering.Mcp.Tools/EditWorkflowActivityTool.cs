@@ -17,7 +17,13 @@ public sealed class EditWorkflowActivityTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Leave-off XAML fragment hatch (ToolSurface=All only). Prefer insert_activities on the Copilot default connector. Inserts a raw activity fragment into a container, or replaces/removes one activity, targeted by activityId (preferred, from find_activity) or DisplayName. Next: validate_project.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Edit Workflow Activity",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Leave-off XAML fragment hatch (ToolSurface=All). Prefer insert_activities. Next: validate_project.")]
     public ToolResult EditWorkflowActivity(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,

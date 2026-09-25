@@ -50,7 +50,7 @@ public sealed class KnowledgeResources {
                     $"Activity '{name}' is not in the catalog (source: {catalog.Source}).",
                     catalog.Suggest(name) is { } suggestion
                         ? $"Did you mean '{suggestion}'?"
-                        : "Call recommend_activities or search_activity_docs for a real activity name.");
+                        : "Call recommend_activities or search_knowledge for a real activity name.");
             }
 
             var payload = new {

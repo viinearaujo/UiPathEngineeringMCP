@@ -1,0 +1,9 @@
+{
+  "id": "02-add-coded-test",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. Add a coded test class named InvoiceTests using add_coded_workflow with kind=test. Then validate_project(build:false, pack:false) or check_work if available, then analyze_project_gaps.",
+  "assertions": [
+    { "type": "fileExists", "path": "Tests/InvoiceTests.cs" },
+    { "type": "fileContains", "path": "Tests/InvoiceTests.cs", "snippet": "class InvoiceTests" }
+  ]
+}

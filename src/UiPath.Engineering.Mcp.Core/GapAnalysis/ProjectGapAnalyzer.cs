@@ -31,7 +31,7 @@ public static class ProjectGapAnalyzer {
         IFilesystemProvider? filesystem = null) {
 
         var gaps = new List<Gap>();
-        var graph = DependencyGraphBuilder.Build(model.Workflows, model.MainWorkflow);
+        var graph = DependencyGraphBuilder.Build(model.Workflows, model.MainWorkflow, model.CodedWorkflows);
         var workflowsByIdentity = new Dictionary<string, WorkflowModel>(StringComparer.OrdinalIgnoreCase);
         foreach (var workflow in model.Workflows) {
             workflowsByIdentity.TryAdd(WorkflowPath.Identity(workflow), workflow);

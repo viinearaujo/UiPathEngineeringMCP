@@ -1,0 +1,21 @@
+{
+  "name": "AgentEvalMinimalXaml",
+  "description": "Tiny XAML fixture for agent evals",
+  "main": "Main.xaml",
+  "projectVersion": "1.0.0",
+  "studioVersion": "24.10.0.0",
+  "targetFramework": "Windows",
+  "expressionLanguage": "CSharp",
+  "designOptions": {
+    "outputType": "Process"
+  },
+  "entryPoints": [
+    {
+      "filePath": "Main.xaml",
+      "uniqueId": "11111111-1111-1111-1111-111111111111",
+      "type": "process",
+      "input": [],
+      "output": []
+    }
+  ]
+}

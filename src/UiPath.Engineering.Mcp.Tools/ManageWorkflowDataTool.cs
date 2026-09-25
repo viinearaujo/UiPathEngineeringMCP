@@ -17,7 +17,13 @@ public sealed class ManageWorkflowDataTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Manages the data surface of an existing .xaml workflow: add, remove, or rename arguments and variables. Arguments become x:Property declarations on the root Activity; variables go into the root Sequence's Sequence.Variables block. Rename updates the declaration and rewrites every expression that references the old name. Next: validate_project.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Manage Workflow Data",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Adds, removes, or renames variables/arguments on an existing .xaml. Next: validate_project.")]
     public ToolResult ManageWorkflowData(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,

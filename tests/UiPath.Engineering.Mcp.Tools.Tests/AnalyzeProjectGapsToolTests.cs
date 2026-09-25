@@ -148,9 +148,9 @@ public class AnalyzeProjectGapsToolTests : IDisposable {
         Assert.Equal(["structure", Gap.CategoryReadability], ordered);
 
         // Every gap carries a confidence so the caller can tell a fact from a hint.
+        var allowedConfidence = new[] { Gap.ConfidenceHigh, Gap.ConfidenceMedium, Gap.ConfidenceLow };
         Assert.All(data.GetProperty("gaps").EnumerateArray(), g =>
-            Assert.Contains(g.GetProperty("Confidence").GetString(),
-                [Gap.ConfidenceHigh, Gap.ConfidenceMedium, Gap.ConfidenceLow]));
+            Assert.Contains(g.GetProperty("Confidence").GetString(), allowedConfidence));
     }
 
     [Fact]

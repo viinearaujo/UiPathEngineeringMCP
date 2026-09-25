@@ -35,7 +35,7 @@ function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 
 # --- 0. Toolchain check ---------------------------------------------------
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    throw "The .NET SDK ('dotnet') was not found on PATH. Install .NET 8: https://dotnet.microsoft.com/download/dotnet/8.0"
+    throw "The .NET SDK ('dotnet') was not found on PATH. Install .NET 10: https://dotnet.microsoft.com/download/dotnet/10.0"
 }
 Write-Step "dotnet $(dotnet --version)"
 

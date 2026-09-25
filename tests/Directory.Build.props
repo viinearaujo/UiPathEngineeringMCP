@@ -1,0 +1,10 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- xUnit1051 is new with v3 (prefer TestContext.Current.CancellationToken). Full
+       call-site migration is large and orthogonal to the net10/MCP bump; keep
+       TreatWarningsAsErrors and silence only this responsiveness analyzer. -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+</Project>

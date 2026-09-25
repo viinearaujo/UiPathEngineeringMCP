@@ -13,6 +13,7 @@ namespace UiPath.Engineering.Mcp.Server.Tests;
 /// <c>AllowedValuesAttributeTests</c>; this pins the protocol surface, which is what an LLM or a
 /// completion client actually reads.
 /// </summary>
+[Collection(McpHostCollection.Name)]
 public class ToolSchemaEnumTests {
     private const string ApiKey = "schema-test-api-key";
 

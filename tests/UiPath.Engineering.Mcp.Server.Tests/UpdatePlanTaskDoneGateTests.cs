@@ -67,13 +67,14 @@ public class ImplementUiPathGoalPromptRecipeTests {
 
         Assert.Contains("copilot-studio-agent-instructions.txt", text);
         Assert.Contains("add_coded_workflow", text);
-        Assert.Contains("recommend_activities", text);
-        Assert.Contains("validate_project", text);
-        Assert.Contains("build:false", text);
+        Assert.Contains("find_activity", text);
+        Assert.Contains("check_work", text);
         Assert.Contains("update_plan_task", text);
         Assert.Contains("not blocked on docs/ADR freshness", text);
         Assert.DoesNotContain("done requires current docs", text);
-        Assert.Contains("manage_project_docs", text);
+        Assert.Contains("manage_project_content", text);
         Assert.DoesNotContain("write_workflow_file", text);
+        Assert.DoesNotContain("manage_project_docs", text);
+        Assert.DoesNotContain("recommend_activities", text);
     }
 }

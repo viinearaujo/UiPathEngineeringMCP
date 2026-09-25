@@ -1,8 +1,11 @@
+using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Authoring;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.CodeSearch;
 using UiPath.Engineering.Mcp.Core.Docs;
+using UiPath.Engineering.Mcp.Core.Jobs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.GitLab;
@@ -252,4 +255,41 @@ internal static class DocsSupport {
 
     public static void SeedGeneratedContext(IFilesystemProvider fs, string projectPath, UiPathProjectModel? model = null) =>
         Renderer(fs).Sync(projectPath, model ?? new UiPathProjectModel { ProjectName = "testProcess" });
+}
+
+internal static class BackgroundJobs {
+    public static BackgroundJobStore NewStore() => new();
+
+    public static async Task<ToolResult> AwaitFinished(IBackgroundJobStore store, ToolResult start, int timeoutMs = 5000) {
+        if (start.Data is null) {
+            return start;
+        }
+
+        var data = JsonSerializer.SerializeToElement(start.Data);
+        if (!data.TryGetProperty("jobId", out var jobIdProp)) {
+            return start;
+        }
+
+        var jobId = jobIdProp.GetString()!;
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline) {
+            if (store.TryGet(jobId, out var job)
+                && job.State is BackgroundJobStates.Succeeded or BackgroundJobStates.Failed) {
+                if (job.Result is ToolResult toolResult) {
+                    return toolResult;
+                }
+
+                return new ToolResult {
+                    Status = job.State == BackgroundJobStates.Succeeded ? "success" : "error",
+                    Summary = job.Error ?? job.State,
+                    Data = job.Result,
+                    Errors = job.Error is null ? [] : [job.Error]
+                };
+            }
+
+            await Task.Delay(10);
+        }
+
+        throw new TimeoutException($"Background job '{jobId}' did not finish within {timeoutMs}ms.");
+    }
 }

@@ -18,13 +18,15 @@ public sealed class BoundedCache<TValue> : IDisposable {
     private readonly TimeProvider _time;
     private readonly ConcurrentDictionary<string, Entry> _entries;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks;
+    private readonly Action<string, TValue>? _onEvicted;
     private long _accessClock;
     private bool _disposed;
 
     public BoundedCache(
         int maxEntries = DefaultMaxEntries,
         TimeSpan? ttl = null,
-        TimeProvider? timeProvider = null) {
+        TimeProvider? timeProvider = null,
+        Action<string, TValue>? onEvicted = null) {
         if (maxEntries < 1) {
             throw new ArgumentOutOfRangeException(nameof(maxEntries), maxEntries, "maxEntries must be at least 1.");
         }
@@ -34,6 +36,7 @@ public sealed class BoundedCache<TValue> : IDisposable {
         _time = timeProvider ?? TimeProvider.System;
         _entries = new ConcurrentDictionary<string, Entry>(StringComparer.OrdinalIgnoreCase);
         _locks = new ConcurrentDictionary<string, SemaphoreSlim>(StringComparer.OrdinalIgnoreCase);
+        _onEvicted = onEvicted;
     }
 
     internal int EntryCount => _entries.Count;
@@ -64,7 +67,10 @@ public sealed class BoundedCache<TValue> : IDisposable {
         var now = _time.GetUtcNow();
         if (IsExpired(entry, now)) {
             if (!includeExpired) {
-                _entries.TryRemove(key, out _);
+                if (_entries.TryRemove(key, out var removed)) {
+                    _onEvicted?.Invoke(key, removed.Value);
+                }
+
                 return false;
             }
 
@@ -81,7 +87,14 @@ public sealed class BoundedCache<TValue> : IDisposable {
     public void Set(string key, TValue value) {
         var now = _time.GetUtcNow();
         var access = Interlocked.Increment(ref _accessClock);
-        _entries[key] = new Entry(value, now, access);
+        if (_entries.TryGetValue(key, out var previous)) {
+            _entries[key] = new Entry(value, now, access);
+            // Replacing the same key is not an eviction of a different project.
+            _ = previous;
+        } else {
+            _entries[key] = new Entry(value, now, access);
+        }
+
         EvictOverflow(key);
     }
 
@@ -91,7 +104,12 @@ public sealed class BoundedCache<TValue> : IDisposable {
         }
 
         _disposed = true;
-        _entries.Clear();
+        foreach (var pair in _entries) {
+            if (_entries.TryRemove(pair.Key, out var entry)) {
+                _onEvicted?.Invoke(pair.Key, entry.Value);
+            }
+        }
+
         foreach (var key in _locks.Keys) {
             if (_locks.TryRemove(key, out var gate)) {
                 gate.Dispose();
@@ -118,7 +136,9 @@ public sealed class BoundedCache<TValue> : IDisposable {
                 break;
             }
 
-            _entries.TryRemove(victim, out _);
+            if (_entries.TryRemove(victim, out var removed)) {
+                _onEvicted?.Invoke(victim, removed.Value);
+            }
         }
     }
 

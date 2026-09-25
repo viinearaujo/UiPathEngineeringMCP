@@ -1,0 +1,9 @@
+{
+  "id": "17-plan-both-tasks",
+  "fixture": "with-plan",
+  "prompt": "Project path: {{projectPath}}. Mark task-1 done and task-2 done via update_plan_task (two calls). Notes can be 'eval'.",
+  "assertions": [
+    { "type": "planTaskStatus", "taskId": "task-1", "status": "done" },
+    { "type": "planTaskStatus", "taskId": "task-2", "status": "done" }
+  ]
+}

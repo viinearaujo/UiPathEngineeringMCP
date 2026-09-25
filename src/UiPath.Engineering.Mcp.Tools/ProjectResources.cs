@@ -167,6 +167,7 @@ public sealed class ProjectResources {
                 f.Severity == DocsFinding.Error
                 && f.Code == ToolErrorCodes.DocsStale
                 && (f.SuggestedTool == "sync_project_context"
+                    || f.SuggestedTool == "manage_project_content"
                     || (f.TargetFile is not null && (
                         f.TargetFile.EndsWith("AGENTS.md", StringComparison.OrdinalIgnoreCase)
                         || f.TargetFile.EndsWith("project-context.md", StringComparison.OrdinalIgnoreCase)))));

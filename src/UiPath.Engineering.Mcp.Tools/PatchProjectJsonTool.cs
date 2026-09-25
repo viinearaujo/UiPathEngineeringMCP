@@ -14,7 +14,13 @@ public sealed class PatchProjectJsonTool {
 
     public PatchProjectJsonTool(IFilesystemProvider filesystem) => _filesystem = filesystem;
 
-    [McpServerTool(UseStructuredContent = true), Description("Applies one structured operation to project.json: add/remove entry points, upsert/remove dependencies, upsert/remove fileInfoCollection entries, set the exception handler, or set a runtimeOptions value. Never changes expressionLanguage, targetFramework, or schemaVersion. Next: validate_project.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Patch Project JSON",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Leave-off. One structured project.json op (entry points, deps, fileInfo, exception handler, runtimeOptions). Next: validate_project.")]
     public ToolResult PatchProjectJson(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Operation: add_entry_point, remove_entry_point, upsert_dependency, remove_dependency, upsert_file_info, remove_file_info, set_exception_handler, set_runtime_option.")]

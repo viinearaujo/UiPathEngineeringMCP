@@ -11,9 +11,13 @@ namespace UiPath.Engineering.Mcp.Core.Tests;
 public class KnowledgeSearchTests : IDisposable {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "mcp-know-" + Guid.NewGuid().ToString("N"));
 
-    public KnowledgeSearchTests() => Directory.CreateDirectory(_root);
+    public KnowledgeSearchTests() {
+        KnowledgeIndex.ClearCaches();
+        Directory.CreateDirectory(_root);
+    }
 
     public void Dispose() {
+        KnowledgeIndex.ClearCaches();
         if (Directory.Exists(_root)) {
             Directory.Delete(_root, recursive: true);
         }
@@ -23,6 +27,8 @@ public class KnowledgeSearchTests : IDisposable {
         var path = Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
+        // Nudge mtime so the index stamp cannot collide with a prior write in the same tick.
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMilliseconds(1));
         return path;
     }
 
@@ -69,6 +75,7 @@ public class KnowledgeSearchTests : IDisposable {
 
         Assert.Equal(2, result.Excerpts.Count);
         Assert.Equal("a/exact.md", result.Excerpts[0].RelativePath);
+        Assert.True(result.Excerpts[0].Score > result.Excerpts[1].Score);
     }
 
     [Fact]
@@ -80,6 +87,28 @@ public class KnowledgeSearchTests : IDisposable {
             [new KnowledgeCorpus(_root, KnowledgeSource.Vendored)], "selector");
 
         Assert.Equal("guides/selector-guide.md", result.Excerpts[0].RelativePath);
+    }
+
+    [Fact]
+    public void Search_RareExactTermOutranksCommonTerm() {
+        // BM25 property: a rare term in one document outranks a common term that
+        // appears in many documents. Filename matches still surface via path tokens.
+        Write("rare/unique-zephyr.md", "# Zephyr\nThe zephyr widget configures throttling.\n");
+        for (var i = 0; i < 8; i++) {
+            Write($"common/doc{i}.md", $"# Doc {i}\nCommon glue text about workflows and activities.\n");
+        }
+
+        var rare = KnowledgeSearchEngine.Search(
+            [new KnowledgeCorpus(_root, KnowledgeSource.Vendored)], "zephyr");
+        Assert.NotEmpty(rare.Excerpts);
+        Assert.All(rare.Excerpts, e => Assert.Equal("rare/unique-zephyr.md", e.RelativePath));
+        Assert.True(rare.Excerpts.Count <= KnowledgeSearchEngine.MaxPerFile);
+
+        var common = KnowledgeSearchEngine.Search(
+            [new KnowledgeCorpus(_root, KnowledgeSource.Vendored)], "glue");
+        Assert.NotEmpty(common.Excerpts);
+        // Every common hit scores below the rare-term hit (lower IDF).
+        Assert.True(rare.Excerpts[0].Score > common.Excerpts[0].Score);
     }
 
     [Fact]
@@ -147,6 +176,21 @@ public class KnowledgeSearchTests : IDisposable {
         var excerpt = Assert.Single(result.Excerpts);
         Assert.Equal(1, excerpt.Line);
         Assert.Contains("Troubleshooting Wrappers", excerpt.Snippet);
+    }
+
+    [Fact]
+    public void Search_ReindexesWhenMarkdownMtimeChanges() {
+        Write("a.md", "# First\noldterm appears here\n");
+        var first = KnowledgeSearchEngine.Search(
+            [new KnowledgeCorpus(_root, KnowledgeSource.Vendored)], "oldterm");
+        Assert.Single(first.Excerpts);
+
+        Write("a.md", "# First\nnewterm appears here\n");
+        var second = KnowledgeSearchEngine.Search(
+            [new KnowledgeCorpus(_root, KnowledgeSource.Vendored)], "newterm");
+        Assert.Single(second.Excerpts);
+        Assert.Empty(KnowledgeSearchEngine.Search(
+            [new KnowledgeCorpus(_root, KnowledgeSource.Vendored)], "oldterm").Excerpts);
     }
 
     [Fact]

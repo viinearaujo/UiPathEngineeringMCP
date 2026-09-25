@@ -5,6 +5,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Jobs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
@@ -20,14 +21,26 @@ public sealed class ManagePackagesTool {
     private readonly IUiPathCliProvider _cli;
     private readonly IFilesystemProvider _filesystem;
     private readonly CliCommandPolicy _policy;
+    private readonly IBackgroundJobStore _jobs;
 
-    public ManagePackagesTool(IUiPathCliProvider cli, IFilesystemProvider filesystem, CliCommandPolicy policy) {
+    public ManagePackagesTool(
+        IUiPathCliProvider cli,
+        IFilesystemProvider filesystem,
+        CliCommandPolicy policy,
+        IBackgroundJobStore jobs) {
         _cli = cli;
         _filesystem = filesystem;
         _policy = policy;
+        _jobs = jobs;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Manages the project's NuGet dependencies through the UiPath CLI package verbs — the canonical path (uip rpa packages install|versions|inspect). Do NOT hand-edit project.json to add a dependency: there is no add-dependency verb, and patch_project_json(upsert_dependency) only rewrites the JSON without restoring or resolving. operation=install: one packageId (repeat with separate calls for several); omit version to resolve the latest compatible (preferred), pin only for a known constraint — install mutates the project and is blocked unless UiPathCli:EnableMutatingCommands is set. operation=versions: lists available versions, --include-prerelease by default since activity packages frequently ship -preview between stable releases carrying the freshest activity surface and .local/docs. operation=inspect: returns a package's public API as markdown (from a feed or a local .nupkg). Next: validate_project.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Manage Packages",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("CLI package verbs: install (async job → get_job), versions, or inspect. Do not hand-edit project.json dependencies. Next: get_job or validate_project.")]
     public async Task<ToolResult> ManagePackages(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Operation: install, versions, or inspect.")]
@@ -56,12 +69,15 @@ public sealed class ManagePackagesTool {
         }
 
         var result = parsedOperation switch {
-            Install => await InstallAsync(projectPath, packageId, version, nugetSourcesConfigPath, timeoutSeconds, sw, cancellationToken),
+            Install => InstallAsync(projectPath, packageId, version, nugetSourcesConfigPath, timeoutSeconds, sw, progress),
             Versions => await VersionsAsync(projectPath, packageId, includePrerelease, timeoutSeconds, sw, cancellationToken),
             _ => await InspectAsync(projectPath, packageName, packageVersion, feedUrl, nupkgPath, timeoutSeconds, sw, cancellationToken)
         };
 
-        reporter.Step($"'{parsedOperation}' returned.");
+        if (parsedOperation != Install) {
+            reporter.Step($"'{parsedOperation}' returned.");
+        }
+
         return result;
     }
 
@@ -70,9 +86,9 @@ public sealed class ManagePackagesTool {
     private const string Inspect = "inspect";
     private static readonly string[] Operations = [Install, Versions, Inspect];
 
-    private async Task<ToolResult> InstallAsync(
+    private ToolResult InstallAsync(
         string projectPath, string? packageId, string? version, string? nugetSourcesConfigPath,
-        int? timeoutSeconds, Stopwatch sw, CancellationToken cancellationToken) {
+        int? timeoutSeconds, Stopwatch sw, IProgress<ProgressNotificationValue>? progress) {
         if (RequirePackageId(packageId, sw) is { } missing) {
             return missing;
         }
@@ -86,45 +102,54 @@ public sealed class ManagePackagesTool {
         var tokens = CliVerbArguments.WithRpaVerb(
             CliVerbArguments.PackagesInstall(projectPath, [spec], nugetSourcesConfigPath));
 
-        // install mutates the project: gated by EnableMutatingCommands (fail closed).
         if (CliToolSupport.GuardSubcommand(_filesystem, _policy, projectPath, tokens, sw) is { } guardFailure) {
             return guardFailure;
         }
 
-        var outcome = await _cli.RunStructuredAsync(
-            CliVerbArguments.RpaVerb, tokens, projectPath,
-            timeoutSeconds: CliToolSupport.ClampTimeout(timeoutSeconds), cancellationToken);
+        var timeout = CliToolSupport.ClampTimeout(timeoutSeconds);
+        return CliToolSupport.StartBackgroundJob(
+            _jobs,
+            "manage_packages",
+            async (jobProgress, jobCt) => {
+                jobProgress.Report($"Installing package {spec}.");
+                var outcome = await _cli.RunStructuredAsync(
+                    CliVerbArguments.RpaVerb, tokens, projectPath,
+                    timeoutSeconds: timeout, jobCt);
 
-        var cli = outcome.Cli;
-        if (outcome.Envelope is not { } envelope) {
-            return CliToolSupport.CliFailure(outcome, cli.Summary, sw, "validate_project");
-        }
+                var cli = outcome.Cli;
+                if (outcome.Envelope is not { } envelope) {
+                    return CliToolSupport.CliFailure(outcome, cli.Summary, Stopwatch.StartNew(), "validate_project");
+                }
 
-        var result = PackagesParser.ParseInstall(envelope.Data, [spec], envelope.Message);
-        var success = envelope.IsSuccess && result.Succeeded;
+                var parsed = PackagesParser.ParseInstall(envelope.Data, [spec], envelope.Message);
+                var success = envelope.IsSuccess && parsed.Succeeded;
 
-        if (!success) {
-            var message = string.Join(" ", new[] { envelope.Message, envelope.Instructions }
-                .Where(s => !string.IsNullOrWhiteSpace(s)));
-            var errors = result.Failed.Count > 0 ? result.Failed : [message.Length > 0 ? message : cli.Summary];
-            return ToolResults.Failure(
-                errors.Count > 0 ? errors[0] : cli.Summary,
-                [new ToolError(
-                    ToolErrorCodes.OperationFailed,
-                    string.Join("; ", errors),
-                    "Package not found: verify the exact id with find_activity or the package's .local/docs. Feed or network error: check the NuGet feed configuration in Studio settings, or pass nugetSourcesConfigPath.",
-                    "find_activity")], sw);
-        }
+                if (!success) {
+                    var message = string.Join(" ", new[] { envelope.Message, envelope.Instructions }
+                        .Where(s => !string.IsNullOrWhiteSpace(s)));
+                    var errors = parsed.Failed.Count > 0 ? parsed.Failed : [message.Length > 0 ? message : cli.Summary];
+                    return ToolResults.Failure(
+                        errors.Count > 0 ? errors[0] : cli.Summary,
+                        [new ToolError(
+                            ToolErrorCodes.OperationFailed,
+                            string.Join("; ", errors),
+                            "Package not found: verify the exact id with find_activity or the package's .local/docs. Feed or network error: check the NuGet feed configuration in Studio settings, or pass nugetSourcesConfigPath.",
+                            "find_activity")], Stopwatch.StartNew());
+                }
 
-        return ToolResults.Ok(
-            $"Installed {spec}. Next: validate_project(build:true) to confirm the project still compiles.",
-            new {
-                operation = Install,
-                requested = result.Requested,
-                resolvedLatest = string.IsNullOrWhiteSpace(version),
-                failed = result.Failed,
-                command = cli.Command
-            }, sw);
+                jobProgress.Report($"Installed {spec}.");
+                return ToolResults.Ok(
+                    $"Installed {spec}. Next: validate_project(build:true) to confirm the project still compiles.",
+                    new {
+                        operation = Install,
+                        requested = parsed.Requested,
+                        resolvedLatest = string.IsNullOrWhiteSpace(version),
+                        failed = parsed.Failed,
+                        command = cli.Command
+                    }, Stopwatch.StartNew());
+            },
+            progress,
+            sw);
     }
 
     private async Task<ToolResult> VersionsAsync(

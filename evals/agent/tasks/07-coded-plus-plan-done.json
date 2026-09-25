@@ -1,0 +1,9 @@
+{
+  "id": "07-coded-plus-plan-done",
+  "fixture": "with-plan",
+  "prompt": "Project path: {{projectPath}}. Complete task-1: add_coded_workflow InvoiceFlow (kind=workflow), then update_plan_task task-1 to done. Prefer coded-first; finish with validate_project(build:false, pack:false) or check_work if listed, then analyze_project_gaps.",
+  "assertions": [
+    { "type": "fileExists", "path": "InvoiceFlow.cs" },
+    { "type": "planTaskStatus", "taskId": "task-1", "status": "done" }
+  ]
+}

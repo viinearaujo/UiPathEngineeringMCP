@@ -61,13 +61,26 @@ public static class HttpAuthEvaluator {
             return false;
         }
 
-        if (FixedEquals(options.ApiKey, headerValue)) {
+        if (MatchesConfiguredKey(options, headerValue)) {
             return true;
         }
 
         if (authorization is not null
             && authorization.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase)) {
-            return FixedEquals(options.ApiKey, authorization[BearerPrefix.Length..].Trim());
+            return MatchesConfiguredKey(options, authorization[BearerPrefix.Length..].Trim());
+        }
+
+        return false;
+    }
+
+    private static bool MatchesConfiguredKey(HttpAuthOptions options, string? provided) {
+        if (FixedEquals(options.ApiKey, provided)) {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(options.PreviousApiKey)
+            && FixedEquals(options.PreviousApiKey, provided)) {
+            return true;
         }
 
         return false;

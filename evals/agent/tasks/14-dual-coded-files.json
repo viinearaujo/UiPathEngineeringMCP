@@ -1,0 +1,9 @@
+{
+  "id": "14-dual-coded-files",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. Create two coded files: add_coded_workflow InvoiceFlow (workflow) and InvoiceHelper (source). Then validate_project(build:false, pack:false) or check_work if available.",
+  "assertions": [
+    { "type": "fileExists", "path": "InvoiceFlow.cs" },
+    { "type": "fileExists", "path": "InvoiceHelper.cs" }
+  ]
+}

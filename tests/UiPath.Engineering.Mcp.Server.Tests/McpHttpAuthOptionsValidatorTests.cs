@@ -75,6 +75,23 @@ public class McpHttpAuthOptionsValidatorTests {
         Assert.Equal(0, roots.GetArrayLength());
     }
 
+    [Fact]
+    public void CommittedAppsettings_EntraAndRateLimitDisabledByDefault() {
+        using var doc = JsonDocument.Parse(ReadRepoFile(Path.Combine(
+            "src", "UiPath.Engineering.Mcp.Server", "appsettings.json")));
+        var mcp = doc.RootElement.GetProperty("McpServer");
+        var entra = mcp.GetProperty("HttpAuth").GetProperty("Entra");
+        Assert.False(entra.GetProperty("Enabled").GetBoolean());
+        Assert.Equal(string.Empty, entra.GetProperty("TenantId").GetString());
+        Assert.Equal(string.Empty, entra.GetProperty("Audience").GetString());
+        Assert.Equal(0, entra.GetProperty("AllowedObjectIds").GetArrayLength());
+
+        var rateLimit = mcp.GetProperty("RateLimit");
+        Assert.False(rateLimit.GetProperty("Enabled").GetBoolean());
+        Assert.Equal(60, rateLimit.GetProperty("PermitLimit").GetInt32());
+        Assert.Equal(60, rateLimit.GetProperty("WindowSeconds").GetInt32());
+    }
+
     private static string ReadRepoFile(string relativePath) {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null) {

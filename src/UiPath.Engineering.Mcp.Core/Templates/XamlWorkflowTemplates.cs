@@ -1,3 +1,5 @@
+using UiPath.Engineering.Mcp.Core.Authoring;
+
 namespace UiPath.Engineering.Mcp.Core.Templates;
 
 // Templates for blank UiPath XAML workflows. x:Class must match the file's path
@@ -14,16 +16,17 @@ public static class XamlWorkflowTemplates {
         var sequenceName = string.IsNullOrWhiteSpace(displayName)
             ? DefaultDisplayName(xamlClassName)
             : displayName;
+        var core = ProjectXamlSettings.ModernCoreAssembly;
 
         return $$"""
         <Activity mc:Ignorable="sap sap2010" x:Class="{{xamlClassName}}"
-          xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
-          xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-          xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
-          xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation"
-          xmlns:sco="clr-namespace:System.Collections.ObjectModel;assembly=System.Private.CoreLib"
-          xmlns:scg="clr-namespace:System.Collections.Generic;assembly=System.Private.CoreLib"
-          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+          xmlns="{{XamlNamespaces.WfUri}}"
+          xmlns:mc="{{XamlNamespaces.McUri}}"
+          xmlns:sap="{{XamlNamespaces.SapUri}}"
+          xmlns:sap2010="{{XamlNamespaces.Sap2010Uri}}"
+          xmlns:sco="{{XamlNamespaces.ClrObjectModel(core)}}"
+          xmlns:scg="{{XamlNamespaces.ClrGeneric(core)}}"
+          xmlns:x="{{XamlNamespaces.XUri}}">
           <x:Members>
           </x:Members>
           <TextExpression.NamespacesForImplementation>

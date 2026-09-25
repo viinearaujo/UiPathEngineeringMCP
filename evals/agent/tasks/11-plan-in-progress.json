@@ -1,0 +1,9 @@
+{
+  "id": "11-plan-in-progress",
+  "fixture": "with-plan",
+  "prompt": "Project path: {{projectPath}}. update_plan_task for task-1 to status in_progress with notes 'started by agent eval'. Do not mark done yet.",
+  "assertions": [
+    { "type": "planTaskStatus", "taskId": "task-1", "status": "in_progress" },
+    { "type": "fileContains", "path": "docs/implementation-plan.json", "snippet": "started by agent eval" }
+  ]
+}

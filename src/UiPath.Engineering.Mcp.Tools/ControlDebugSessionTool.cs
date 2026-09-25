@@ -4,6 +4,7 @@ using System.Diagnostics;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Jobs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
@@ -20,15 +21,27 @@ public sealed class ControlDebugSessionTool {
     private readonly IUiPathCliProvider _cli;
     private readonly IFilesystemProvider _filesystem;
     private readonly CliCommandPolicy _policy;
+    private readonly IBackgroundJobStore _jobs;
 
-    public ControlDebugSessionTool(IUiPathCliProvider cli, IFilesystemProvider filesystem, CliCommandPolicy policy) {
+    public ControlDebugSessionTool(
+        IUiPathCliProvider cli,
+        IFilesystemProvider filesystem,
+        CliCommandPolicy policy,
+        IBackgroundJobStore jobs) {
         _cli = cli;
         _filesystem = filesystem;
         _policy = policy;
+        _jobs = jobs;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Drives ONE UiPath debug session (uip rpa debug start|state|step-*|continue*|resume|break|restart-from-top|set-breakpoints, plus execution cancel) and returns DebugState, DebugDetails, and the verdict. EXECUTES ARBITRARY AUTOMATION, so it is refused unless the server operator set UiPathCli:EnableExecution=true. Prefer this over run_workflow for UI automation: the app is preserved for selector repair on error. READ DebugState BEFORE HasErrors — a Suspended session has an awaiting exception while HasErrors is still false, and Paused means a breakpoint was hit with the current activity and locals in debugDetails. Every mid-session command returns at the next stable state (Paused, Suspended, Running when the wait timed out, or Completed). command=start needs filePath; breakpoints target activities by their sap2010:WorkflowViewState.IdRef (workflowFile=Main.xaml,activityIdRef=Assign_1). command=cancel ends the active run or session — always cancel when done. Pass profiling=true on start to surface profilingOutputDirectory (the .uistat files and screenshots). Next: validate_project.")]
-    public async Task<ToolResult> ControlDebugSession(
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Control Debug Session",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Leave-off execution (needs UiPathCli:EnableExecution). Starts a debug CLI command as a background job; returns {jobId,status:running}. Poll get_job. Next: get_job.")]
+    public Task<ToolResult> ControlDebugSession(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Debug command: start, state, step-over, step-into, step-out, continue, continue-retry, continue-ignore, resume, break, restart-from-top, set-breakpoints, or cancel.")]
         [AllowedValues(
@@ -67,24 +80,22 @@ public sealed class ControlDebugSessionTool {
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
-        var reporter = CliToolSupport.ProgressFor(progress, $"Sending debug command '{command}' (the wait can take up to the CLI timeout).");
-
         if (ToolArgs.ParseChoice(command, "command", Commands, sw, out var parsedCommand) is { } commandError) {
-            return commandError;
+            return Task.FromResult(commandError);
         }
 
         if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } projectFailure) {
-            return projectFailure;
+            return Task.FromResult(projectFailure);
         }
 
         if (logLevel is not null
             && ToolArgs.ParseChoice(logLevel, "logLevel", CliVerbArguments.RunLogLevels, sw, out _) is { } logLevelFailure) {
-            return logLevelFailure;
+            return Task.FromResult(logLevelFailure);
         }
 
         if (profilingMode is not null
             && ToolArgs.ParseChoice(profilingMode, "profilingMode", CliVerbArguments.ProfilingModes, sw, out _) is { } profilingModeFailure) {
-            return profilingModeFailure;
+            return Task.FromResult(profilingModeFailure);
         }
 
         string? relativePath = null;
@@ -92,12 +103,12 @@ public sealed class ControlDebugSessionTool {
 
         if (string.Equals(parsedCommand, StartCommand, StringComparison.Ordinal)) {
             if (RunWorkflowTool.ResolveTarget(_filesystem, projectPath, filePath ?? string.Empty, sw, out _, out relativePath) is { } targetFailure) {
-                return targetFailure!;
+                return Task.FromResult(targetFailure!);
             }
 
             var arguments = inputArguments ?? [];
             if (CliToolSupport.ValidateInputArguments(arguments, sw) is { } argumentFailure) {
-                return argumentFailure;
+                return Task.FromResult(argumentFailure);
             }
 
             tokens = CliVerbArguments.WithRpaVerb(CliVerbArguments.DebugStart(
@@ -106,10 +117,10 @@ public sealed class ControlDebugSessionTool {
             tokens = CliVerbArguments.WithRpaVerb(CliVerbArguments.ExecutionCancel(projectPath));
         } else if (string.Equals(parsedCommand, SetBreakpointsCommand, StringComparison.Ordinal)) {
             if (breakpoints is null || breakpoints.Count == 0) {
-                return ToolResults.Failure(new ToolError(
+                return Task.FromResult(ToolResults.Failure(new ToolError(
                     CliToolErrorCodes.InvalidArgument,
                     "command=set-breakpoints requires at least one breakpoints entry.",
-                    "Pass 'workflowFile=Main.xaml,activityIdRef=Assign_1'. The whole existing set is replaced."), sw);
+                    "Pass 'workflowFile=Main.xaml,activityIdRef=Assign_1'. The whole existing set is replaced."), sw));
             }
 
             tokens = CliVerbArguments.WithRpaVerb(CliVerbArguments.DebugSetBreakpoints(projectPath, breakpoints));
@@ -117,29 +128,37 @@ public sealed class ControlDebugSessionTool {
             tokens = CliVerbArguments.WithRpaVerb(CliVerbArguments.DebugCommand(projectPath, parsedCommand!, waitTimeoutSeconds));
         }
 
-        // Execution gate: fail closed unless UiPathCli:EnableExecution is set.
         if (CliToolSupport.GuardExecution(_policy, tokens, sw, SuggestedTool) is { } executionFailure) {
-            return executionFailure;
+            return Task.FromResult(executionFailure);
         }
 
-        // The CLI timeout must exceed the mid-session wait by a margin, or the process is killed
-        // before it can cancel cleanly. `start` ignores --wait-timeout-seconds entirely.
         var isMidSession = CliVerbArguments.DebugSessionCommands.Contains(parsedCommand, StringComparer.Ordinal);
         if (isMidSession
             && waitTimeoutSeconds is { } wait
             && CliToolSupport.ClampTimeout(timeoutSeconds) - wait < MinimumTimeoutMarginSeconds) {
-            return ToolResults.Failure(new ToolError(
+            return Task.FromResult(ToolResults.Failure(new ToolError(
                 CliToolErrorCodes.InvalidArgument,
                 $"timeoutSeconds must exceed waitTimeoutSeconds ({wait}s) by at least {MinimumTimeoutMarginSeconds}s.",
-                $"Pass timeoutSeconds >= {wait + MinimumTimeoutMarginSeconds}, or lower waitTimeoutSeconds, so the CLI can cancel cleanly instead of being killed."), sw);
+                $"Pass timeoutSeconds >= {wait + MinimumTimeoutMarginSeconds}, or lower waitTimeoutSeconds, so the CLI can cancel cleanly instead of being killed."), sw));
         }
 
-        var outcome = await _cli.RunStructuredAsync(
-            CliVerbArguments.RpaVerb, tokens, projectPath,
-            timeoutSeconds: CliToolSupport.ClampTimeout(timeoutSeconds), cancellationToken);
-
-        reporter.Step($"Debug command '{parsedCommand}' returned.");
-        return BuildResult(outcome, parsedCommand!, relativePath ?? filePath, profiling, includeLogEntries, sw);
+        _ = cancellationToken;
+        var timeout = CliToolSupport.ClampTimeout(timeoutSeconds);
+        var commandLabel = parsedCommand!;
+        var pathLabel = relativePath ?? filePath;
+        return Task.FromResult(CliToolSupport.StartBackgroundJob(
+            _jobs,
+            "control_debug_session",
+            async (jobProgress, jobCt) => {
+                jobProgress.Report($"Sending debug command '{commandLabel}'.");
+                var outcome = await _cli.RunStructuredAsync(
+                    CliVerbArguments.RpaVerb, tokens, projectPath,
+                    timeoutSeconds: timeout, jobCt);
+                jobProgress.Report($"Debug command '{commandLabel}' returned.");
+                return BuildResult(outcome, commandLabel, pathLabel, profiling, includeLogEntries, Stopwatch.StartNew());
+            },
+            progress,
+            sw));
     }
 
     internal const string SuggestedTool = "validate_project";

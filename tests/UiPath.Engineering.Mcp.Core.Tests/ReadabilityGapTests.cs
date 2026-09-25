@@ -519,7 +519,7 @@ public class ReadabilityGapTests {
 
         var gaps = ProjectGapAnalyzer.Analyze(model);
 
-        Assert.NotEmpty(gaps.Where(g => g.Category == Gap.CategoryReadability));
+        Assert.Contains(gaps, g => g.Category == Gap.CategoryReadability);
         Assert.All(gaps.Where(g => g.Category == Gap.CategoryReadability), g => {
             Assert.NotEqual(Gap.Error, g.Severity);
             Assert.False(string.IsNullOrWhiteSpace(g.Message), g.Id);

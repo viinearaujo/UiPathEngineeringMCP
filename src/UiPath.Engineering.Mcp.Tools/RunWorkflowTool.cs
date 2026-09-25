@@ -5,6 +5,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Jobs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
@@ -21,15 +22,27 @@ public sealed class RunWorkflowTool {
     private readonly IUiPathCliProvider _cli;
     private readonly IFilesystemProvider _filesystem;
     private readonly CliCommandPolicy _policy;
+    private readonly IBackgroundJobStore _jobs;
 
-    public RunWorkflowTool(IUiPathCliProvider cli, IFilesystemProvider filesystem, CliCommandPolicy policy) {
+    public RunWorkflowTool(
+        IUiPathCliProvider cli,
+        IFilesystemProvider filesystem,
+        CliCommandPolicy policy,
+        IBackgroundJobStore jobs) {
         _cli = cli;
         _filesystem = filesystem;
         _policy = policy;
+        _jobs = jobs;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Runs a .xaml workflow or .cs coded file through Studio with no debugging (uip rpa run) and returns the execution verdict. EXECUTES ARBITRARY AUTOMATION on this machine, so it is refused unless the server operator set UiPathCli:EnableExecution=true. Verdict: succeeded comes from the envelope Result cross-checked with HasErrors (or the flat shape's errors+output) — NEVER from a log entry's level, since a successful workflow may log at Error level as observability. Input arguments are repeatable key=value pairs (key:=value for raw JSON, key=@file to read a value from a file; double-quoted values are rejected because PowerShell 5.1 strips them). Pass profiling=true to surface profilingOutputDirectory, the folder of per-run .uistat files and screenshots — the only performance feedback channel. Cancel a long run with control_debug_session(command=cancel). A successful smoke test implies the project compiles; when no smoke test is possible, use validate_project(build:true). Next: validate_project.")]
-    public async Task<ToolResult> RunWorkflow(
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Run Workflow",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Leave-off execution (needs UiPathCli:EnableExecution). Starts uip rpa run as a background job; returns {jobId,status:running}. Poll get_job. Next: get_job.")]
+    public Task<ToolResult> RunWorkflow(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Workflow or coded file to run, relative to the project root, e.g. 'Main.xaml'. Resolved and verified inside the project before it is passed to the CLI.")] string filePath,
         [Description("Optional repeatable input arguments: 'name=John', 'retries:=3' (raw JSON), or 'payload=@file.json'. Values containing double quotes are rejected — write them to a UTF-8 file and use key=@file.")] List<string>? inputArguments = null,
@@ -51,45 +64,51 @@ public sealed class RunWorkflowTool {
         CancellationToken cancellationToken = default) {
 
         var sw = Stopwatch.StartNew();
-        var reporter = CliToolSupport.ProgressFor(progress, $"Starting uip rpa run for '{filePath}' (a cold headless Studio start can take 30-90s).");
-
         if (ToolResults.GuardProject(_filesystem, projectPath, sw) is { } projectFailure) {
-            return projectFailure;
+            return Task.FromResult(projectFailure);
         }
 
-        if (ResolveTarget(_filesystem, projectPath, filePath, sw, out var targetPath, out var relativePath) is { } targetFailure) {
-            return targetFailure!;
+        if (ResolveTarget(_filesystem, projectPath, filePath, sw, out _, out var relativePath) is { } targetFailure) {
+            return Task.FromResult(targetFailure!);
         }
 
         var arguments = inputArguments ?? [];
         if (CliToolSupport.ValidateInputArguments(arguments, sw) is { } argumentFailure) {
-            return argumentFailure;
+            return Task.FromResult(argumentFailure);
         }
 
         if (logLevel is not null
             && ToolArgs.ParseChoice(logLevel, "logLevel", CliVerbArguments.RunLogLevels, sw, out _) is { } logLevelFailure) {
-            return logLevelFailure;
+            return Task.FromResult(logLevelFailure);
         }
 
         if (profilingMode is not null
             && ToolArgs.ParseChoice(profilingMode, "profilingMode", CliVerbArguments.ProfilingModes, sw, out _) is { } profilingModeFailure) {
-            return profilingModeFailure;
+            return Task.FromResult(profilingModeFailure);
         }
 
         var tokens = CliVerbArguments.WithRpaVerb(CliVerbArguments.Run(
             projectPath, relativePath!, arguments, logLevel, skipBuild, profiling, profilingMode));
 
-        // Execution gate: fail closed unless UiPathCli:EnableExecution is set.
         if (CliToolSupport.GuardExecution(_policy, tokens, sw, SuggestedTool) is { } executionFailure) {
-            return executionFailure;
+            return Task.FromResult(executionFailure);
         }
 
-        var outcome = await _cli.RunStructuredAsync(
-            CliVerbArguments.RpaVerb, tokens, projectPath,
-            timeoutSeconds: CliToolSupport.ClampTimeout(timeoutSeconds), cancellationToken);
-
-        reporter.Step($"The run returned; verdict: {(outcome.Verdict?.Succeeded == true ? "success" : "not a clean completion")}.");
-        return BuildResult(outcome, relativePath!, profiling, includeLogEntries, sw);
+        _ = cancellationToken;
+        var timeout = CliToolSupport.ClampTimeout(timeoutSeconds);
+        return Task.FromResult(CliToolSupport.StartBackgroundJob(
+            _jobs,
+            "run_workflow",
+            async (jobProgress, jobCt) => {
+                jobProgress.Report($"Running uip rpa run for '{relativePath}'.");
+                var outcome = await _cli.RunStructuredAsync(
+                    CliVerbArguments.RpaVerb, tokens, projectPath,
+                    timeoutSeconds: timeout, jobCt);
+                jobProgress.Report($"Run returned; verdict: {(outcome.Verdict?.Succeeded == true ? "success" : "not a clean completion")}.");
+                return BuildResult(outcome, relativePath!, profiling, includeLogEntries, Stopwatch.StartNew());
+            },
+            progress,
+            sw));
     }
 
     internal const string SuggestedTool = "validate_project";

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using UiPath.Engineering.Mcp.Core;
+using UiPath.Engineering.Mcp.Core.Jobs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
@@ -11,7 +12,7 @@ public class ValidateProjectToolTests {
     public async Task ValidateProject_WhenPathNotAllowed_ReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = false };
         var cli = new FakeUiPathCliProvider();
-        var tool = new ValidateProjectTool(cli, fs);
+        var tool = new ValidateProjectTool(cli, fs, BackgroundJobs.NewStore());
 
         var result = await tool.ValidateProject("/not/allowed");
 
@@ -23,7 +24,7 @@ public class ValidateProjectToolTests {
     public async Task ValidateProject_WhenProjectJsonMissing_ReturnsError() {
         var fs = new FakeFilesystemProvider { Allowed = true, ProjectJson = null };
         var cli = new FakeUiPathCliProvider();
-        var tool = new ValidateProjectTool(cli, fs);
+        var tool = new ValidateProjectTool(cli, fs, BackgroundJobs.NewStore());
 
         var result = await tool.ValidateProject("/projects/empty");
 
@@ -37,9 +38,12 @@ public class ValidateProjectToolTests {
         var cli = new FakeUiPathCliProvider {
             Result = new UiPathCliResult { Success = true, Summary = "Validation completed." }
         };
-        var tool = new ValidateProjectTool(cli, fs);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs);
 
-        var result = await tool.ValidateProject("/projects/testProcess");
+        var started = await tool.ValidateProject("/projects/testProcess");
+        AssertJobStarted(started);
+        var result = await BackgroundJobs.AwaitFinished(jobs, started);
 
         Assert.Equal("success", result.Status);
         Assert.Equal("Validation completed.", result.Summary);
@@ -57,9 +61,11 @@ public class ValidateProjectToolTests {
                 Warnings = ["[build] heads up"]
             }
         };
-        var tool = new ValidateProjectTool(cli, fs);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs);
 
-        var result = await tool.ValidateProject("/projects/testProcess");
+        var started = await tool.ValidateProject("/projects/testProcess");
+        var result = await BackgroundJobs.AwaitFinished(jobs, started);
 
         Assert.Equal("error", result.Status);
         Assert.Contains("[validate] boom", result.Errors);
@@ -67,16 +73,29 @@ public class ValidateProjectToolTests {
     }
 
     [Fact]
-    public async Task ValidateProject_WhenCliThrows_PropagatesToHostExceptionBoundary() {
+    public async Task ValidateProject_WhenCliThrows_JobFailsWithoutThrowingStarter() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var cli = new FakeUiPathCliProvider { ValidateException = new InvalidOperationException("boom") };
-        var tool = new ValidateProjectTool(cli, fs);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tool.ValidateProject("/projects/testProcess"));
+        var started = await tool.ValidateProject("/projects/testProcess");
+        AssertJobStarted(started);
+        var result = await BackgroundJobs.AwaitFinished(jobs, started);
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains("boom", result.Summary);
     }
 
     private static JsonElement SerializeData(object? data) =>
         JsonSerializer.SerializeToElement(data);
+
+    private static void AssertJobStarted(ToolResult started) {
+        Assert.Equal("success", started.Status);
+        var data = SerializeData(started.Data);
+        Assert.Equal("running", data.GetProperty("status").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(data.GetProperty("jobId").GetString()));
+    }
 
     [Fact]
     public async Task ValidateProject_WhenCliSucceeds_DataHasPerStepShapeAndNoRecommendations() {
@@ -89,16 +108,16 @@ public class ValidateProjectToolTests {
                 Build = new CliStepResult { Executed = true, Success = true, Warnings = ["[build] heads up"] }
             }
         };
-        var tool = new ValidateProjectTool(cli, fs);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs);
 
-        var result = await tool.ValidateProject("/projects/testProcess");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await tool.ValidateProject("/projects/testProcess"));
         var data = SerializeData(result.Data);
 
         Assert.True(data.GetProperty("success").GetBoolean());
         Assert.True(data.GetProperty("validate").GetProperty("executed").GetBoolean());
         Assert.True(data.GetProperty("validate").GetProperty("success").GetBoolean());
         Assert.True(data.GetProperty("build").GetProperty("executed").GetBoolean());
-        // pack was not executed -> distinguishable via executed:false, success:false.
         Assert.False(data.GetProperty("pack").GetProperty("executed").GetBoolean());
         Assert.False(data.GetProperty("pack").GetProperty("success").GetBoolean());
         Assert.Equal(0, data.GetProperty("recommendations").GetArrayLength());
@@ -115,9 +134,10 @@ public class ValidateProjectToolTests {
                 Errors = ["[validate] boom"]
             }
         };
-        var tool = new ValidateProjectTool(cli, fs);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs);
 
-        var result = await tool.ValidateProject("/projects/testProcess");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await tool.ValidateProject("/projects/testProcess"));
         var data = SerializeData(result.Data);
 
         Assert.False(data.GetProperty("success").GetBoolean());
@@ -134,9 +154,10 @@ public class ValidateProjectToolTests {
     public async Task ValidateProject_DefaultFlags_ValidateAndBuildOnly() {
         var fs = new FakeFilesystemProvider { Allowed = true };
         var cli = new FakeUiPathCliProvider();
-        var tool = new ValidateProjectTool(cli, fs);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs);
 
-        await tool.ValidateProject("/projects/testProcess");
+        await BackgroundJobs.AwaitFinished(jobs, await tool.ValidateProject("/projects/testProcess"));
 
         Assert.Equal((true, false, false), cli.LastValidateFlags);
     }
@@ -147,9 +168,10 @@ public class ValidateProjectToolTests {
         var cli = new FakeUiPathCliProvider {
             Result = new UiPathCliResult { Success = true, Summary = "Validation completed." }
         };
-        var tool = new ValidateProjectTool(cli, fs);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs);
 
-        var result = await tool.ValidateProject("/projects/testProcess");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await tool.ValidateProject("/projects/testProcess"));
         var data = SerializeData(result.Data);
 
         Assert.Equal(0, data.GetProperty("diagnostics").GetArrayLength());
@@ -198,9 +220,11 @@ public class ValidateProjectToolTests {
                 ]
             }
         };
-        var tool = new ValidateProjectTool(cli, fs, builder);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs, builder);
 
-        var result = await tool.ValidateProject("/projects/testProcess", validate: true, build: false, pack: false);
+        var result = await BackgroundJobs.AwaitFinished(
+            jobs, await tool.ValidateProject("/projects/testProcess", validate: true, build: false, pack: false));
         var data = SerializeData(result.Data);
 
         Assert.Equal("error", result.Status);
@@ -222,9 +246,11 @@ public class ValidateProjectToolTests {
                 Workflows = [new WorkflowModel { FileName = "Main.xaml" }]
             }
         };
-        var tool = new ValidateProjectTool(cli, fs, builder);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs, builder);
 
-        var result = await tool.ValidateProject("/projects/testProcess", validate: true, build: false, pack: false);
+        var result = await BackgroundJobs.AwaitFinished(
+            jobs, await tool.ValidateProject("/projects/testProcess", validate: true, build: false, pack: false));
 
         Assert.Equal("success", result.Status);
         Assert.Empty(result.ErrorDetails);
@@ -261,9 +287,10 @@ public class ValidateProjectToolTests {
                 ]
             }
         };
-        var tool = new ValidateProjectTool(cli, fs);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs);
 
-        var result = await tool.ValidateProject("/projects/testProcess");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await tool.ValidateProject("/projects/testProcess"));
         var data = SerializeData(result.Data);
 
         Assert.Equal("error", result.Status);

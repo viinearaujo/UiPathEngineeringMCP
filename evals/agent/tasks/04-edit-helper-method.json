@@ -1,0 +1,9 @@
+{
+  "id": "04-edit-helper-method",
+  "fixture": "minimal-coded",
+  "prompt": "Project path: {{projectPath}}. Use edit_workflow_file on Helper.cs to replace the comment line `// placeholder for agent eval edits` with `var stamp = \"agent-eval-04\";`. Do not rewrite the whole file. Then analyze_project.",
+  "assertions": [
+    { "type": "fileExists", "path": "Helper.cs" },
+    { "type": "fileContains", "path": "Helper.cs", "snippet": "agent-eval-04" }
+  ]
+}

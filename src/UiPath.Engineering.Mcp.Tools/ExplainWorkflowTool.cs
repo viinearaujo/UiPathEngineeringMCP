@@ -17,7 +17,13 @@ public sealed class ExplainWorkflowTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Explains a single workflow in a UiPath project: arguments, variables, activity outline, exception handlers, invoked workflows, and log messages. Coded (.cs) files return kind (workflow, test, or source), class, namespace, entry methods, entry arguments, and public methods. Next: find_activity.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Explain Workflow",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Explains one workflow: arguments, variables, activity outline, invokes, and risks. Next: get_workflow_dependencies or navigate_code.")]
     public async Task<ToolResult> ExplainWorkflow(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Workflow file to explain (file name, with or without .xaml/.cs, or a path).")] string workflowFile,

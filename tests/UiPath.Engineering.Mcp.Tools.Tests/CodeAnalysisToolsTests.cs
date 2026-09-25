@@ -7,28 +7,28 @@ public class CodeAnalysisToolsTests {
     private static FakeFilesystemProvider ProjectFilesystem() =>
         new() { Allowed = true, ProjectJson = "/projects/testProcess/project.json" };
 
-    // --- find_code_symbol ---
+    // --- navigate_code mode=symbol ---
 
     [Fact]
-    public async Task FindCodeSymbol_PathNotAllowed_ReturnsError() {
-        var tool = new FindCodeSymbolTool(new FakeFilesystemProvider { Allowed = false }, new FakeCSharpAnalysisService());
+    public async Task NavigateCode_Symbol_PathNotAllowed_ReturnsError() {
+        var tool = new NavigateCodeTool(new FakeFilesystemProvider { Allowed = false }, new FakeCSharpAnalysisService());
 
-        var result = await tool.FindCodeSymbol("/not/allowed", "Execute");
+        var result = await tool.NavigateCode("/not/allowed", NavigateCodeTool.ModeSymbol, symbol: "Execute");
 
         Assert.Equal("error", result.Status);
         Assert.Equal("Path not allowed.", result.Summary);
     }
 
     [Fact]
-    public async Task FindCodeSymbol_HappyPath_ReturnsMatchesAndForwardsArguments() {
+    public async Task NavigateCode_Symbol_HappyPath_ReturnsMatchesAndForwardsArguments() {
         var analysis = new FakeCSharpAnalysisService {
             SymbolResult = new FindSymbolResult {
                 Matches = [new SymbolMatch { Name = "Execute", Kind = "method", FilePath = "Flow.cs", Line = 6 }]
             }
         };
-        var tool = new FindCodeSymbolTool(ProjectFilesystem(), analysis);
+        var tool = new NavigateCodeTool(ProjectFilesystem(), analysis);
 
-        var result = await tool.FindCodeSymbol("/projects/testProcess", "Execute", kind: "method");
+        var result = await tool.NavigateCode("/projects/testProcess", NavigateCodeTool.ModeSymbol, symbol: "Execute", kind: "method");
 
         Assert.Equal("success", result.Status);
         Assert.Equal("/projects/testProcess", analysis.LastProjectPath);
@@ -39,33 +39,34 @@ public class CodeAnalysisToolsTests {
     }
 
     [Fact]
-    public async Task FindCodeSymbol_ServiceThrows_PropagatesToHostExceptionBoundary() {
+    public async Task NavigateCode_Symbol_ServiceThrows_PropagatesToHostExceptionBoundary() {
         var analysis = new FakeCSharpAnalysisService { ToThrow = new InvalidOperationException("boom") };
-        var tool = new FindCodeSymbolTool(ProjectFilesystem(), analysis);
+        var tool = new NavigateCodeTool(ProjectFilesystem(), analysis);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tool.FindCodeSymbol("/projects/testProcess", "Execute"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            tool.NavigateCode("/projects/testProcess", NavigateCodeTool.ModeSymbol, symbol: "Execute"));
     }
 
-    // --- get_code_context ---
+    // --- navigate_code mode=context ---
 
     [Fact]
-    public async Task GetCodeContext_PathNotAllowed_ReturnsError() {
-        var tool = new GetCodeContextTool(new FakeFilesystemProvider { Allowed = false }, new FakeCSharpAnalysisService());
+    public async Task NavigateCode_Context_PathNotAllowed_ReturnsError() {
+        var tool = new NavigateCodeTool(new FakeFilesystemProvider { Allowed = false }, new FakeCSharpAnalysisService());
 
-        var result = await tool.GetCodeContext("/not/allowed", symbol: "Execute");
+        var result = await tool.NavigateCode("/not/allowed", NavigateCodeTool.ModeContext, symbol: "Execute");
 
         Assert.Equal("error", result.Status);
         Assert.Equal("Path not allowed.", result.Summary);
     }
 
     [Fact]
-    public async Task GetCodeContext_BySymbol_ForwardsArguments() {
+    public async Task NavigateCode_Context_BySymbol_ForwardsArguments() {
         var analysis = new FakeCSharpAnalysisService {
             ContextResult = new CodeContextResult { Found = true, Name = "Execute", Signature = "Execute()" }
         };
-        var tool = new GetCodeContextTool(ProjectFilesystem(), analysis);
+        var tool = new NavigateCodeTool(ProjectFilesystem(), analysis);
 
-        var result = await tool.GetCodeContext("/projects/testProcess", symbol: "Execute");
+        var result = await tool.NavigateCode("/projects/testProcess", NavigateCodeTool.ModeContext, symbol: "Execute");
 
         Assert.Equal("success", result.Status);
         Assert.Equal("Execute", analysis.LastSymbol);
@@ -74,22 +75,22 @@ public class CodeAnalysisToolsTests {
     }
 
     [Fact]
-    public async Task GetCodeContext_ByFileAndLine_ForwardsArguments() {
+    public async Task NavigateCode_Context_ByFileAndLine_ForwardsArguments() {
         var analysis = new FakeCSharpAnalysisService();
-        var tool = new GetCodeContextTool(ProjectFilesystem(), analysis);
+        var tool = new NavigateCodeTool(ProjectFilesystem(), analysis);
 
-        await tool.GetCodeContext("/projects/testProcess", file: "Flow.cs", line: 6);
+        await tool.NavigateCode("/projects/testProcess", NavigateCodeTool.ModeContext, file: "Flow.cs", line: 6);
 
         Assert.Equal("Flow.cs", analysis.LastFile);
         Assert.Equal(6, analysis.LastLine);
     }
 
     [Fact]
-    public async Task GetCodeContext_NoLocator_IsRejectedWithoutCallingTheAnalyzer() {
+    public async Task NavigateCode_Context_NoLocator_IsRejectedWithoutCallingTheAnalyzer() {
         var analysis = new FakeCSharpAnalysisService();
-        var tool = new GetCodeContextTool(ProjectFilesystem(), analysis);
+        var tool = new NavigateCodeTool(ProjectFilesystem(), analysis);
 
-        var result = await tool.GetCodeContext("/projects/testProcess");
+        var result = await tool.NavigateCode("/projects/testProcess", NavigateCodeTool.ModeContext);
 
         Assert.Equal("error", result.Status);
         Assert.Null(analysis.LastSymbol);
@@ -98,39 +99,39 @@ public class CodeAnalysisToolsTests {
     }
 
     [Fact]
-    public async Task GetCodeContext_FileWithoutLine_IsRejectedWithoutCallingTheAnalyzer() {
+    public async Task NavigateCode_Context_FileWithoutLine_IsRejectedWithoutCallingTheAnalyzer() {
         var analysis = new FakeCSharpAnalysisService();
-        var tool = new GetCodeContextTool(ProjectFilesystem(), analysis);
+        var tool = new NavigateCodeTool(ProjectFilesystem(), analysis);
 
-        var result = await tool.GetCodeContext("/projects/testProcess", file: "Flow.cs");
+        var result = await tool.NavigateCode("/projects/testProcess", NavigateCodeTool.ModeContext, file: "Flow.cs");
 
         Assert.Equal("error", result.Status);
         Assert.Null(analysis.LastFile);
         Assert.Contains("'line'", result.Errors[0]);
     }
 
-    // --- find_code_references ---
+    // --- navigate_code mode=references ---
 
     [Fact]
-    public async Task FindCodeReferences_PathNotAllowed_ReturnsError() {
-        var tool = new FindCodeReferencesTool(new FakeFilesystemProvider { Allowed = false }, new FakeCSharpAnalysisService());
+    public async Task NavigateCode_References_PathNotAllowed_ReturnsError() {
+        var tool = new NavigateCodeTool(new FakeFilesystemProvider { Allowed = false }, new FakeCSharpAnalysisService());
 
-        var result = await tool.FindCodeReferences("/not/allowed", "Log");
+        var result = await tool.NavigateCode("/not/allowed", NavigateCodeTool.ModeReferences, symbol: "Log");
 
         Assert.Equal("error", result.Status);
         Assert.Equal("Path not allowed.", result.Summary);
     }
 
     [Fact]
-    public async Task FindCodeReferences_HappyPath_ReturnsReferences() {
+    public async Task NavigateCode_References_HappyPath_ReturnsReferences() {
         var analysis = new FakeCSharpAnalysisService {
             ReferencesResult = new FindReferencesResult {
                 References = [new ReferenceMatch { FilePath = "Flow.cs", Line = 7, ContainingMember = "Execute", Snippet = "Log(\"start\");" }]
             }
         };
-        var tool = new FindCodeReferencesTool(ProjectFilesystem(), analysis);
+        var tool = new NavigateCodeTool(ProjectFilesystem(), analysis);
 
-        var result = await tool.FindCodeReferences("/projects/testProcess", "Log");
+        var result = await tool.NavigateCode("/projects/testProcess", NavigateCodeTool.ModeReferences, symbol: "Log");
 
         Assert.Equal("success", result.Status);
         Assert.Equal("Log", analysis.LastSymbol);

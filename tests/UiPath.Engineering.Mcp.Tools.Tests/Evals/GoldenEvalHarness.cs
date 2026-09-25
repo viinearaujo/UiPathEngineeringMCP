@@ -6,6 +6,7 @@ using UiPath.Engineering.Mcp.Core.Authoring;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.CodeSearch;
 using UiPath.Engineering.Mcp.Core.GapAnalysis;
+using UiPath.Engineering.Mcp.Core.Jobs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
@@ -35,6 +36,7 @@ internal sealed class GoldenEvalContext {
     public WriteWorkflowFileTool Write { get; }
     public RecommendActivitiesTool Recommend { get; }
     public ValidateProjectTool ValidateProject { get; }
+    public BackgroundJobStore Jobs { get; }
 
     /// <summary>
     /// <paramref name="projectModelBuilder"/> decides the expression language the
@@ -74,7 +76,8 @@ internal sealed class GoldenEvalContext {
         Build = new BuildWorkflowTool(Fs, resolver, projectModelBuilder);
         Write = new WriteWorkflowFileTool(Fs, resolver);
         Recommend = new RecommendActivitiesTool(Fs, resolver);
-        ValidateProject = new ValidateProjectTool(Cli, Fs);
+        Jobs = BackgroundJobs.NewStore();
+        ValidateProject = new ValidateProjectTool(Cli, Fs, Jobs);
     }
 
     public static GoldenEvalContext CSharp() =>
@@ -674,7 +677,9 @@ internal static class GoldenEvalTasks {
             ]
         };
 
-        var result = await ctx.ValidateProject.ValidateProject(GoldenEvalContext.ProjectPath, validate: true, build: false, pack: false);
+        var result = await BackgroundJobs.AwaitFinished(
+            ctx.Jobs,
+            await ctx.ValidateProject.ValidateProject(GoldenEvalContext.ProjectPath, validate: true, build: false, pack: false));
         var data = GoldenEvalContext.Data(result.Data);
         if (data.GetProperty("diagnostics").GetArrayLength() != 1) {
             return Fail("10-validate-diagnostics", "validate_project activityId/specFix",

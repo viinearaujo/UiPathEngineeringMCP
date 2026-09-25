@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -6,9 +7,11 @@ namespace UiPath.Engineering.Mcp.Core.Caching;
 /// <summary>
 /// Cross-request decorator over <see cref="BoundedCache{TValue}"/> keyed by the normalized
 /// project path. Each call recomputes a fingerprint for the project and rebuilds the cached
-/// value only when the fingerprint changed. A fingerprint failure serves the cached value
-/// with the caller's stale flag set rather than throwing; an inner build exception is never
-/// cached.
+/// value only when the fingerprint changed. When an <see cref="IProjectChangeWatcher"/> is
+/// active and not dirty, the previous fingerprint is reused without walking the tree.
+/// A fingerprint failure serves the cached value with the caller's stale flag set rather
+/// than throwing; an inner build exception is never cached. Watchers are disposed when
+/// the project entry is evicted or the cache is disposed.
 /// </summary>
 public sealed class FingerprintedCache<TValue> : IDisposable {
     private sealed record CacheEntry(TValue Value, string Fingerprint);
@@ -16,16 +19,24 @@ public sealed class FingerprintedCache<TValue> : IDisposable {
     private readonly string _label;
     private readonly BoundedCache<CacheEntry> _cache;
     private readonly ILogger _logger;
+    private readonly IProjectChangeWatcherFactory? _watcherFactory;
+    private readonly bool _reuseWhenClean;
+    private readonly ConcurrentDictionary<string, IProjectChangeWatcher> _watchers =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public FingerprintedCache(
         string label,
         int maxEntries = BoundedCache<CacheEntry>.DefaultMaxEntries,
         TimeSpan? ttl = null,
         TimeProvider? timeProvider = null,
-        ILogger? logger = null) {
+        ILogger? logger = null,
+        IProjectChangeWatcherFactory? watcherFactory = null,
+        bool reuseWhenClean = true) {
         _label = label;
-        _cache = new BoundedCache<CacheEntry>(maxEntries, ttl, timeProvider);
+        _watcherFactory = watcherFactory;
+        _reuseWhenClean = reuseWhenClean;
         _logger = logger ?? NullLogger.Instance;
+        _cache = new BoundedCache<CacheEntry>(maxEntries, ttl, timeProvider, OnEntryEvicted);
     }
 
     internal int EntryCount => _cache.EntryCount;
@@ -46,10 +57,20 @@ public sealed class FingerprintedCache<TValue> : IDisposable {
         CancellationToken cancellationToken = default) {
         var key = Path.GetFullPath(projectPath);
         return await _cache.RunExclusiveAsync(key, async ct => {
+            var watcher = GetOrCreateWatcher(key);
+            if (_reuseWhenClean
+                && watcher is { IsActive: true, IsDirty: false }
+                && _cache.TryGet(key, out var cleanHit)) {
+                _logger.LogDebug("{Label} cache hit (watcher clean) for {CacheKey}", _label, key);
+                setStale(cleanHit.Value, false);
+                return cleanHit.Value;
+            }
+
             if (tryComputeFingerprint(projectPath) is { } fingerprint) {
                 if (_cache.TryGet(key, out var entry) && entry.Fingerprint == fingerprint) {
                     _logger.LogDebug("{Label} cache hit for {CacheKey}", _label, key);
                     setStale(entry.Value, false);
+                    watcher?.MarkClean();
                     return entry.Value;
                 }
 
@@ -57,6 +78,7 @@ public sealed class FingerprintedCache<TValue> : IDisposable {
                 var built = await buildAsync(ct);
                 setStale(built, false);
                 _cache.Set(key, new CacheEntry(built, fingerprint));
+                watcher?.MarkClean();
                 return built;
             }
 
@@ -71,5 +93,35 @@ public sealed class FingerprintedCache<TValue> : IDisposable {
         }, cancellationToken);
     }
 
-    public void Dispose() => _cache.Dispose();
+    public void Dispose() {
+        _cache.Dispose();
+        foreach (var key in _watchers.Keys) {
+            if (_watchers.TryRemove(key, out var watcher)) {
+                watcher.Dispose();
+            }
+        }
+    }
+
+    private IProjectChangeWatcher? GetOrCreateWatcher(string key) {
+        if (_watcherFactory is null) {
+            return null;
+        }
+
+        return _watchers.GetOrAdd(key, static (path, factory) =>
+            factory.TryCreate(path) ?? new InactiveWatcher(), _watcherFactory);
+    }
+
+    private void OnEntryEvicted(string key, CacheEntry _) {
+        if (_watchers.TryRemove(key, out var watcher)) {
+            watcher.Dispose();
+        }
+    }
+
+    /// <summary>Placeholder when the factory cannot start a real watcher.</summary>
+    private sealed class InactiveWatcher : IProjectChangeWatcher {
+        public bool IsActive => false;
+        public bool IsDirty => true;
+        public void MarkClean() { }
+        public void Dispose() { }
+    }
 }

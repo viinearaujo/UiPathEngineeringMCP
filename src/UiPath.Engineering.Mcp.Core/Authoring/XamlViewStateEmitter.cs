@@ -21,10 +21,10 @@ namespace UiPath.Engineering.Mcp.Core.Authoring;
 /// inserted activity continues the sequence instead of colliding.
 /// </remarks>
 public static class XamlViewStateEmitter {
-    internal static readonly XNamespace Sap = "http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation";
-    internal static readonly XNamespace Sap2010 = "http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation";
-    internal static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
-    internal static readonly string ScgNamespacePrefix = "clr-namespace:System.Collections.Generic;assembly=";
+    internal static readonly XNamespace Sap = XamlNamespaces.Sap;
+    internal static readonly XNamespace Sap2010 = XamlNamespaces.Sap2010;
+    internal static readonly XNamespace X = XamlNamespaces.X;
+    internal static readonly string ScgNamespacePrefix = XamlNamespaces.ScgClrPrefix;
 
     /// <summary>
     /// Runs the pass over a whole document in document order: every activity
@@ -99,8 +99,8 @@ public static class XamlViewStateEmitter {
     // A Sequence shows as expanded so its children are visible on the canvas.
     private static XElement RenderExpandedViewState(string coreAssembly) =>
         new(Sap + "WorkflowViewStateService.ViewState",
-            new XElement(XNamespace.Get($"clr-namespace:System.Collections.Generic;assembly={coreAssembly}") + "Dictionary",
-                new XAttribute(XName.Get("TypeArguments", "http://schemas.microsoft.com/winfx/2006/xaml"), "x:String, x:Object"),
+            new XElement(XamlNamespaces.Generic(coreAssembly) + "Dictionary",
+                new XAttribute(XamlNamespaces.X + "TypeArguments", "x:String, x:Object"),
                 new XElement(X + "Boolean",
                     new XAttribute(X + "Key", "IsExpanded"),
                     "True")));

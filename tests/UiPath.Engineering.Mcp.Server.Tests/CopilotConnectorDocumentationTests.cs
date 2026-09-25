@@ -12,22 +12,23 @@ public class CopilotConnectorDocumentationTests {
             + CopilotConnectorTools.JoinDefaultNamesMarkdown();
         Assert.Contains(recommendedLine, readme);
 
-        Assert.Contains(CopilotConnectorTools.JoinDefaultNames(), SplitLines(instructions));
+        Assert.InRange(instructions.Length, 4500, 5000);
+        Assert.DoesNotContain(CopilotConnectorTools.JoinDefaultNames(), instructions);
 
         foreach (var name in CopilotConnectorTools.DefaultNames) {
             Assert.Contains(name, readme);
-            Assert.Contains(name, instructions);
         }
 
-        foreach (var name in CopilotConnectorTools.LeaveOffNames) {
-            Assert.Contains(name, instructions);
-        }
-
+        Assert.Contains("CODED-FIRST", instructions);
+        Assert.Contains("check_work", instructions);
+        Assert.Contains("update_plan_task", instructions);
+        Assert.Contains("WHEN TO ASK VS ACT", instructions);
+        Assert.Contains("read_workflow_file", instructions);
         Assert.Contains("McpServer:HttpAuth", readme);
         Assert.Contains("not blocked on docs", instructions);
-        Assert.Contains("IDIOM", instructions);
         Assert.Contains("write_workflow_file", readme);
         Assert.Contains("ToolSurface=All", readme);
+        Assert.Contains("ReadOnly", readme);
     }
 
     [Fact]
@@ -40,13 +41,6 @@ public class CopilotConnectorDocumentationTests {
         Assert.Contains("If none exists, create_implementation_plan", text);
         Assert.DoesNotContain("not on the default connector", text);
     }
-
-    private static IReadOnlyList<string> SplitLines(string text) =>
-        text.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Split('\n')
-            .Select(l => l.Trim())
-            .Where(l => l.Length > 0)
-            .ToArray();
 
     private static string ResolveDoc(string relativePath) {
         var copied = Path.Combine(AppContext.BaseDirectory, Path.GetFileName(relativePath));

@@ -15,7 +15,13 @@ public sealed class ListSkillsTool {
         _skills = skills;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Lists RPA playbooks served by this MCP (name + short description). This is not a full UiPath product catalog — Maestro, IXP, Insights, and Agents are omitted. Call read_skill for one name (uipath-rpa or guided-implementation-loop) before implement work. Next: read_skill.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "List Skills",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Leave-off. Lists RPA playbooks served by this MCP. Prefer search_knowledge(mode=skill) on the default connector. Next: search_knowledge.")]
     public async Task<ToolResult> ListSkills(CancellationToken cancellationToken = default) {
         var sw = Stopwatch.StartNew();
 

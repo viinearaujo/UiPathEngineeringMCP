@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using UiPath.Engineering.Mcp.Core.Abstractions;
@@ -49,15 +50,19 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
             writeTime = DateTime.MinValue;
         }
 
+        var packages = ReadPackages(projectJson);
+        var packagesFingerprint = PackagesFingerprint(packages);
+
         var cacheKey = Path.GetFullPath(projectPath);
         return await _cache.RunExclusiveAsync(cacheKey, async ct => {
-            if (_cache.TryGet(cacheKey, out var cached) && cached.ProjectJsonWriteTimeUtc == writeTime) {
+            if (_cache.TryGet(cacheKey, out var cached)
+                && cached.ProjectJsonWriteTimeUtc == writeTime
+                && cached.PackagesFingerprint == packagesFingerprint) {
                 _logger.LogDebug("Activity catalog cache hit for {CacheKey}", cacheKey);
                 return cached.Catalog;
             }
 
             _logger.LogDebug("Activity catalog cache miss for {CacheKey}", cacheKey);
-            var packages = ReadPackages(projectJson);
             var (discovered, discoveryFailed, truncated) = await DiscoverForProjectAsync(projectPath, packages, ct);
             discovered = EnrichWithReflection(packages, discovered);
             var catalog = Merge(
@@ -67,12 +72,47 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
                 discovered.Count > 0 ? "cli" : "project-packages",
                 discoveryFailed,
                 truncated);
-            _cache.Set(cacheKey, new CachedCatalog(catalog, writeTime));
+            _cache.Set(cacheKey, new CachedCatalog(catalog, writeTime, packagesFingerprint));
             return catalog;
         }, cancellationToken);
     }
 
     public void Dispose() => _cache.Dispose();
+
+    /// <summary>
+    /// Fingerprint of declared packages plus on-disk package folder write times so a
+    /// package install/restore invalidates the catalog even when project.json's mtime
+    /// is unchanged (same path rewritten within the filesystem clock granularity, or
+    /// binaries restored under an already-declared version).
+    /// </summary>
+    internal static string PackagesFingerprint(
+        IReadOnlyDictionary<string, string> packages,
+        string? packagesFolder = null) {
+        packagesFolder ??= new NuGetReferenceResolver().GetPackagesFolder();
+        var sb = new StringBuilder();
+        foreach (var entry in packages.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)) {
+            sb.Append(entry.Key).Append('@').Append(entry.Value);
+            if (packagesFolder is not null) {
+                try {
+                    var idFolder = Path.Combine(packagesFolder, entry.Key.ToLowerInvariant());
+                    var versionFolder = Path.Combine(idFolder, entry.Value.ToLowerInvariant());
+                    if (Directory.Exists(versionFolder)) {
+                        sb.Append('#').Append(Directory.GetLastWriteTimeUtc(versionFolder).Ticks);
+                    } else if (Directory.Exists(idFolder)) {
+                        sb.Append('#').Append(Directory.GetLastWriteTimeUtc(idFolder).Ticks);
+                    } else {
+                        sb.Append("#0");
+                    }
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                    sb.Append("#?");
+                }
+            }
+
+            sb.Append(';');
+        }
+
+        return sb.ToString();
+    }
 
     public static string? DiscoveryWarning(IActivityCatalog catalog) {
         if (catalog.DiscoveryFailed) {
@@ -277,7 +317,9 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
                 packagesFolder,
                 packageModels,
                 targetFramework: null,
-                hit.FullTypeName);
+                hit.FullTypeName,
+                packageId: hit.PackageId,
+                packageVersion: hit.PackageVersion);
             if (reflected is { Count: > 1 } && reflected.Any(p => p.Kind == PropertyKind.Expression)) {
                 // A property surface is only treated as complete — able to reject an
                 // unknown key as a typo — once reflection has resolved at least one
@@ -452,5 +494,8 @@ public sealed class ActivityCatalogResolver : IActivityCatalogResolver, IDisposa
         }
     }
 
-    private sealed record CachedCatalog(IActivityCatalog Catalog, DateTime ProjectJsonWriteTimeUtc);
+    private sealed record CachedCatalog(
+        IActivityCatalog Catalog,
+        DateTime ProjectJsonWriteTimeUtc,
+        string PackagesFingerprint);
 }

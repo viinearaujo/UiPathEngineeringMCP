@@ -18,7 +18,13 @@ public sealed class AnalyzeProjectTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project and returns structured metadata. Default detail is 'summary' (counts + workflow index, coded-file kind workflow/test/source, no activity trees). Pass detail='full' to page complete workflow models; pass workflowFile to load one workflow fully. Next: get_implementation_plan.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Analyze Project",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Analyzes a UiPath project (summary by default: counts, workflow index, packages, risks). Pass workflowFile or detail=full to page one workflow's activities. Next: get_implementation_plan.")]
     public async Task<ToolResult> AnalyzeProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("summary (default) or full.")]

@@ -78,20 +78,19 @@ public class AllowedValuesAttributeTests {
     }
 
     [Fact]
-    public void ManageProjectFile_AdvertisesAction() {
+    public void ManageProjectContent_AdvertisesActionAndKind() {
         Assert.Equal(
-            [ManageProjectFileTool.Write, ManageProjectFileTool.Edit, ManageProjectFileTool.Delete],
-            AllowedValuesOf(nameof(ManageProjectFileTool.ManageProjectFile), "action"));
-    }
-
-    [Fact]
-    public void ManageProjectDocs_AdvertisesActionAndKind() {
+            [
+                ManageProjectContentTool.ListDocs, ManageProjectContentTool.WriteDocs,
+                ManageProjectContentTool.DeleteDocs, ManageProjectContentTool.SearchDocs,
+                ManageProjectContentTool.WriteFile, ManageProjectContentTool.EditFile,
+                ManageProjectContentTool.DeleteFile, ManageProjectContentTool.SyncContext,
+                ManageProjectContentTool.ValidateDocs
+            ],
+            AllowedValuesOf(nameof(ManageProjectContentTool.ManageProjectContent), "action"));
         Assert.Equal(
-            [ManageProjectDocsTool.List, ManageProjectDocsTool.Write, ManageProjectDocsTool.Delete, ManageProjectDocsTool.Search],
-            AllowedValuesOf(nameof(ManageProjectDocsTool.ManageProjectDocs), "action"));
-        Assert.Equal(
-            [ProjectKnowledgeStore.Kind, ProjectAdrStore.Kind, ManageProjectDocsTool.ContextKind, ProjectDocsSearch.KindAll],
-            AllowedValuesOf(nameof(ManageProjectDocsTool.ManageProjectDocs), "kind"));
+            [ProjectKnowledgeStore.Kind, ProjectAdrStore.Kind, ManageProjectContentTool.ContextKind, ProjectDocsSearch.KindAll],
+            AllowedValuesOf(nameof(ManageProjectContentTool.ManageProjectContent), "kind"));
     }
 
     [Fact]
@@ -105,11 +104,24 @@ public class AllowedValuesAttributeTests {
     }
 
     [Fact]
-    public void GetCompileErrors_And_FindCodeSymbol_AdvertiseTheirFilters() {
+    public void GetCompileErrors_And_NavigateCode_AdvertiseTheirFilters() {
         Assert.Equal(["error", "warning", "all"], AllowedValuesOf(nameof(GetCompileErrorsTool.GetCompileErrors), "severity"));
         Assert.Equal(
+            [NavigateCodeTool.ModeSymbol, NavigateCodeTool.ModeReferences, NavigateCodeTool.ModeContext],
+            AllowedValuesOf(nameof(NavigateCodeTool.NavigateCode), "mode"));
+        Assert.Equal(
             ["method", "property", "field", "class", "interface"],
-            AllowedValuesOf(nameof(FindCodeSymbolTool.FindCodeSymbol), "kind"));
+            AllowedValuesOf(nameof(NavigateCodeTool.NavigateCode), "kind"));
+    }
+
+    [Fact]
+    public void SearchKnowledge_AdvertisesModeAndKind() {
+        Assert.Equal(
+            [SearchKnowledgeTool.ModeActivityDocs, SearchKnowledgeTool.ModeKnowledge, SearchKnowledgeTool.ModeSkill],
+            AllowedValuesOf(nameof(SearchKnowledgeTool.SearchKnowledge), "mode"));
+        Assert.Equal(
+            SearchKnowledgeTool.KnowledgeKinds,
+            AllowedValuesOf(nameof(SearchKnowledgeTool.SearchKnowledge), "kind"));
     }
 
     [Fact]

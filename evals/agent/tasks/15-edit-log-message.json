@@ -1,0 +1,8 @@
+{
+  "id": "15-edit-log-message",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. edit_workflow_file Main.xaml: replace Message=\"start\" with Message=\"agent-eval-15\". Exact replace.",
+  "assertions": [
+    { "type": "fileContains", "path": "Main.xaml", "snippet": "Message=\"agent-eval-15\"" }
+  ]
+}

@@ -18,7 +18,13 @@ public sealed class RecommendActivitiesTool {
         _catalogResolver = catalogResolver;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Recommends up to 5 version-aware activity schemas for a natural-language step against the project's installed packages (uip activities find when available; otherwise the built-in fallback catalog). Call this before validate_activity_spec / build_workflow when the activity type is unknown. Next: validate_activity_spec.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Recommend Activities",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Recommends up to 5 version-aware activity schemas for a natural-language intent. Next: get_activity_metadata or validate_activity_spec.")]
     public async Task<ToolResult> RecommendActivities(
         [Description("Natural-language step or activity name, e.g. 'read excel range' or 'Click'.")] string query,
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,

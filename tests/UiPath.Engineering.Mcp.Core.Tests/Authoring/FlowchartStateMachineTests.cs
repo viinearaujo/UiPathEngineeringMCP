@@ -66,7 +66,7 @@ public class FlowchartStateMachineTests {
         Assert.NotNull(flowStep.Element(flowStep.Name.Namespace + "FlowStep.Next"));
         Assert.NotNull(flowDecision.Element(flowDecision.Name.Namespace + "FlowDecision.True"));
         // The FlowStep must not contain the FlowDecision.
-        Assert.Empty(flowStep.Descendants().Where(e => e.Name.LocalName == "FlowDecision"));
+        Assert.DoesNotContain(flowStep.Descendants(), e => e.Name.LocalName == "FlowDecision");
     }
 
     [Fact]

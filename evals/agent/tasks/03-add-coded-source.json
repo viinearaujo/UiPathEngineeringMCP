@@ -1,0 +1,9 @@
+{
+  "id": "03-add-coded-source",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. Add a coded source helper named InvoiceHelper using add_coded_workflow with kind=source. Then validate_project(build:false, pack:false) if possible.",
+  "assertions": [
+    { "type": "fileExists", "path": "InvoiceHelper.cs" },
+    { "type": "fileContains", "path": "InvoiceHelper.cs", "snippet": "class InvoiceHelper" }
+  ]
+}

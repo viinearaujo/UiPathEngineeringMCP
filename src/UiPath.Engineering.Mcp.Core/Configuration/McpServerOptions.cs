@@ -6,6 +6,7 @@ public sealed class McpServerOptions {
 
     /// <summary>
     /// HTTP Copilot surface. CopilotDefault (default) advertises CopilotConnectorTools.DefaultNames.
+    /// ReadOnly advertises tools annotated ReadOnly=true and Destructive=false.
     /// All exposes every registered tool (Inspector). GitLab tools are never deleted.
     /// </summary>
     public string ToolSurface { get; set; } = CopilotConnectorTools.SurfaceCopilotDefault;

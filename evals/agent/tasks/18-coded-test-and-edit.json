@@ -1,0 +1,9 @@
+{
+  "id": "18-coded-test-and-edit",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. add_coded_workflow SmokeTest (kind=test), then edit_workflow_file on Tests/SmokeTest.cs to replace `public void Execute` with `public void Execute_Smoke` if present, or otherwise ensure the file contains SmokeTest. Prefer coded-first.",
+  "assertions": [
+    { "type": "fileExists", "path": "Tests/SmokeTest.cs" },
+    { "type": "fileContains", "path": "Tests/SmokeTest.cs", "snippet": "SmokeTest" }
+  ]
+}

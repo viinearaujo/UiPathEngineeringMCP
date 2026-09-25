@@ -1,0 +1,9 @@
+{
+  "id": "06-create-implementation-plan",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. There is no plan yet. Call create_implementation_plan with goal 'Ship invoice automation' and at least two tasks (titles only are fine). Then get_implementation_plan to confirm.",
+  "assertions": [
+    { "type": "fileExists", "path": "docs/implementation-plan.json" },
+    { "type": "fileContains", "path": "docs/implementation-plan.json", "snippet": "Ship invoice automation" }
+  ]
+}

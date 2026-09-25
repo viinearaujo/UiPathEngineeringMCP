@@ -10,7 +10,7 @@ Conventions for `[McpServerTool]` methods in `src/UiPath.Engineering.Mcp.Tools`.
 | `relativePath` | File path relative to the project root, e.g. `'Main.xaml'`, `'Workflows/SendEmail.cs'`, `'docs/notes.md'`. | Reading, editing, and creating files inside the project. |
 | `filePath` | Project-relative workflow or coded file the CLI acts on, e.g. `'Main.xaml'`. | `run_workflow`, `control_debug_session`, `patch_project_json`. |
 | `workflowFile` | Workflow file name with or without the extension, optionally a path. | Read-only lookups that accept a loose name and resolve it: `find_activity`, `get_workflow_dependencies`, `explain_workflow`. |
-| `file` | Project-relative `.cs` path, passed together with `line`. | `get_code_context` only, where the member is located by `symbol` or by `file` + `line`. |
+| `file` | Project-relative `.cs` path, passed together with `line`. | `navigate_code` (`mode=context`), where the member is located by `symbol` or by `file` + `line`. |
 | `workingDirectory` | Absolute directory used as the process working directory. | `run_ui_path_cli` only. |
 | `parentDirectory` | Absolute directory that receives a new project folder. | `create_project` only. |
 
@@ -25,9 +25,9 @@ Enum-like parameters are lower-case tokens and are validated with `ToolArgs.Pars
 Identifier names, by role:
 
 - `operation` — what the tool does, when the tool is a dispatcher over several verbs: `manage_packages`, `patch_project_json`, `manage_workflow_data`, `edit_workflow_activity`.
-- `action` — the same role where the tool manages a resource: `manage_project_docs`, `manage_project_file`.
-- `kind` — the category of the thing being created or managed: `add_coded_workflow`, `manage_project_docs`, `manage_workflow_data`.
-- `mode` — the search strategy: `search_codebase`.
+- `action` — the same role where the tool manages a resource: `manage_project_content`.
+- `kind` — the category of the thing being created or managed: `add_coded_workflow`, `manage_project_content`, `manage_workflow_data`, `search_knowledge`.
+- `mode` — the search or navigation strategy: `search_codebase`, `navigate_code`, `search_knowledge`.
 - `source` — which repository or origin to read: `get_object_repository`.
 - `detail` — response verbosity: `analyze_project`.
 - `position` — insertion placement, `first` or `last`: `insert_activities`, `edit_workflow_activity`.
@@ -46,14 +46,14 @@ A flag that changes behavior materially states the default in its description an
 
 ## Descriptions
 
-Every parameter carries `[Description]`. Every tool method carries one `[Description]` on the `[McpServerTool]` attribute.
+Every parameter carries `[Description]`. Every tool method carries one `[Description]` on the `[McpServerTool]` attribute, plus `Title`, `ReadOnly`, `Destructive`, and `Idempotent` matching real behavior.
 
+- Tool and parameter descriptions stay at most about 400 characters.
+- The tool description states what the call does, when to use it, and the next tool (`Next: validate_project.`). Do not paste activity-spec grammar into tool descriptions — that lives at MCP resource `uipath://authoring/activity-spec`.
 - Absolute-path parameters name their guard: `"Absolute path to the UiPath project directory (must contain project.json)."` or `"... Must be inside Projects:AllowedRoots."`
 - Project-relative file parameters give a concrete example: `"Path of the .xaml file relative to the project root, e.g. 'Main.xaml'."`
 - Numeric parameters state their range and default: `"Workflows per page when detail=full (1-50, default 20)."`, `"Optional CLI timeout in seconds (default 300, max 3600)."`
 - A parameter whose meaning depends on another parameter says which one: `"For command=start: workflow or coded file to debug, relative to the project root, e.g. 'Main.xaml'."`
-- The tool description states what the call does, when to prefer it over a sibling tool, and how its verdict is derived. When a verdict comes from the CLI envelope, name the field that decides it rather than a log level.
-- The tool description ends with a routing pointer to the next call: `"Next: validate_project."` Use the tool name, not prose.
 
 ## Collections
 

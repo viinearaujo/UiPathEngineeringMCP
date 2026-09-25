@@ -1,0 +1,8 @@
+{
+  "id": "10-add-normalize-helper",
+  "fixture": "minimal-coded",
+  "prompt": "Project path: {{projectPath}}. Use edit_workflow_file on Helper.cs to replace `// placeholder for agent eval edits` with `return; // normalize-ready`. Keep the class named Helper.",
+  "assertions": [
+    { "type": "fileContains", "path": "Helper.cs", "snippet": "normalize-ready" }
+  ]
+}

@@ -1,5 +1,5 @@
-using System.Text.Json;
 using UiPath.Engineering.Mcp.Core;
+using UiPath.Engineering.Mcp.Core.Docs;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
@@ -9,64 +9,74 @@ public class ManageProjectFileToolTests {
     private static string Target(string relative) =>
         Path.Combine(Path.GetFullPath(ProjectPath), relative.Replace('/', Path.DirectorySeparatorChar));
 
-    [Fact]
-    public void UnknownAction_ReturnsError() {
-        var result = new ManageProjectFileTool(new FakeFilesystemProvider()).ManageProjectFile(ProjectPath, "move", "notes.md", "x");
-
-        Assert.Equal("error", result.Status);
-        Assert.Contains("action must be", result.Summary);
+    private static ManageProjectContentTool CreateTool(FakeFilesystemProvider? fs = null) {
+        fs ??= new FakeFilesystemProvider();
+        fs.ProjectJson ??= Path.Combine(Path.GetFullPath(ProjectPath), "project.json");
+        var knowledge = DocsSupport.Knowledge(fs);
+        var adrs = DocsSupport.Adrs(fs);
+        return new ManageProjectContentTool(
+            fs, knowledge, adrs, new ProjectDocsSearch(fs, knowledge, adrs),
+            DocsSupport.Validator(fs), new FakeProjectModelBuilder(), DocsSupport.Renderer(fs));
     }
 
     [Fact]
-    public void ReservedPlanPath_IsRejected() {
-        var result = new ManageProjectFileTool(new FakeFilesystemProvider()).ManageProjectFile(ProjectPath, "write", "docs/implementation-plan.json", "{}");
+    public async Task UnknownAction_ReturnsError() {
+        var result = await CreateTool().ManageProjectContent(ProjectPath, "move", relativePath: "notes.md", content: "x");
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains("action", result.Summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ReservedPlanPath_IsRejected() {
+        var result = await CreateTool().ManageProjectContent(ProjectPath, ManageProjectContentTool.WriteFile, relativePath: "docs/implementation-plan.json", content: "{}");
 
         Assert.Equal("error", result.Status);
         Assert.Contains("owned by another tool", result.Summary);
     }
 
     [Fact]
-    public void SecretName_IsRejected() {
-        var result = new ManageProjectFileTool(new FakeFilesystemProvider()).ManageProjectFile(ProjectPath, "write", ".env", "SECRET=1");
+    public async Task SecretName_IsRejected() {
+        var result = await CreateTool().ManageProjectContent(ProjectPath, ManageProjectContentTool.WriteFile, relativePath: ".env", content: "SECRET=1");
 
         Assert.Equal("error", result.Status);
     }
 
     [Fact]
-    public void RedactedBody_IsRejected() {
-        var result = new ManageProjectFileTool(new FakeFilesystemProvider()).ManageProjectFile(ProjectPath, "write", "notes.md", "token=***REDACTED***");
+    public async Task RedactedBody_IsRejected() {
+        var result = await CreateTool().ManageProjectContent(ProjectPath, ManageProjectContentTool.WriteFile, relativePath: "notes.md", content: "token=***REDACTED***");
 
         Assert.Equal("error", result.Status);
         Assert.Contains("REDACTED", result.Summary);
     }
 
     [Fact]
-    public void InvalidJson_IsRejected() {
-        var result = new ManageProjectFileTool(new FakeFilesystemProvider()).ManageProjectFile(ProjectPath, "write", "settings.json", "{");
+    public async Task InvalidJson_IsRejected() {
+        var result = await CreateTool().ManageProjectContent(ProjectPath, ManageProjectContentTool.WriteFile, relativePath: "settings.json", content: "{");
 
         Assert.Equal("error", result.Status);
         Assert.Contains("JSON", result.Summary);
     }
 
     [Fact]
-    public void Write_HappyPath() {
+    public async Task Write_HappyPath() {
         var fs = new FakeFilesystemProvider();
-        var result = new ManageProjectFileTool(fs).ManageProjectFile(ProjectPath, "write", "docs/notes.md", "# hello");
+        var result = await CreateTool(fs).ManageProjectContent(ProjectPath, ManageProjectContentTool.WriteFile, relativePath: "docs/notes.md", content: "# hello");
 
         Assert.Equal("success", result.Status);
         Assert.Equal("# hello", fs.Writes[Target("docs/notes.md")]);
     }
 
     [Fact]
-    public void Edit_RequiresSingleMatch() {
+    public async Task Edit_RequiresSingleMatch() {
         var fs = new FakeFilesystemProvider();
         fs.FileContents[Target("docs/notes.md")] = "alpha\nalpha";
-        var tool = new ManageProjectFileTool(fs);
+        var tool = CreateTool(fs);
 
-        var zero = tool.ManageProjectFile(ProjectPath, "edit", "docs/notes.md", oldString: "missing", newString: "x");
-        var ambiguous = tool.ManageProjectFile(ProjectPath, "edit", "docs/notes.md", oldString: "alpha", newString: "beta");
+        var zero = await tool.ManageProjectContent(ProjectPath, ManageProjectContentTool.EditFile, relativePath: "docs/notes.md", oldString: "missing", newString: "x");
+        var ambiguous = await tool.ManageProjectContent(ProjectPath, ManageProjectContentTool.EditFile, relativePath: "docs/notes.md", oldString: "alpha", newString: "beta");
         fs.FileContents[Target("docs/notes.md")] = "alpha\n";
-        var ok = tool.ManageProjectFile(ProjectPath, "edit", "docs/notes.md", oldString: "alpha", newString: "beta");
+        var ok = await tool.ManageProjectContent(ProjectPath, ManageProjectContentTool.EditFile, relativePath: "docs/notes.md", oldString: "alpha", newString: "beta");
 
         Assert.Equal("error", zero.Status);
         Assert.Equal("error", ambiguous.Status);
@@ -74,11 +84,11 @@ public class ManageProjectFileToolTests {
     }
 
     [Fact]
-    public void Delete_RemovesFile() {
+    public async Task Delete_RemovesFile() {
         var fs = new FakeFilesystemProvider();
         fs.FileContents[Target("docs/notes.md")] = "x";
 
-        var result = new ManageProjectFileTool(fs).ManageProjectFile(ProjectPath, "delete", "docs/notes.md");
+        var result = await CreateTool(fs).ManageProjectContent(ProjectPath, ManageProjectContentTool.DeleteFile, relativePath: "docs/notes.md");
 
         Assert.Equal("success", result.Status);
         Assert.Contains(Target("docs/notes.md"), fs.DeletedFiles);

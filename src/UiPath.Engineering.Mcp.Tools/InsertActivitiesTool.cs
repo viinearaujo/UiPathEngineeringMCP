@@ -25,7 +25,13 @@ public sealed class InsertActivitiesTool {
         _projectModelBuilder = projectModelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Recommended Copilot surgical XAML path: inserts activities from a JSON spec into an existing .xaml workflow, as children of the container targeted by activityId (preferred, from find_activity; accepts WorkflowViewState.IdRef or a structural path) or DisplayName. Prefer this over edit_workflow_activity (leave-off fragment hatch). Run validate_activity_spec first to dry-run. Spec shape: { name, properties, annotation, children, variables (Sequence only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile and InvokeCode), flowchart (Flowchart), stateMachine (StateMachine) }. A root Sequence without variables inserts its children directly; any other root is inserted as a single node. Expression form follows the target project's expressionLanguage: in a VisualBasic project pass [expr] bracket shorthand and any other value is a literal; in a CSharp project pass a raw C# expression with no brackets. Next: validate_project.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Insert Activities",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Inserts JSON activity-spec children into an existing .xaml container (activityId from find_activity). Read uipath://authoring/activity-spec first; dry-run with validate_activity_spec. Next: validate_project.")]
     public async Task<ToolResult> InsertActivities(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the .xaml file relative to the project root, e.g. 'Main.xaml'.")] string relativePath,

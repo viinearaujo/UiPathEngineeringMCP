@@ -320,7 +320,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         var run = await ProcessRunner.RunAsync(
             spec.FileName, spec.BuildArgumentList(arguments), workingDirectory,
             timeout, cancellationToken,
-            _options.Environment);
+            EffectiveEnvironment());
 
         sw.Stop();
 
@@ -418,5 +418,36 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             parts[i + 1] = arg.Length == 0 || arg.Any(char.IsWhiteSpace) ? $"\"{arg}\"" : arg;
         }
         return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Best-effort <c>uip --version</c> so the first Copilot CLI call does not pay cold start.
+    /// Failures are ignored.
+    /// </summary>
+    public async Task WarmupAsync(CancellationToken cancellationToken = default) {
+        try {
+            await RunTokensCoreAsync(
+                "version",
+                ["--version"],
+                workingDirectory: null,
+                timeoutSeconds: 60,
+                cancellationToken,
+                captureFullStdOut: false).ConfigureAwait(false);
+        } catch {
+            // Fire-and-forget warm-up: ignore all failures.
+        }
+    }
+
+    private IReadOnlyDictionary<string, string> EffectiveEnvironment() {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (_options.Environment is not null) {
+            foreach (var (key, value) in _options.Environment) {
+                map[key] = value;
+            }
+        }
+
+        // Skip npm's update-notifier hang; no UiPath-documented UIPATH_* skip flag found for @uipath/cli.
+        map.TryAdd("npm_config_update_notifier", "false");
+        return map;
     }
 }

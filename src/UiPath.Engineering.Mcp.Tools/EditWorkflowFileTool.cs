@@ -16,7 +16,13 @@ public sealed class EditWorkflowFileTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Replaces an exact string in a .xaml or .cs file. Fails on zero or ambiguous matches unless replaceAll is true. Prefer this over write_workflow_file for small changes. Do not use to insert activities from a JSON spec — that is insert_activities / build_workflow. Next: validate_project.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Edit Workflow File",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Exact string replace in a .xaml/.cs file. Fails on 0 or >1 matches unless replaceAll. Never rewrite ***REDACTED***. Next: validate_project.")]
     public ToolResult EditWorkflowFile(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Path of the file relative to the project root, e.g. 'Main.xaml' or 'Workflows/SendEmail.cs'.")] string relativePath,

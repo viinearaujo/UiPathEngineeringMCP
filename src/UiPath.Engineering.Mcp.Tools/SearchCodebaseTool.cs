@@ -19,7 +19,13 @@ public sealed class SearchCodebaseTool {
         _search = search;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Substring search across a UiPath project's .xaml and .cs files. Modes: 'text' (matching lines), 'symbol' (C# name contains query), 'activity' (XAML display name/type), 'workflow' (file name/description). Do not use for exact C# definition or usage lookup — that is find_code_symbol / find_code_references. Next: read_workflow_file or find_activity.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Search Codebase",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Substring search across .xaml/.cs. Modes: text, symbol, activity, workflow. For exact C# definition/usages use navigate_code. Next: read_workflow_file or find_activity.")]
     public async Task<ToolResult> SearchCodebase(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Case-insensitive substring to search for, e.g. 'queue'.")] string query,
@@ -53,7 +59,7 @@ public sealed class SearchCodebaseTool {
                 }
             case "symbol": {
                     var result = await _search.SearchSymbolsAsync(projectPath, query, kind, cancellationToken);
-                    var summary = $"Found {result.Matches.Count} symbol(s) matching '{query}'. Next: get_code_context.";
+                    var summary = $"Found {result.Matches.Count} symbol(s) matching '{query}'. Next: navigate_code.";
                     return ToolResults.Ok(summary, result, sw, result.Warnings);
                 }
             case "activity": {

@@ -1,0 +1,9 @@
+{
+  "id": "09-analyze-then-coded",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. First analyze_project. Then add_coded_workflow class Processor with kind=workflow. Then analyze_project_gaps.",
+  "assertions": [
+    { "type": "fileExists", "path": "Processor.cs" },
+    { "type": "fileContains", "path": "Processor.cs", "snippet": "class Processor" }
+  ]
+}

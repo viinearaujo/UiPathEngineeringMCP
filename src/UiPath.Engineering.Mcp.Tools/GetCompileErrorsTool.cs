@@ -18,7 +18,13 @@ public sealed class GetCompileErrorsTool {
         _analysis = analysis;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Fast in-memory C# compiler diagnostics (Roslyn) without a UiPath CLI build. Do not use for XAML, and do not use as the agent-loop green gate (that is validate_project). For an authoritative CLI build, call validate_project(build:true). Next: edit_workflow_file.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Get Compile Errors",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Fast in-memory Roslyn diagnostics for .cs (not XAML). Not the green gate — that is validate_project. Next: edit_workflow_file.")]
     public async Task<ToolResult> GetCompileErrors(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Minimum severity to include: 'error' (default), 'warning', or 'all'.")]

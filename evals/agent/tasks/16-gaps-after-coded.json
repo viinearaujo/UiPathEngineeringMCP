@@ -1,0 +1,9 @@
+{
+  "id": "16-gaps-after-coded",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. add_coded_workflow GapProbe (kind=workflow), then analyze_project_gaps. Leave GapProbe.cs in place.",
+  "assertions": [
+    { "type": "fileExists", "path": "GapProbe.cs" },
+    { "type": "fileContains", "path": "GapProbe.cs", "snippet": "GapProbe" }
+  ]
+}

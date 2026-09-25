@@ -16,9 +16,13 @@ public class ProjectDocsToolGateTests {
 
     [Fact]
     public async Task ValidateProjectDocs_ReportsMissingContext() {
-        var tool = new ValidateProjectDocsTool(_fs, new FakeProjectModelBuilder(), DocsSupport.Validator(_fs));
+        var knowledge = DocsSupport.Knowledge(_fs);
+        var adrs = DocsSupport.Adrs(_fs);
+        var tool = new ManageProjectContentTool(
+            _fs, knowledge, adrs, new UiPath.Engineering.Mcp.Core.Docs.ProjectDocsSearch(_fs, knowledge, adrs),
+            DocsSupport.Validator(_fs), new FakeProjectModelBuilder(), DocsSupport.Renderer(_fs));
 
-        var result = await tool.ValidateProjectDocs(_projectPath);
+        var result = await tool.ManageProjectContent(_projectPath, ManageProjectContentTool.ValidateDocs);
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == ToolErrorCodes.DocsStale);
@@ -26,9 +30,13 @@ public class ProjectDocsToolGateTests {
 
     [Fact]
     public async Task SyncProjectContext_WritesGeneratedFiles() {
-        var tool = new SyncProjectContextTool(_fs, new FakeProjectModelBuilder(), DocsSupport.Renderer(_fs));
+        var knowledge = DocsSupport.Knowledge(_fs);
+        var adrs = DocsSupport.Adrs(_fs);
+        var tool = new ManageProjectContentTool(
+            _fs, knowledge, adrs, new UiPath.Engineering.Mcp.Core.Docs.ProjectDocsSearch(_fs, knowledge, adrs),
+            DocsSupport.Validator(_fs), new FakeProjectModelBuilder(), DocsSupport.Renderer(_fs));
 
-        var result = await tool.SyncProjectContext(_projectPath);
+        var result = await tool.ManageProjectContent(_projectPath, ManageProjectContentTool.SyncContext);
 
         Assert.Equal("success", result.Status);
         Assert.True(_fs.FileExists(UiPath.Engineering.Mcp.Core.Docs.ProjectDocsPaths.AgentsMd(_projectPath)));

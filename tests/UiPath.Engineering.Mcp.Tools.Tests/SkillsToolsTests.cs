@@ -29,16 +29,19 @@ public class SkillsToolsTests {
     }
 
     [Fact]
-    public async Task ReadSkill_Success_ReturnsRedactedContent() {
+    public async Task SearchKnowledge_Skill_Success_ReturnsRedactedContent() {
         var skills = new FakeSkillsProvider {
             ReadResult = new SkillReadResult {
                 Success = true, SkillName = "uipath-rpa", File = "SKILL.md",
                 Content = "playbook with password=hunter2 inside"
             }
         };
-        var sut = new ReadSkillTool(skills);
+        var sut = new SearchKnowledgeTool(
+            new FakeFilesystemProvider(),
+            Microsoft.Extensions.Options.Options.Create(new UiPath.Engineering.Mcp.Core.Configuration.SkillsOptions()),
+            skills);
 
-        var result = await sut.ReadSkill("uipath-rpa");
+        var result = await sut.SearchKnowledge(SearchKnowledgeTool.ModeSkill, "uipath-rpa");
 
         Assert.Equal("success", result.Status);
         Assert.Equal("uipath-rpa", skills.LastName);
@@ -47,16 +50,19 @@ public class SkillsToolsTests {
     }
 
     [Fact]
-    public async Task ReadSkill_UnknownSkill_SuggestsListSkills() {
+    public async Task SearchKnowledge_Skill_UnknownSkill_SuggestsListSkills() {
         var skills = new FakeSkillsProvider {
             ReadResult = new SkillReadResult {
                 ErrorCode = "SKILL_NOT_FOUND", ErrorMessage = "Skill 'nope' was not found.",
                 AvailableSkills = ["uipath-rpa"]
             }
         };
-        var sut = new ReadSkillTool(skills);
+        var sut = new SearchKnowledgeTool(
+            new FakeFilesystemProvider(),
+            Microsoft.Extensions.Options.Options.Create(new UiPath.Engineering.Mcp.Core.Configuration.SkillsOptions()),
+            skills);
 
-        var result = await sut.ReadSkill("nope");
+        var result = await sut.SearchKnowledge(SearchKnowledgeTool.ModeSkill, "nope");
 
         Assert.Equal("error", result.Status);
         var error = Assert.Single(result.ErrorDetails);
@@ -65,15 +71,18 @@ public class SkillsToolsTests {
     }
 
     [Fact]
-    public async Task ReadSkill_PathRejected_ReturnsStructuredError() {
+    public async Task SearchKnowledge_Skill_PathRejected_ReturnsStructuredError() {
         var skills = new FakeSkillsProvider {
             ReadResult = new SkillReadResult {
                 ErrorCode = "SKILL_PATH_REJECTED", ErrorMessage = "'../x' escapes the skill directory."
             }
         };
-        var sut = new ReadSkillTool(skills);
+        var sut = new SearchKnowledgeTool(
+            new FakeFilesystemProvider(),
+            Microsoft.Extensions.Options.Options.Create(new UiPath.Engineering.Mcp.Core.Configuration.SkillsOptions()),
+            skills);
 
-        var result = await sut.ReadSkill("uipath-rpa", "../x");
+        var result = await sut.SearchKnowledge(SearchKnowledgeTool.ModeSkill, "uipath-rpa", file: "../x");
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == "SKILL_PATH_REJECTED");

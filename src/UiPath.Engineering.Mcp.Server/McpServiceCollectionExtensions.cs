@@ -14,6 +14,8 @@ using UiPath.Engineering.Mcp.Core.Authoring;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 using UiPath.Engineering.Mcp.Core.Planning;
+using UiPath.Engineering.Mcp.Core.Jobs;
+using UiPath.Engineering.Mcp.Core.Safety;
 using UiPath.Engineering.Mcp.Providers.Filesystem;
 using UiPath.Engineering.Mcp.Providers.GitLab;
 using UiPath.Engineering.Mcp.Providers.Skills;
@@ -44,8 +46,15 @@ public static class McpServiceCollectionExtensions {
 
         services.AddSingleton<IPathPolicy>(sp =>
             new PathPolicy(sp.GetRequiredService<IOptions<ProjectRootOptions>>().Value));
-        services.AddSingleton<IFilesystemProvider, FilesystemProvider>();
+        services.AddSingleton<IProjectWriteJournal, ProjectWriteJournal>();
+        services.AddSingleton<ProjectCheckpointService>();
+        services.AddSingleton<IBackgroundJobStore, BackgroundJobStore>();
+        services.AddSingleton<IFilesystemProvider>(sp =>
+            new FilesystemProvider(
+                sp.GetRequiredService<IPathPolicy>(),
+                sp.GetRequiredService<IProjectWriteJournal>()));
         services.AddSingleton<IUiPathCliProvider, UiPathCliProvider>();
+        services.AddHostedService<UiPathCliWarmupHostedService>();
         services.AddSingleton<IActivityDiscovery, CliActivityDiscovery>();
         services.AddSingleton<IActivityCatalogResolver, ActivityCatalogResolver>();
         services.AddSingleton<ISkillsProvider, SkillsProvider>();
@@ -107,16 +116,18 @@ public static class McpServiceCollectionExtensions {
                 if (restrictToCopilotDefault) {
                     filters.AddListToolsFilter(next => async (context, cancellationToken) => {
                         var result = await next(context, cancellationToken);
-                        if (!CopilotDefaultSurfaceActive(context.Services)) {
+                        var surface = ResolveToolSurface(context.Services);
+                        if (!CopilotConnectorTools.RestrictsSurface(surface)) {
                             return result;
                         }
 
-                        CopilotToolSurface.FilterListedTools(result);
+                        CopilotToolSurface.FilterListedTools(result, surface);
                         return result;
                     });
                     filters.AddCallToolFilter(next => async (context, cancellationToken) => {
-                        if (CopilotDefaultSurfaceActive(context.Services)
-                            && CopilotToolSurface.RejectIfHidden(context.Params?.Name) is { } rejected) {
+                        var surface = ResolveToolSurface(context.Services);
+                        if (CopilotConnectorTools.RestrictsSurface(surface)
+                            && CopilotToolSurface.RejectIfHidden(context.Params?.Name, surface) is { } rejected) {
                             return rejected;
                         }
 
@@ -124,6 +135,10 @@ public static class McpServiceCollectionExtensions {
                     });
                 }
 
+                filters.AddCallToolFilter(next => async (context, cancellationToken) => {
+                    using var _ = WriteJournalContext.Begin(context.Params?.Name ?? "unknown");
+                    return await next(context, cancellationToken);
+                });
                 filters.AddCallToolFilter(next => async (context, cancellationToken) => {
                     try {
                         var result = await next(context, cancellationToken);
@@ -158,12 +173,11 @@ public static class McpServiceCollectionExtensions {
             });
     }
 
-    private static bool CopilotDefaultSurfaceActive(IServiceProvider? services) {
+    private static string? ResolveToolSurface(IServiceProvider? services) {
         if (services is null) {
-            return true;
+            return CopilotConnectorTools.SurfaceCopilotDefault;
         }
 
-        var surface = services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolSurface;
-        return CopilotConnectorTools.RestrictsSurface(surface);
+        return services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolSurface;
     }
 }

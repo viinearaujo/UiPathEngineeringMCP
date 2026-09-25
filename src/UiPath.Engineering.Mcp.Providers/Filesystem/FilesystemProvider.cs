@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
+using UiPath.Engineering.Mcp.Core.Safety;
 
 namespace UiPath.Engineering.Mcp.Providers.Filesystem;
 
@@ -36,9 +37,13 @@ public sealed class FilesystemProvider : IFilesystemProvider {
     ];
 
     private readonly IPathPolicy _pathPolicy;
+    private readonly IProjectWriteJournal? _writeJournal;
     private readonly ConcurrentDictionary<string, byte> _enumeratedAllowed = new(StringComparer.OrdinalIgnoreCase);
 
-    public FilesystemProvider(IPathPolicy pathPolicy) => _pathPolicy = pathPolicy;
+    public FilesystemProvider(IPathPolicy pathPolicy, IProjectWriteJournal? writeJournal = null) {
+        _pathPolicy = pathPolicy;
+        _writeJournal = writeJournal;
+    }
 
     public bool IsPathAllowed(string requestedPath) => _pathPolicy.IsAllowed(requestedPath);
 
@@ -194,6 +199,11 @@ public sealed class FilesystemProvider : IFilesystemProvider {
         var tempPath = path + ".tmp";
         File.WriteAllText(tempPath, content, encoding);
         File.Move(tempPath, path, overwrite: true);
+        try {
+            _writeJournal?.RecordWrite(path);
+        } catch {
+            // Journal must not fail the write.
+        }
     }
 
     private static string MatchNewlines(string content, byte[] existing, bool hasBom) {

@@ -1,3 +1,4 @@
+using UiPath.Engineering.Mcp.Core.Jobs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Tools;
 
@@ -14,18 +15,19 @@ public class GetAnalyzerRulesToolTests {
         }
         """;
 
-    private static (GetAnalyzerRulesTool Sut, RecordingStructuredCli Cli, FakeFilesystemProvider Fs) CreateSut(
+    private static (GetAnalyzerRulesTool Sut, RecordingStructuredCli Cli, FakeFilesystemProvider Fs, BackgroundJobStore Jobs) CreateSut(
         string stdOut = WorkflowScopePayload) {
         var cli = new RecordingStructuredCli { StdOut = stdOut };
         var filesystem = CliToolFixtures.ProjectFilesystem();
-        return (new GetAnalyzerRulesTool(cli, filesystem, CliToolFixtures.Policy()), cli, filesystem);
+        var jobs = BackgroundJobs.NewStore();
+        return (new GetAnalyzerRulesTool(cli, filesystem, CliToolFixtures.Policy(), jobs), cli, filesystem, jobs);
     }
 
     [Fact]
     public async Task DefaultsToWorkflowScope_AndRunsTheScopedVerb() {
-        var (sut, cli, _) = CreateSut();
+        var (sut, cli, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
 
         Assert.Equal("success", result.Status);
         Assert.Equal(
@@ -35,9 +37,9 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task ReturnsIdSeverityScopeTitleRecommendationAndDocs() {
-        var (sut, _, _) = CreateSut();
+        var (sut, _, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
         var data = CliToolFixtures.Data<AnalyzerRulesPayload>(result)!;
 
         Assert.Equal(3, data.ReturnedRules);
@@ -53,9 +55,9 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task ConfiguredParameters_AreReturned() {
-        var (sut, _, _) = CreateSut();
+        var (sut, _, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
         var data = CliToolFixtures.Data<AnalyzerRulesPayload>(result)!;
 
         Assert.Equal("1", data.Rules[0].Parameters["VariableDepthUsage"]);
@@ -67,9 +69,9 @@ public class GetAnalyzerRulesToolTests {
     [InlineData("Project")]
     [InlineData("Coded Workflow")]
     public async Task EveryDocumentedScope_IsAccepted(string scope) {
-        var (sut, cli, _) = CreateSut();
+        var (sut, cli, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, scope);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, scope));
 
         Assert.Equal("success", result.Status);
         Assert.Equal(scope, CliToolFixtures.TokenAfter(cli.LastTokens, "--scope"));
@@ -77,9 +79,9 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task ScopeIsCaseInsensitive_AndNormalizedToTheDocumentedValue() {
-        var (sut, cli, _) = CreateSut();
+        var (sut, cli, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, "coded workflow");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, "coded workflow"));
 
         Assert.Equal("success", result.Status);
         Assert.Contains("Coded Workflow", cli.LastTokens!);
@@ -87,9 +89,9 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task UnknownScope_IsRefusedWithoutCallingTheCli() {
-        var (sut, cli, _) = CreateSut();
+        var (sut, cli, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, "Everything");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, "Everything"));
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == "INVALID_ARGUMENT");
@@ -98,9 +100,9 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task ScopeAll_OmitsTheScopeFlag_AndWarnsAboutTheCost() {
-        var (sut, cli, _) = CreateSut();
+        var (sut, cli, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, "All");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, "All"));
 
         Assert.Equal("success", result.Status);
         Assert.DoesNotContain("--scope", cli.LastTokens!);
@@ -109,9 +111,9 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task MinSeverity_FiltersOutLowerSeverities() {
-        var (sut, _, _) = CreateSut();
+        var (sut, _, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, minSeverity: "error");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, minSeverity: "error"));
         var data = CliToolFixtures.Data<AnalyzerRulesPayload>(result)!;
 
         Assert.Equal(3, data.TotalRules);
@@ -122,18 +124,18 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task MinSeverityWarning_KeepsErrorAndWarning() {
-        var (sut, _, _) = CreateSut();
+        var (sut, _, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, minSeverity: "warning");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, minSeverity: "warning"));
 
         Assert.Equal(2, CliToolFixtures.Data<AnalyzerRulesPayload>(result)!.ReturnedRules);
     }
 
     [Fact]
     public async Task UnknownMinSeverity_IsRefused() {
-        var (sut, cli, _) = CreateSut();
+        var (sut, cli, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, minSeverity: "critical");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, minSeverity: "critical"));
 
         Assert.Equal("error", result.Status);
         Assert.Empty(cli.Calls);
@@ -141,9 +143,9 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task NoRulesReported_WarnsInsteadOfFailing() {
-        var (sut, _, _) = CreateSut("""{"Result":"Success","Data":{"message":"No analyzer rules found."}}""");
+        var (sut, _, _, jobs) = CreateSut("""{"Result":"Success","Data":{"message":"No analyzer rules found."}}""");
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
 
         Assert.Equal("success", result.Status);
         Assert.Equal(0, CliToolFixtures.Data<AnalyzerRulesPayload>(result)!.TotalRules);
@@ -152,9 +154,9 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task FailureEnvelope_ReturnsStructuredErrorWithAFixHint() {
-        var (sut, _, _) = CreateSut("""{"Result":"Failure","Message":"The project is not open in Studio."}""");
+        var (sut, _, _, jobs) = CreateSut("""{"Result":"Failure","Message":"The project is not open in Studio."}""");
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
 
         Assert.Equal("error", result.Status);
         var error = Assert.Single(result.ErrorDetails);
@@ -165,9 +167,9 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task UnparseablePayload_ReturnsCliUnparseableResponse() {
-        var (sut, _, _) = CreateSut("not json at all");
+        var (sut, _, _, jobs) = CreateSut("not json at all");
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == "CLI_UNPARSEABLE_RESPONSE");
@@ -181,9 +183,10 @@ public class GetAnalyzerRulesToolTests {
             StdOut = string.Empty
         };
         cli.CliErrors.Add("The UiPath CLI ('uip') was not found on PATH (searched for uip.exe).");
-        var sut = new GetAnalyzerRulesTool(cli, CliToolFixtures.ProjectFilesystem(), CliToolFixtures.Policy());
+        var jobs = BackgroundJobs.NewStore();
+        var sut = new GetAnalyzerRulesTool(cli, CliToolFixtures.ProjectFilesystem(), CliToolFixtures.Policy(), jobs);
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == "CLI_UNAVAILABLE");
@@ -193,9 +196,10 @@ public class GetAnalyzerRulesToolTests {
     public async Task MissingProjectJson_IsRefusedWithoutCallingTheCli() {
         var cli = new RecordingStructuredCli();
         var filesystem = new FakeFilesystemProvider { ProjectJson = null };
-        var sut = new GetAnalyzerRulesTool(cli, filesystem, CliToolFixtures.Policy());
+        var jobs = BackgroundJobs.NewStore();
+        var sut = new GetAnalyzerRulesTool(cli, filesystem, CliToolFixtures.Policy(), jobs);
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == "PROJECT_JSON_NOT_FOUND");
@@ -206,9 +210,10 @@ public class GetAnalyzerRulesToolTests {
     public async Task PathOutsideAllowedRoots_IsRefused() {
         var cli = new RecordingStructuredCli();
         var filesystem = new FakeFilesystemProvider { Allowed = false };
-        var sut = new GetAnalyzerRulesTool(cli, filesystem, CliToolFixtures.Policy());
+        var jobs = BackgroundJobs.NewStore();
+        var sut = new GetAnalyzerRulesTool(cli, filesystem, CliToolFixtures.Policy(), jobs);
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
 
         Assert.Equal("error", result.Status);
         Assert.Contains(result.ErrorDetails, e => e.ErrorCode == "PATH_NOT_ALLOWED");
@@ -217,18 +222,18 @@ public class GetAnalyzerRulesToolTests {
 
     [Fact]
     public async Task TimeoutIsClampedToTheConfiguredMaximum() {
-        var (sut, cli, _) = CreateSut();
+        var (sut, cli, _, jobs) = CreateSut();
 
-        await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, timeoutSeconds: 999999);
+        await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath, timeoutSeconds: 999999));
 
         Assert.Equal(CliToolSupport.MaxTimeoutSeconds, cli.Timeouts[^1]);
     }
 
     [Fact]
     public async Task ProjectDirectoryIsTheWorkingDirectory() {
-        var (sut, cli, _) = CreateSut();
+        var (sut, cli, _, jobs) = CreateSut();
 
-        await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
 
         Assert.Equal(CliToolFixtures.ProjectPath, cli.WorkingDirectories[^1]);
     }
@@ -236,9 +241,9 @@ public class GetAnalyzerRulesToolTests {
     [Fact]
     public async Task ReadOnlyVerb_NeedsNoEnableMutatingCommands() {
         // analyzer-rules list is in UiPathCli:ReadOnlySubcommands, so the default policy passes.
-        var (sut, cli, _) = CreateSut();
+        var (sut, cli, _, jobs) = CreateSut();
 
-        var result = await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath);
+        var result = await BackgroundJobs.AwaitFinished(jobs, await sut.GetAnalyzerRules(CliToolFixtures.ProjectPath));
 
         Assert.Equal("success", result.Status);
         Assert.Single(cli.Calls);

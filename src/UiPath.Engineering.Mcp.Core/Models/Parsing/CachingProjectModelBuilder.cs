@@ -10,8 +10,10 @@ namespace UiPath.Engineering.Mcp.Core.Parsing;
 /// Decorates an <see cref="IProjectModelBuilder"/> with a bounded cross-request cache
 /// keyed by the normalized project path. Each call recomputes a SHA-256 fingerprint of
 /// the project files (sorted path+write-time pairs for project.json + *.xaml + *.cs)
-/// and only delegates to the inner builder when the fingerprint changed. Fingerprint
-/// failure serves a cached model with <see cref="UiPathProjectModel.Stale"/> set.
+/// and only delegates to the inner builder when the fingerprint changed. When a
+/// <see cref="IProjectChangeWatcher"/> is active and clean, the last fingerprint is
+/// reused without walking. Fingerprint failure serves a cached model with
+/// <see cref="UiPathProjectModel.Stale"/> set.
 /// </summary>
 public sealed class CachingProjectModelBuilder : IProjectModelBuilder, IDisposable {
     private readonly IProjectModelBuilder _inner;
@@ -31,7 +33,8 @@ public sealed class CachingProjectModelBuilder : IProjectModelBuilder, IDisposab
         int maxEntries,
         TimeSpan? ttl = null,
         TimeProvider? timeProvider = null,
-        ILogger<CachingProjectModelBuilder>? logger = null) {
+        ILogger<CachingProjectModelBuilder>? logger = null,
+        IProjectChangeWatcherFactory? watcherFactory = null) {
         _inner = inner;
         _filesystem = filesystem;
         _cache = new FingerprintedCache<UiPathProjectModel>(
@@ -39,7 +42,9 @@ public sealed class CachingProjectModelBuilder : IProjectModelBuilder, IDisposab
             maxEntries,
             ttl,
             timeProvider,
-            logger ?? NullLogger<CachingProjectModelBuilder>.Instance);
+            logger ?? NullLogger<CachingProjectModelBuilder>.Instance,
+            watcherFactory ?? ProjectFileChangeWatcher.ForProvider(filesystem),
+            reuseWhenClean: true);
     }
 
     internal int CacheEntryCount => _cache.EntryCount;

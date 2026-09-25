@@ -8,6 +8,7 @@ using UiPath.Engineering.Mcp.Core.Configuration;
 
 namespace UiPath.Engineering.Mcp.Server.Tests;
 
+[Collection(McpHostCollection.Name)]
 public class McpHostTests {
     private const string ApiKey = "host-test-api-key";
 

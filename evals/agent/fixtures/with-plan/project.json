@@ -1,0 +1,21 @@
+{
+  "name": "AgentEvalWithPlan",
+  "description": "XAML fixture with an implementation plan",
+  "main": "Main.xaml",
+  "projectVersion": "1.0.0",
+  "studioVersion": "24.10.0.0",
+  "targetFramework": "Windows",
+  "expressionLanguage": "CSharp",
+  "designOptions": {
+    "outputType": "Process"
+  },
+  "entryPoints": [
+    {
+      "filePath": "Main.xaml",
+      "uniqueId": "33333333-3333-3333-3333-333333333333",
+      "type": "process",
+      "input": [],
+      "output": []
+    }
+  ]
+}

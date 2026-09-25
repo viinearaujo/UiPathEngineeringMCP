@@ -27,7 +27,13 @@ public sealed class GetActivityMetadataTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Returns the full authoring surface of ONE named activity — type name, XML prefix and namespace, package, container flag, body shape, and every property with its CLR type, argument direction (in/out/inOut), required flag, default, allowed values, and content-property marker. Pass projectPath so the surface comes from that project's installed packages (reflected over the package assemblies) instead of the built-in fallback catalog. Use this instead of guessing property names before validate_activity_spec / build_workflow; validate_activity_spec remains the gate that rejects a typo. Next: validate_activity_spec.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Get Activity Metadata",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Full authoring surface of one activity (properties, types, required, defaults, body shape). Prefer over guessing. Next: validate_activity_spec.")]
     public async Task<ToolResult> GetActivityMetadata(
         [Description("Activity name to describe, e.g. 'LogMessage', 'If', 'NClick'. Both the toolbox label ('While') and the emitted type ('InterruptibleWhile') resolve to the same schema.")] string name,
         [Description("Optional absolute path to the UiPath project directory. When set, the surface comes from that project's package catalog (which reflects over the installed activity assemblies); otherwise the built-in fallback catalog is used.")] string? projectPath = null,

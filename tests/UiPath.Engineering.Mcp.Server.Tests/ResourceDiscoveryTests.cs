@@ -8,14 +8,14 @@ using UiPath.Engineering.Mcp.Core.Configuration;
 namespace UiPath.Engineering.Mcp.Server.Tests;
 
 /// <summary>
-/// Pins the resource discovery contract over the real HTTP host. Every resource this server
-/// registers is a URI template, so <c>resources/list</c> returns an empty array and the
-/// templates reach the client through <c>resources/listResourceTemplates</c> instead — the two
-/// facts the Copilot Studio registration depends on (documented in
-/// <c>docs/agent-connection.md</c> § Resources).
+/// Pins the resource discovery contract over the real HTTP host. Parameterized resources are URI
+/// templates (discovered via <c>resources/listResourceTemplates</c>). Fixed guides such as
+/// <c>uipath://authoring/activity-spec</c> appear in <c>resources/list</c>.
 /// </summary>
+[Collection(McpHostCollection.Name)]
 public class ResourceDiscoveryTests {
     private const string ApiKey = "resource-discovery-api-key";
+    private const string ActivitySpecUri = "uipath://authoring/activity-spec";
 
     [Fact]
     public async Task ResourcesList_IsEmpty_TemplatesCarryEveryResource_AndActivityResourceReads() {
@@ -37,11 +37,13 @@ public class ResourceDiscoveryTests {
                 ownsHttpClient: false);
             await using var client = await McpClient.CreateAsync(transport);
 
-            // No static resource exists: a client that reads only resources/list sees none.
+            // Fixed (non-templated) authoring guide is listed as a concrete resource.
             var listed = await client.ListResourcesAsync();
-            Assert.Empty(listed);
+            Assert.Contains(listed, r =>
+                string.Equals(r.Name, "activity-spec", StringComparison.Ordinal)
+                || string.Equals(r.Uri, ActivitySpecUri, StringComparison.Ordinal));
 
-            // The templates are where every resource lives. Count is not pinned (the set grows
+            // The templates are where parameterized resources live. Count is not pinned (the set grows
             // with the catalog); the templates the knowledge surface added must be present.
             var templates = await client.ListResourceTemplatesAsync();
             var uris = templates.Select(t => t.UriTemplate).ToArray();

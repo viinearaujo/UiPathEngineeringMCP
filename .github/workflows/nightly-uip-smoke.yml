@@ -1,0 +1,33 @@
+name: Nightly uip smoke
+
+# Self-hosted Windows runner with a real UiPath CLI. Independent of pull_request CI
+# (.github/workflows/ci.yml). Allowed to fail / sit queued when the runner is absent.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  uip-smoke:
+    runs-on: [self-hosted, Windows, uipath]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore UiPath.Engineering.Mcp.sln
+
+      - name: Build server
+        run: >
+          dotnet build src/UiPath.Engineering.Mcp.Server/UiPath.Engineering.Mcp.Server.csproj
+          --configuration Release --no-restore --nologo
+
+      - name: Smoke uip
+        run: pwsh -NoProfile -File scripts/smoke-uip.ps1
+        env:
+          SMOKE_PROJECT_PATH: ${{ vars.SMOKE_PROJECT_PATH }}

@@ -1,3 +1,6 @@
+using System.Text.Json;
+using UiPath.Engineering.Mcp.Core.Jobs;
+
 namespace UiPath.Engineering.Mcp.Tools.Tests;
 
 public class CompileProjectToolTests {
@@ -6,7 +9,10 @@ public class CompileProjectToolTests {
 
     [Fact]
     public async Task CompileProject_PathNotAllowed_ReturnsError() {
-        var tool = new CompileProjectTool(new FakeUiPathCliProvider(), new FakeFilesystemProvider { Allowed = false });
+        var tool = new CompileProjectTool(
+            new FakeUiPathCliProvider(),
+            new FakeFilesystemProvider { Allowed = false },
+            BackgroundJobs.NewStore());
 
         var result = await tool.CompileProject("/not/allowed");
 
@@ -17,9 +23,13 @@ public class CompileProjectToolTests {
     [Fact]
     public async Task CompileProject_HappyPath_RunsBuildOnly() {
         var cli = new FakeUiPathCliProvider();
-        var tool = new CompileProjectTool(cli, ProjectFilesystem());
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new CompileProjectTool(cli, ProjectFilesystem(), jobs);
 
-        var result = await tool.CompileProject("/projects/testProcess");
+        var started = await tool.CompileProject("/projects/testProcess");
+        var data = JsonSerializer.SerializeToElement(started.Data);
+        Assert.Equal("running", data.GetProperty("status").GetString());
+        var result = await BackgroundJobs.AwaitFinished(jobs, started);
 
         Assert.Equal((false, true, false), cli.LastValidateFlags);
         Assert.Equal("success", result.Status);
@@ -30,9 +40,10 @@ public class CompileProjectToolTests {
         var cli = new FakeUiPathCliProvider {
             Result = new() { Success = false, Summary = "Build failed.", Errors = ["error CS0103"] }
         };
-        var tool = new CompileProjectTool(cli, ProjectFilesystem());
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new CompileProjectTool(cli, ProjectFilesystem(), jobs);
 
-        var result = await tool.CompileProject("/projects/testProcess");
+        var result = await BackgroundJobs.AwaitFinished(jobs, await tool.CompileProject("/projects/testProcess"));
 
         Assert.Equal("error", result.Status);
         Assert.Contains("error CS0103", result.Errors);

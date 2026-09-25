@@ -1,3 +1,6 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using UiPath.Engineering.Mcp.Core.CodeAnalysis;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -11,6 +14,10 @@ public class DependencyGraphBuilderTests {
             .Select(t => new InvokeWorkflowModel { SourceWorkflow = fileName, TargetWorkflow = t })
             .ToList()
     };
+
+    private static List<InvokeWorkflowModel> ScanCoded(string identity, string source) =>
+        CodedWorkflowInvokeScanner.Scan(identity, source).ToList();
+
 
     [Fact]
     public void Build_LinearChain_ResolvesAllEdgesAndNoOrphansOrCycles() {
@@ -181,5 +188,206 @@ public class DependencyGraphBuilderTests {
         var ghostCallers = graph.CallersIndex["Ghost.xaml"];
         Assert.Single(ghostCallers);
         Assert.False(ghostCallers[0].IsResolved);
+    }
+
+    [Fact]
+    public void Build_CodedRunWorkflow_CreatesResolvedEdgeWithMappings() {
+        const string mainSource = """
+            using System.Collections.Generic;
+            public class Main : CodedWorkflow {
+                [Workflow]
+                public void Execute() {
+                    var orderId = "O-1";
+                    RunWorkflow("Child.cs", new Dictionary<string, object> { { "id", orderId } });
+                }
+            }
+            public class CodedWorkflow { }
+            public class WorkflowAttribute : System.Attribute { }
+            """;
+        var invokes = ScanCoded("Main.cs", mainSource);
+        var workflows = new List<WorkflowModel> {
+            new() {
+                FileName = "Main.cs",
+                RelativePath = "Main.cs",
+                InvokeWorkflows = invokes.ToList()
+            },
+            new() { FileName = "Child.cs", RelativePath = "Child.cs" }
+        };
+
+        var graph = DependencyGraphBuilder.Build(workflows, "Main.cs");
+
+        var edge = Assert.Single(graph.Edges);
+        Assert.True(edge.IsResolved);
+        Assert.Equal("Main.cs", edge.Source);
+        Assert.Equal("Child.cs", edge.Target);
+        Assert.Equal("RunWorkflow", edge.DisplayName);
+        var mapping = Assert.Single(edge.ArgumentMappings);
+        Assert.Equal("In", mapping.Direction);
+        Assert.Equal("id", mapping.TargetArgument);
+        Assert.Equal("orderId", mapping.Expression);
+    }
+
+    [Fact]
+    public void Build_CodedWorkflowsHelper_CreatesResolvedEdge() {
+        const string mainSource = """
+            public class Main : CodedWorkflow {
+                WorkflowsHost workflows = new();
+                [Workflow]
+                public void Execute() {
+                    workflows.Child(invoiceId: "INV-1");
+                }
+            }
+            public class WorkflowsHost {
+                public void Child(string invoiceId) { }
+            }
+            public class CodedWorkflow { }
+            public class WorkflowAttribute : System.Attribute { }
+            """;
+        var invokes = ScanCoded("Main.cs", mainSource);
+        var workflows = new List<WorkflowModel> {
+            new() {
+                FileName = "Main.cs",
+                RelativePath = "Main.cs",
+                InvokeWorkflows = invokes.ToList()
+            },
+            new() { FileName = "Child.cs", RelativePath = "Child.cs" }
+        };
+
+        var graph = DependencyGraphBuilder.Build(workflows, "Main.cs");
+
+        var edge = Assert.Single(graph.Edges);
+        Assert.True(edge.IsResolved);
+        Assert.Equal("Child.cs", edge.Target);
+        Assert.Equal("workflows.Child", edge.DisplayName);
+        var mapping = Assert.Single(edge.ArgumentMappings);
+        Assert.Equal("invoiceId", mapping.TargetArgument);
+        Assert.Equal("\"INV-1\"", mapping.Expression);
+    }
+
+    [Fact]
+    public void Build_CodedUnresolvedHelper_ProducesUnresolvedEdge() {
+        const string mainSource = """
+            public class Main : CodedWorkflow {
+                dynamic workflows = null!;
+                [Workflow]
+                public void Execute() {
+                    workflows.Missing();
+                }
+            }
+            public class CodedWorkflow { }
+            public class WorkflowAttribute : System.Attribute { }
+            """;
+        var invokes = ScanCoded("Main.cs", mainSource);
+        var workflows = new List<WorkflowModel> {
+            new() {
+                FileName = "Main.cs",
+                RelativePath = "Main.cs",
+                InvokeWorkflows = invokes.ToList()
+            }
+        };
+
+        var graph = DependencyGraphBuilder.Build(workflows, "Main.cs");
+
+        var edge = Assert.Single(graph.Edges);
+        Assert.False(edge.IsResolved);
+        Assert.Equal("Missing.cs", edge.Target);
+        Assert.Equal("workflows.Missing", edge.DisplayName);
+    }
+
+    [Fact]
+    public void Build_XamlInvokeStillPresent_WhenCodedNodesExist() {
+        var workflows = new List<WorkflowModel> {
+            new() {
+                FileName = "Main.xaml",
+                RelativePath = "Main.xaml",
+                InvokeWorkflows = [
+                    new InvokeWorkflowModel {
+                        SourceWorkflow = "Main.xaml",
+                        TargetWorkflow = "Child.xaml",
+                        DisplayName = "Invoke child"
+                    }
+                ]
+            },
+            new() { FileName = "Child.xaml", RelativePath = "Child.xaml" },
+            new() { FileName = "Helper.cs", RelativePath = "Helper.cs" } // coded node, no edges
+        };
+
+        var graph = DependencyGraphBuilder.Build(workflows, "Main.xaml");
+
+        var edge = Assert.Single(graph.Edges);
+        Assert.True(edge.IsResolved);
+        Assert.Equal("Main.xaml", edge.Source);
+        Assert.Equal("Child.xaml", edge.Target);
+        Assert.Equal("Invoke child", edge.DisplayName);
+        Assert.Contains("Helper.cs", graph.Orphans);
+    }
+
+    [Fact]
+    public void Build_CodedWorkflowWithNoCalls_IsNodeWithoutEdges() {
+        var workflows = new[] {
+            new WorkflowModel { FileName = "Main.cs", RelativePath = "Main.cs" },
+            new WorkflowModel { FileName = "Lonely.cs", RelativePath = "Lonely.cs" }
+        };
+
+        var graph = DependencyGraphBuilder.Build(workflows, "Main.cs");
+
+        Assert.Empty(graph.Edges);
+        Assert.Equal(["Lonely.cs"], graph.Orphans);
+    }
+
+    [Fact]
+    public void Build_PromotesCodedWorkflowsAndScansWithSyntaxOnlyAnalysis() {
+        const string mainSource = """
+            public class Main : CodedWorkflow {
+                dynamic workflows = null!;
+                [Workflow] public void Execute() { workflows.Child(); }
+            }
+            public class CodedWorkflow { }
+            public class WorkflowAttribute : System.Attribute { }
+            """;
+        const string childSource = """
+            public class Child : CodedWorkflow {
+                [Workflow] public void Execute() { }
+            }
+            public class CodedWorkflow { }
+            public class WorkflowAttribute : System.Attribute { }
+            """;
+        var treeMain = CSharpSyntaxTree.ParseText(mainSource, path: "Main.cs");
+        var treeChild = CSharpSyntaxTree.ParseText(childSource, path: "Child.cs");
+        var compilation = CSharpCompilation.Create(
+            "coded-edges",
+            [treeMain, treeChild],
+            references: [],
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var analysis = new CSharpAnalysisContext {
+            Compilation = compilation,
+            Mode = CSharpAnalysisMode.SyntaxOnly,
+            HasCSharpFiles = true
+        };
+        var coded = new[] {
+            new CodedWorkflowModel {
+                FileName = "Main.cs", FilePath = "Main.cs", ClassName = "Main",
+                Kind = CodedFileKind.Workflow, IsCodedWorkflow = true
+            },
+            new CodedWorkflowModel {
+                FileName = "Child.cs", FilePath = "Child.cs", ClassName = "Child",
+                Kind = CodedFileKind.Workflow, IsCodedWorkflow = true
+            },
+            new CodedWorkflowModel {
+                FileName = "Util.cs", FilePath = "Util.cs", ClassName = "Util",
+                Kind = CodedFileKind.Source // must not become a node
+            }
+        };
+
+        var graph = DependencyGraphBuilder.Build([], "Main.cs", coded, analysis);
+
+        var edge = Assert.Single(graph.Edges);
+        Assert.True(edge.IsResolved);
+        Assert.Equal("Main.cs", edge.Source);
+        Assert.Equal("Child.cs", edge.Target);
+        Assert.Equal("workflows.Child", edge.DisplayName);
+        Assert.Empty(graph.Orphans);
+        Assert.DoesNotContain(graph.Edges, e => e.Source.Contains("Util", StringComparison.OrdinalIgnoreCase)
+            || e.Target.Contains("Util", StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -1,0 +1,29 @@
+{
+  "name": "AgentEvalMinimalCoded",
+  "description": "Tiny coded fixture for agent evals",
+  "main": "Helper.cs",
+  "projectVersion": "1.0.0",
+  "studioVersion": "24.10.0.0",
+  "targetFramework": "Windows",
+  "expressionLanguage": "CSharp",
+  "designOptions": {
+    "outputType": "Process"
+  },
+  "fileInfoCollection": [
+    {
+      "editingStatus": "Publishable",
+      "fileName": "Helper.cs",
+      "fileType": "Workflow",
+      "uniqueId": "22222222-2222-2222-2222-222222222222"
+    }
+  ],
+  "entryPoints": [
+    {
+      "filePath": "Helper.cs",
+      "uniqueId": "22222222-2222-2222-2222-222222222222",
+      "type": "process",
+      "input": [],
+      "output": []
+    }
+  ]
+}

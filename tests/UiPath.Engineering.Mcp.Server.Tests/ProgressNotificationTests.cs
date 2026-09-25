@@ -19,6 +19,7 @@ namespace UiPath.Engineering.Mcp.Server.Tests;
 /// Studio CLI: the tools report their opening progress notification before the CLI is even
 /// resolved, which is what this test needs to observe. That also keeps the test hermetic and fast.
 /// </remarks>
+[Collection(McpHostCollection.Name)]
 public class ProgressNotificationTests {
     private const string ApiKey = "progress-test-api-key";
 

@@ -29,7 +29,13 @@ public sealed class RunUiPathCliTool {
         _options = options.Value;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Runs an allowlisted UiPath CLI (uip) command and returns structured output. Allowed verbs are configured server-side (default: rpa, solution); mutating subcommands are blocked unless enabled in server config. stdout/stderr are redacted and capped. Path-like arguments must canonicalize inside Projects:AllowedRoots. Next: validate_project.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Run UiPath CLI",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Leave-off. Runs an allowlisted uip CLI command and returns structured output. Next: validate_project.")]
     public async Task<ToolResult> RunUiPathCli(
         [Description("Top-level uip verb, e.g. 'rpa' or 'solution'.")] string verb,
         [Description("Arguments appended verbatim after the verb, e.g. 'validate --project-dir \"C:/proj\" --output json'.")] string arguments,

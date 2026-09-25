@@ -1,5 +1,8 @@
 name: CI
 
+# AgentEval (Category=AgentEval) skips without AGENT_EVAL_API_KEY/MODEL — not a PR gate.
+# Real-uip smoke is .github/workflows/nightly-uip-smoke.yml (self-hosted); not used here.
+
 on:
   push:
     branches: [main, master]

@@ -7,6 +7,9 @@ namespace UiPath.Engineering.Mcp.Core.Caching;
 /// <summary>
 /// SHA-256 of sorted path + last-write ticks. Shared by the project-model cache
 /// and the C# analysis cache (the latter appends NuGet folder ticks).
+/// Callers that hold a per-project <see cref="IProjectChangeWatcher"/> (see
+/// <see cref="FingerprintedCache{TValue}"/>) may skip invoking these methods while
+/// the watcher is active and clean; the hash contract is unchanged when a walk runs.
 /// </summary>
 public static class ProjectFingerprint {
     public const string StaleCacheWarning =

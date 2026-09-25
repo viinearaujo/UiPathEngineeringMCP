@@ -17,7 +17,13 @@ public sealed class GetWorkflowDependenciesTool {
         _modelBuilder = modelBuilder;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Shows the InvokeWorkflowFile dependency graph of a UiPath project. With workflowFile: the callers and callees of that workflow, each edge carrying the argument mappings passed at the invoke site. Without workflowFile: the full project edge list plus cycles, orphans (unreachable from Main), and unresolved targets. Next: explain_workflow.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Get Workflow Dependencies",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Shows the InvokeWorkflowFile dependency graph (optionally scoped to one workflow). Next: explain_workflow or analyze_project_gaps.")]
     public async Task<ToolResult> GetWorkflowDependencies(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Optional workflow file name (with or without .xaml). When omitted, the project-wide graph is returned.")] string? workflowFile = null,

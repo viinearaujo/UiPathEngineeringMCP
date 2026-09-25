@@ -15,7 +15,13 @@ public sealed class AddXamlWorkflowTool {
         _filesystem = filesystem;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Adds a new blank XAML workflow file to an existing UiPath project, with the correct x:Class naming for its location. Next: insert_activities.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Add XAML Workflow",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false),
+     Description("Leave-off. Adds a blank .xaml workflow to an existing project. Prefer coded for new work. Next: insert_activities.")]
     public ToolResult AddXamlWorkflow(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Workflow file name or relative path within the project, e.g. 'SendEmail.xaml' or 'Workflows/SendEmail.xaml'.")] string fileName) {

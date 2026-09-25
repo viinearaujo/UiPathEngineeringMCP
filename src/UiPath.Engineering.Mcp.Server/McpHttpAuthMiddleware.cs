@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -32,19 +33,18 @@ public sealed class McpHttpAuthMiddleware {
             return;
         }
 
+        if (_options.Enabled
+            && _options.Entra is { Enabled: true }
+            && await TryEntraAsync(context)) {
+            await InvokeAuthorizedAsync(context, path);
+            return;
+        }
+
         var headerName = HttpAuthEvaluator.ResolveHeaderName(_options);
         context.Request.Headers.TryGetValue(headerName, out var apiKey);
         var authorization = context.Request.Headers.Authorization.ToString();
         if (HttpAuthEvaluator.IsAuthorized(_options, apiKey.ToString(), string.IsNullOrEmpty(authorization) ? null : authorization)) {
-            var sw = Stopwatch.StartNew();
-            await _next(context);
-            sw.Stop();
-            _logger.LogDebug(
-                "MCP HTTP {Method} {Path} duration {DurationMs}ms status {Status}",
-                context.Request.Method,
-                path,
-                sw.ElapsedMilliseconds,
-                context.Response.StatusCode);
+            await InvokeAuthorizedAsync(context, path);
             return;
         }
 
@@ -58,5 +58,31 @@ public sealed class McpHttpAuthMiddleware {
             "unauthorized");
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         context.Response.Headers.WWWAuthenticate = $"ApiKey realm=\"mcp\", header=\"{headerName}\"";
+    }
+
+    private async Task InvokeAuthorizedAsync(HttpContext context, string path) {
+        var sw = Stopwatch.StartNew();
+        await _next(context);
+        sw.Stop();
+        _logger.LogDebug(
+            "MCP HTTP {Method} {Path} duration {DurationMs}ms status {Status}",
+            context.Request.Method,
+            path,
+            sw.ElapsedMilliseconds,
+            context.Response.StatusCode);
+    }
+
+    private async Task<bool> TryEntraAsync(HttpContext context) {
+        var authenticator = context.RequestServices?.GetService<IEntraBearerAuthenticator>();
+        if (authenticator is null) {
+            return false;
+        }
+
+        try {
+            return await authenticator.TryAuthenticateAsync(context, _options.Entra);
+        } catch {
+            // JWT validation failure falls through to API-key compare.
+            return false;
+        }
     }
 }

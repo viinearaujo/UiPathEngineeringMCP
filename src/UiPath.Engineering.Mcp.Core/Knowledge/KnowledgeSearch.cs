@@ -39,11 +39,11 @@ public sealed class KnowledgeSearchResult {
 }
 
 /// <summary>
-/// Substring search over markdown corpora with excerpt retrieval. Exact-case hits rank above
-/// case-insensitive ones; an exact filename or heading match ranks above a body match; a file
-/// where every query token appears ranks above one where only some do. Every excerpt carries the
-/// line number and the nearest preceding heading, so a caller can cite the location instead of
-/// reading the file.
+/// BM25 search over markdown corpora with excerpt retrieval. Document scores come from an
+/// in-memory inverted index (built once per root, invalidated on markdown mtime change).
+/// Filename and heading matches still boost ranking; exact-case line hits outrank
+/// case-insensitive ones. Every excerpt carries the line number and the nearest preceding
+/// heading, so a caller can cite the location instead of reading the file.
 /// </summary>
 public static class KnowledgeSearchEngine {
     public const int DefaultMaxResults = 12;
@@ -56,10 +56,14 @@ public static class KnowledgeSearchEngine {
     private const int ContextBefore = 2;
     private const int ContextAfter = 3;
     private const int MaxSnippetChars = 700;
-    private const int MinTokenLength = 2;
 
-    private static readonly char[] TokenSeparators =
-        [' ', '-', '_', '.', ',', ';', ':', '/', '\\', '(', ')', '[', ']'];
+    // Integer score = scaled BM25 + discrete boosts so ordering stays stable for callers.
+    private const int Bm25Scale = 100;
+    private const int ExactFilenameBoost = 100;
+    private const int PartialFilenameBoost = 60;
+    private const int ExactCaseBoost = 15;
+    private const int HeadingBoost = 5;
+    private const int PhraseBoost = 10;
 
     public static KnowledgeSearchResult Search(
         IReadOnlyList<KnowledgeCorpus> corpora,
@@ -75,7 +79,7 @@ public static class KnowledgeSearchEngine {
         }
 
         var limit = maxResults <= 0 ? DefaultMaxResults : Math.Min(maxResults, MaxResults);
-        var tokens = Tokenize(trimmed);
+        var tokens = KnowledgeIndex.TokenizeQuery(trimmed);
         var scored = new List<Scored>();
 
         foreach (var corpus in corpora) {
@@ -85,20 +89,17 @@ public static class KnowledgeSearchEngine {
             }
 
             result.RootsSearched.Add(corpus.Root);
-            foreach (var file in EnumerateMarkdown(corpus.Root, cancellationToken)) {
+            var index = KnowledgeIndex.ForRoot(corpus.Root).GetOrBuild(result.Warnings, cancellationToken);
+            result.FilesSearched += index.Docs.Count;
+
+            for (var docId = 0; docId < index.Docs.Count; docId++) {
                 cancellationToken.ThrowIfCancellationRequested();
-                var relative = Path.GetRelativePath(corpus.Root, file).Replace('\\', '/');
-                if (!MatchesPackage(relative, packageFilter)) {
+                var doc = index.Docs[docId];
+                if (!MatchesPackage(doc.RelativePath, packageFilter)) {
                     continue;
                 }
 
-                var content = TryRead(file, result.Warnings);
-                if (content is null) {
-                    continue;
-                }
-
-                result.FilesSearched++;
-                scored.AddRange(ScoreFile(file, relative, content, trimmed, tokens, corpus.Source));
+                scored.AddRange(ScoreDocument(index, docId, doc, trimmed, tokens, corpus.Source));
             }
         }
 
@@ -132,18 +133,23 @@ public static class KnowledgeSearchEngine {
         return result;
     }
 
-    // A file-level match with no line hit still returns a head excerpt (title plus the
-    // opening paragraph), so "what is X" answered by a document title is useful.
-    private static IEnumerable<Scored> ScoreFile(
-        string filePath, string relative, string content, string query, IReadOnlyList<string> tokens, KnowledgeSource source) {
-        var lines = content.Split('\n');
-        var descriptor = Describe(relative, source);
-        var stem = Path.GetFileNameWithoutExtension(filePath);
+    private static IEnumerable<Scored> ScoreDocument(
+        KnowledgeIndex.IndexSnapshot index,
+        int docId,
+        KnowledgeIndex.IndexedDocument doc,
+        string query,
+        IReadOnlyList<string> tokens,
+        KnowledgeSource source) {
+        var bm25 = KnowledgeIndex.Bm25(index, tokens, docId);
+        var lines = doc.Content.Split('\n');
+        var descriptor = Describe(doc.RelativePath, source);
+        var stem = Path.GetFileNameWithoutExtension(doc.FilePath);
 
         var nameScore = stem.Equals(query, StringComparison.OrdinalIgnoreCase)
-            ? 100
-            : stem.Contains(query, StringComparison.OrdinalIgnoreCase) ? 60 : 0;
+            ? ExactFilenameBoost
+            : stem.Contains(query, StringComparison.OrdinalIgnoreCase) ? PartialFilenameBoost : 0;
 
+        var baseScore = (int)Math.Round(bm25 * Bm25Scale) + nameScore;
         var best = new List<Scored>();
 
         string? heading = null;
@@ -152,26 +158,44 @@ public static class KnowledgeSearchEngine {
             var line = lines[i].TrimEnd('\r');
             if (line.StartsWith('#')) {
                 heading = line.TrimStart('#', ' ').Trim();
-                if (heading.Contains(query, StringComparison.OrdinalIgnoreCase)) {
+                if (heading.Contains(query, StringComparison.OrdinalIgnoreCase)
+                    || tokens.Any(t => heading.Contains(t, StringComparison.OrdinalIgnoreCase))) {
                     headingHit = true;
                 }
             }
 
-            if (!line.Contains(query, StringComparison.OrdinalIgnoreCase)) {
+            if (!LineMatches(line, query, tokens)) {
                 continue;
             }
 
             var exact = line.Contains(query, StringComparison.Ordinal);
+            var phrase = query.Length >= 2 && line.Contains(query, StringComparison.OrdinalIgnoreCase);
+            var score = baseScore
+                + (exact ? ExactCaseBoost : 0)
+                + (phrase ? PhraseBoost : 0)
+                + (headingHit ? HeadingBoost : 0);
+
+            // A filename-only boost with no BM25 still needs a positive score to surface.
+            if (score <= 0 && nameScore > 0) {
+                score = nameScore + (headingHit ? HeadingBoost : 0);
+            }
+
+            // Substring line hit whose tokens did not land in the inverted index (e.g. a
+            // query that is only a prefix of an indexed token) still yields a weak excerpt.
+            if (score <= 0) {
+                score = 1 + (exact ? ExactCaseBoost : 0) + (headingHit ? HeadingBoost : 0);
+            }
+
             best.Add(new Scored(new KnowledgeExcerpt {
-                FilePath = filePath,
-                RelativePath = relative,
+                FilePath = doc.FilePath,
+                RelativePath = doc.RelativePath,
                 Source = SourceName(source),
                 Package = descriptor.Package,
                 Activity = descriptor.Activity,
                 Line = i + 1,
                 Heading = heading,
                 Snippet = Excerpt(lines, i),
-                Score = (exact ? 55 : 40) + nameScore + (headingHit ? 5 : 0)
+                Score = score
             }, i, exact));
         }
 
@@ -179,20 +203,15 @@ public static class KnowledgeSearchEngine {
             return best;
         }
 
-        var tokenScore = TokenScore(content, tokens);
-        if (tokenScore <= 0) {
-            return [];
-        }
-
-        // A document whose title matches but whose body does not is still a weak hit.
-        var headScore = Math.Max(tokenScore, nameScore) + (headingHit ? 5 : 0);
+        // Title / filename hit with no line match: return a head excerpt.
+        var headScore = baseScore + (headingHit ? HeadingBoost : 0);
         if (headScore <= 0) {
             return [];
         }
 
         return [new Scored(new KnowledgeExcerpt {
-            FilePath = filePath,
-            RelativePath = relative,
+            FilePath = doc.FilePath,
+            RelativePath = doc.RelativePath,
             Source = SourceName(source),
             Package = descriptor.Package,
             Activity = descriptor.Activity,
@@ -203,17 +222,12 @@ public static class KnowledgeSearchEngine {
         }, 0, false)];
     }
 
-    private static int TokenScore(string content, IReadOnlyList<string> tokens) {
-        if (tokens.Count == 0) {
-            return 0;
+    private static bool LineMatches(string line, string query, IReadOnlyList<string> tokens) {
+        if (line.Contains(query, StringComparison.OrdinalIgnoreCase)) {
+            return true;
         }
 
-        var matched = tokens.Count(t => content.Contains(t, StringComparison.OrdinalIgnoreCase));
-        if (matched == 0) {
-            return 0;
-        }
-
-        return matched == tokens.Count ? 25 : 10 * matched / tokens.Count;
+        return tokens.Count > 0 && tokens.Any(t => line.Contains(t, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string Excerpt(string[] lines, int index) {
@@ -282,66 +296,6 @@ public static class KnowledgeSearchEngine {
     private static string SourceName(KnowledgeSource source) =>
         source == KnowledgeSource.ProjectLocal ? "project-local" : "vendored";
 
-    private static string? TryRead(string file, List<string> warnings) {
-        try {
-            var info = new FileInfo(file);
-            if (info.Exists && info.Length > MaxFileCharacters) {
-                warnings.Add($"Skipped oversized file '{file}' ({info.Length} bytes).");
-                return null;
-            }
-
-            var content = File.ReadAllText(file);
-            if (content.Length > MaxFileCharacters) {
-                warnings.Add($"Skipped oversized file '{file}' ({content.Length} characters).");
-                return null;
-            }
-
-            return content;
-        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException) {
-            warnings.Add($"Skipped unreadable file '{file}': {ex.Message}");
-            return null;
-        }
-    }
-
-    // Manual recursion so one unreadable subdirectory does not abort the whole corpus walk.
-    private static IEnumerable<string> EnumerateMarkdown(string root, CancellationToken cancellationToken) {
-        var pending = new Stack<string>();
-        pending.Push(root);
-        while (pending.Count > 0) {
-            cancellationToken.ThrowIfCancellationRequested();
-            var current = pending.Pop();
-
-            string[] files;
-            string[] subDirectories;
-            try {
-                files = Directory.GetFiles(current, "*.md", SearchOption.TopDirectoryOnly);
-                subDirectories = Directory.GetDirectories(current);
-            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-                continue;
-            }
-
-            foreach (var file in files) {
-                yield return file;
-            }
-
-            foreach (var sub in subDirectories) {
-                pending.Push(sub);
-            }
-        }
-    }
-
-    private static IReadOnlyList<string> Tokenize(string query) {
-        var tokens = new List<string>();
-        foreach (var token in query.Split(
-            TokenSeparators,
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
-            if (token.Length >= MinTokenLength && !tokens.Contains(token, StringComparer.OrdinalIgnoreCase)) {
-                tokens.Add(token);
-            }
-        }
-
-        return tokens;
-    }
-
     private sealed record Scored(KnowledgeExcerpt Excerpt, int Index, bool Exact);
 }
+

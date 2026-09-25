@@ -92,6 +92,11 @@ public sealed class ImplementationPlanStore {
             _filesystem.WriteAllText(GetMarkdownPath(projectPath), RenderMarkdown(plan));
         } finally {
             gate.Release();
+            // Evict idle per-project locks so the dictionary does not retain a
+            // SemaphoreSlim for every project path forever.
+            if (gate.CurrentCount == 1) {
+                _saveLocks.TryRemove(new KeyValuePair<string, SemaphoreSlim>(key, gate));
+            }
         }
     }
 

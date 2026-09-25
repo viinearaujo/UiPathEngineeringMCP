@@ -1,0 +1,9 @@
+{
+  "id": "12-source-in-models-folder",
+  "fixture": "minimal-xaml",
+  "prompt": "Project path: {{projectPath}}. Use add_coded_workflow to create kind=source class ModelsHelper with relativeFolder Models.",
+  "assertions": [
+    { "type": "fileExists", "path": "Models/ModelsHelper.cs" },
+    { "type": "fileContains", "path": "Models/ModelsHelper.cs", "snippet": "class ModelsHelper" }
+  ]
+}

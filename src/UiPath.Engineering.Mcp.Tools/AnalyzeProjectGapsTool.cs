@@ -28,7 +28,13 @@ public sealed class AnalyzeProjectGapsTool {
         _docsValidator = docsValidator;
     }
 
-    [McpServerTool(UseStructuredContent = true), Description("Analyzes a UiPath project for deterministic hygiene gaps (missing entry point, orphan workflows, missing exception handling/logging on XAML entry and coded [Workflow] methods, readability and naming — DisplayName quality, in_/out_/io_ argument prefixes, nesting depth, activity counts, Rule 24 container body wraps, description coverage, REFramework conformance — XAML business-logic that belongs in coded workflows, descriptions/tests, unresolved invocations, coded/XAML invoke boundary that forbids project-defined types), docs errors, and plan cross-checks, and names the MCP tool that fixes each gap. Each gap carries a severity (how much it matters) and a confidence: high, medium, or low. A low-confidence gap is a substring or namespace-blind heuristic — verify it before editing and never treat it as a done gate; remediate high-confidence error and warning gaps first. Next: update_plan_task.")]
+    [McpServerTool(
+        UseStructuredContent = true,
+        Title = "Analyze Project Gaps",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true),
+     Description("Deterministic hygiene gaps (entry point, resilience, logging, naming, coded/XAML boundary, docs, plan). Prefer high-confidence errors/warnings. Next: update_plan_task.")]
     public async Task<ToolResult> AnalyzeProjectGaps(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {

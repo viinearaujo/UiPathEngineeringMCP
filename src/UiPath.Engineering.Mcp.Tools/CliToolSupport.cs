@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using ModelContextProtocol;
 using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Jobs;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Providers.UiPathCli;
 
@@ -328,5 +329,74 @@ internal static class CliToolSupport {
         var scope = new CliProgress(progress, total);
         scope.Start(startingMessage);
         return scope;
+    }
+
+    /// <summary>
+    /// Starts long CLI work on a background task and returns <c>{ jobId, status: "running" }</c>
+    /// immediately. The request <see cref="CancellationToken"/> is not linked into the job —
+    /// cancelling a later <c>get_job</c> poll must not kill the work.
+    /// </summary>
+    public static ToolResult StartBackgroundJob(
+        IBackgroundJobStore jobs,
+        string toolName,
+        Func<JobProgress, CancellationToken, Task<ToolResult>> work,
+        IProgress<ProgressNotificationValue>? progress,
+        Stopwatch sw) {
+        var job = jobs.Create(toolName);
+        var progressAlive = progress;
+        _ = Task.Run(async () => {
+            jobs.MarkRunning(job.JobId);
+            var jobProgress = new JobProgress(jobs, job.JobId, progressAlive);
+            try {
+                jobProgress.Report("running");
+                // Job-owned token: do not honor the starter request's CancellationToken.
+                var result = await work(jobProgress, CancellationToken.None).ConfigureAwait(false);
+                jobs.Complete(job.JobId, result);
+                jobProgress.Report(result.Status == "success" ? "succeeded" : "finished with errors");
+            } catch (Exception ex) {
+                jobs.Fail(job.JobId, ex.Message);
+                jobProgress.Report("failed");
+            }
+        });
+
+        return ToolResults.Ok(
+            $"Started '{toolName}'. Poll get_job with this jobId.",
+            new { jobId = job.JobId, status = BackgroundJobStates.Running },
+            sw);
+    }
+
+    /// <summary>
+    /// Progress for a background CLI job: stores phase text on the job and best-effort reports
+    /// to the original request's <see cref="IProgress{T}"/> when it is still alive.
+    /// </summary>
+    public sealed class JobProgress {
+        private readonly IBackgroundJobStore _jobs;
+        private readonly string _jobId;
+        private IProgress<ProgressNotificationValue>? _progress;
+
+        public JobProgress(IBackgroundJobStore jobs, string jobId, IProgress<ProgressNotificationValue>? progress) {
+            _jobs = jobs;
+            _jobId = jobId;
+            _progress = progress;
+        }
+
+        public void Report(string phase) {
+            _jobs.SetPhase(_jobId, phase);
+            var sink = _progress;
+            if (sink is null) {
+                return;
+            }
+
+            try {
+                sink.Report(new ProgressNotificationValue {
+                    Progress = 0,
+                    Total = 1,
+                    Message = phase
+                });
+            } catch {
+                // Progress token may be gone after the starter request completed.
+                _progress = null;
+            }
+        }
     }
 }
