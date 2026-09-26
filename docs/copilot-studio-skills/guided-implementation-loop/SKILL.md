@@ -5,7 +5,7 @@ description: "Implements a UiPath RPA feature (.xaml/.cs) through a governed pla
 
 # Guided implementation loop
 
-Turns a feature request into a governed loop over advertised Engineering MCP tools. The server is passive — drive the sequence, one deterministic tool call at a time: plan first, dry-run before writing, verify after every task, stop when told.
+Turns a feature request into a governed loop over the Engineering MCP tools on the Copilot connector. The server is passive — drive the sequence, one deterministic tool call at a time: plan first, dry-run before writing, verify after every task, stop when told.
 
 This MCP is **RPA only** (`.xaml` / `.cs`). Decline Maestro, IXP, Insights, Agents, Orchestrator runtime, and publishing.
 
@@ -13,7 +13,7 @@ Single-file create/edit/debug without a multi-step plan belongs to `rpa-authorin
 
 ## Phase 0 — Scope check
 
-1. Confirm `projectPath` (folder that contains `project.json`) inside the allowed roots. Never guess paths.
+1. Confirm `projectPath` (folder that contains `project.json`) inside the allowed roots. Never guess paths. If Memory recalls a `projectPath` or plan state, confirm it with `analyze_project` / `get_implementation_plan` before acting.
 2. Call `analyze_project` (`detail=summary`) for structure, workflow names, and file paths.
 3. Restate the goal in one sentence and confirm it if the request is vague. Do not start a plan for a requirement that cannot map to concrete workflows or activities.
 
@@ -28,37 +28,35 @@ Single-file create/edit/debug without a multi-step plan belongs to `rpa-authorin
 
 For each task, in order:
 
-1. Call `update_plan_task` → `in_progress`.
+1. Call `update_plan_task` → `in_progress`. Call `checkpoint` before a risky edit.
 2. New work is **coded** unless the task is REFramework or orchestration XAML.
    XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
-   - Coded: `add_coded_workflow` (`kind` `workflow` / `test` / `source`); Process `kind=test` defaults to `Tests\`; pass `relativeFolder` for other layouts (empty string forces the project root). Edit `.cs` with `edit_workflow_file` after `read_workflow_file`. `kind=test` registers `fileInfoCollection`, never `entryPoints`. Fast `.cs` check: `get_compile_errors`.
-   - XAML shell: `find_activity` then `insert_activities` for REFramework and `InvokeWorkflowFile` only. New blank XAML: `add_xaml_workflow`.
-   - Spec-based XAML (full surface): `recommend_activities` when the activity type is unknown; dry-run `validate_activity_spec` before `build_workflow` / `insert_activities`. Do not write files from an invalid spec. Variables/arguments: `manage_workflow_data`.
-3. Spec shape: `{ name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }`. Strings in `[expr]` brackets are expressions; everything else is a literal. `If` `children` is the Then branch; `else` is the Else branch.
-4. UI steps without live capture: real UIA activities with placeholder selectors and `TODO Indicate` markers. Call `read_skill("uipath-rpa", file: "references/ui-automation-guide.md")` for the Placeholder-Selector Stub Pattern. Do not emit `Log` stubs.
-5. If a tool returns a structured error, read the `fixHint`, correct the call, and retry. After repeated failures on the same task, mark it `blocked` with notes and ask the user instead of guessing.
+   - Coded: `add_coded_workflow` (`className`, `kind` `workflow` / `test` / `source`); Process `kind=test` defaults to `Tests\`; pass `relativeFolder` for other layouts (empty string forces the project root). Edit `.cs` with `edit_workflow_file` after `read_workflow_file`. `kind=test` registers `fileInfoCollection`, never `entryPoints`. Navigate symbols with `navigate_code` (`mode=symbol` / `context` / `references`).
+   - XAML shell: `find_activity` then `insert_activities` for REFramework and `InvokeWorkflowFile` only. New XAML file: `build_workflow` from a minimal spec such as `{ "name": "Sequence" }`.
+   - Spec-based XAML (full surface): read `references/activity-spec.md`, bundled with this skill, for the grammar and the expression-language rules. Look up unknown activities with `search_knowledge` (`mode=activity_docs`). Dry-run `validate_activity_spec` with `projectPath` before `build_workflow` / `insert_activities`. Do not write files from an invalid spec. Variables/arguments: `manage_workflow_data`.
+3. UI steps without live capture: real UIA activities with placeholder selectors and `TODO Indicate` markers. Read the Placeholder-Selector Stub Pattern with `search_knowledge` (`mode=skill`, `query=uipath-rpa`, `file=references/uia-starter-guide.md`). Do not emit `Log` stubs.
+4. If a tool returns a structured error, read the `fixHint`, correct the call, and retry. After repeated failures on the same task, mark it `blocked` with notes and ask the user instead of guessing.
 
-Deep coded/XAML policy: `read_skill("uipath-rpa", file: "references/coded/operations-guide.md")` or `references/xaml/xaml-basics-and-rules.md`.
+Deep coded/XAML policy: `search_knowledge` (`mode=skill`, `query=uipath-rpa`) with `file=references/coded/operations-guide.md` or `file=references/xaml/xaml-basics-and-rules.md`.
 
 ## Phase 3 — Verify after every task
 
 After **one** task:
 
 1. Confirm the files you wrote with `read_workflow_file` or `search_codebase`. Never rewrite a redacted credential body (`***REDACTED***`) back to disk.
-2. Call `validate_project` with `build: false` and `pack: false`. Pass `build: true` only for an authoritative CLI compile.
-3. Call `analyze_project_gaps`. Remediate resilience, observability, structure, and coded/XAML boundary gaps. Ignore `category=docs` — docs freshness does not block RPA done.
-4. Call `update_plan_task` → `done` when validation succeeded and the files exist.
+2. Call `check_work` with `projectPath` and `files` set to the project-relative files this task touched. One call returns the Roslyn compile, `validate`, and scoped gaps (top 20). Remediate resilience, observability, structure, and coded/XAML boundary issues. Docs freshness is not part of the verdict.
+3. Call `update_plan_task` → `done` when `check_work` passed and the files exist.
    The plan at `docs/implementation-plan.json` is a scratchpad. Marking done is not blocked on ADR or knowledge freshness.
-   On failure, `update_plan_task` → `blocked` with the validation errors in notes.
+   On failure, `update_plan_task` → `blocked` with the `check_work` issues in notes. `get_changes` / `revert_changes` undo the task's edits when the user asks.
 
-Incidental docs (do not block done): file-count or dependency changes → `sync_project_context`; a recorded decision → `manage_project_docs` action `write` kind `adr`; a convention or pitfall → `manage_project_docs` action `write` kind `memory`.
+Incidental docs (do not block done): file-count or dependency changes → `manage_project_content` action `sync_context`; a recorded decision → action `write_docs` kind `adr`; a convention or pitfall → action `write_docs` kind `memory`.
 
 ## Phase 4 — Close out
 
 When all tasks are `done` (or the remaining ones are explicitly `blocked`):
 
-1. Call `validate_project` with `build: false` and `pack: false` for a final project check.
-2. Report: what was implemented per task, final validation status, and any blocked tasks with their notes. Suggest the next step (`generate_documentation` as a read-only dump, or committing).
+1. Call `check_work` with `projectPath` and no `files` for a final project-wide verdict. Start `validate_project` with `build: true` (then poll `get_job`) only when the user asks for an authoritative CLI compile.
+2. Report: what was implemented per task, final `check_work` status, and any blocked tasks with their notes. Suggest the next step (`explain_workflow` for a walkthrough, or committing).
 
 ## Stop rules
 
