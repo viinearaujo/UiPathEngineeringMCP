@@ -1,6 +1,6 @@
 # Thin REFramework — `InvokeWorkflowFile` only
 
-Copy into a UiPath project’s `docs/idioms/`. XAML may wire REFramework and invoke coded workflows. It must not contain Excel, HTTP, Mail, or UI activities.
+Match this shape for REFramework and orchestration XAML. XAML may wire REFramework and invoke coded workflows. It must not contain Excel, HTTP, Mail, or UI activities.
 
 `InvokeWorkflowFile` arguments are BCL and framework types only (`String`, `Boolean`, `Int32`, `Dictionary`, `IEnumerable`, `DataTable`, arrays). Never pass types defined in this automation. Never call coded-source methods from XAML.
 

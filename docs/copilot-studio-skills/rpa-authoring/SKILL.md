@@ -19,6 +19,16 @@ For a multi-step feature through a plan, use the `guided-implementation-loop` sk
 4. No project yet: stop and ask the user to create it in UiPath Studio. Project scaffolding is not on the Copilot connector.
 5. Deep policy lives in the MCP `uipath-rpa` playbook. Call `search_knowledge` with `mode=skill`, `query=uipath-rpa`, and `file` set to a reference from the table below. Do not invent activity property surfaces; look them up with `search_knowledge` (`mode=activity_docs`, `projectPath`, `query`).
 
+## Idioms
+
+Match the house-style samples bundled with this skill before writing:
+
+- `references/idioms/coded-workflow-try-log.md` — coded `[Workflow]` entry with try/catch and `Log`.
+- `references/idioms/coded-testcase.md` — coded `[TestCase]` with Arrange / Act / Assert.
+- `references/idioms/thin-reframework-invoke.md` — thin REFramework / `InvokeWorkflowFile` XAML shell.
+
+When the project has its own `docs/idioms/` folder (or the user names one), read those files with `read_workflow_file`; they override the bundled samples.
+
 ## Coded path (default)
 
 1. `add_coded_workflow` with `className` and `kind` `workflow` / `test` / `source`. Process `kind=test` defaults to `Tests\`; pass `relativeFolder` for other layouts (empty string forces the project root). `kind=test` registers `fileInfoCollection`, never `entryPoints`. `kind=workflow` registers `entryPoints`. `kind=source` is a plain helper class.

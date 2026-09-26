@@ -29,7 +29,7 @@ Single-file create/edit/debug without a multi-step plan belongs to `rpa-authorin
 For each task, in order:
 
 1. Call `update_plan_task` → `in_progress`. Call `checkpoint` before a risky edit.
-2. New work is **coded** unless the task is REFramework or orchestration XAML.
+2. New work is **coded** unless the task is REFramework or orchestration XAML. Match the idioms bundled with this skill: `references/idioms/coded-workflow-try-log.md`, `references/idioms/coded-testcase.md`, and `references/idioms/thin-reframework-invoke.md`. A project's own `docs/idioms/` files, when present, override them.
    XAML may invoke coded workflows with BCL and framework types (including Dictionary, IEnumerable, DataTable, and arrays); never types defined in this automation or source-file methods from XAML.
    - Coded: `add_coded_workflow` (`className`, `kind` `workflow` / `test` / `source`); Process `kind=test` defaults to `Tests\`; pass `relativeFolder` for other layouts (empty string forces the project root). Edit `.cs` with `edit_workflow_file` after `read_workflow_file`. `kind=test` registers `fileInfoCollection`, never `entryPoints`. Navigate symbols with `navigate_code` (`mode=symbol` / `context` / `references`).
    - XAML shell: `find_activity` then `insert_activities` for REFramework and `InvokeWorkflowFile` only. New XAML file: `build_workflow` from a minimal spec such as `{ "name": "Sequence" }`.
