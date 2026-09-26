@@ -34,7 +34,7 @@ public sealed class AnalyzeProjectGapsTool {
         ReadOnly = true,
         Destructive = false,
         Idempotent = true),
-     Description("Deterministic hygiene gaps (entry point, resilience, logging, naming, coded/XAML boundary, docs, plan). Prefer high-confidence errors/warnings. Next: update_plan_task.")]
+     Description("Deterministic hygiene gaps (entry point, resilience, logging, naming, coded/XAML boundary, Execute argument mismatches, docs, plan). Prefer high-confidence errors/warnings. Next: update_plan_task.")]
     public async Task<ToolResult> AnalyzeProjectGaps(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         CancellationToken cancellationToken = default) {

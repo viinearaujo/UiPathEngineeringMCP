@@ -172,6 +172,26 @@ public class CodedSourceFileParserTests {
         Assert.Equal(4, model.EntryArguments.Count);
         Assert.Equal("string[]", model.EntryArguments.Single(a => a.Name == "in_Ids").Type);
         Assert.Equal("CustomerRecord", model.EntryArguments.Single(a => a.Name == "in_Customer").Type);
+        Assert.DoesNotContain(model.EntryArguments, a => a.HasDefault);
+    }
+
+    [Fact]
+    public void Parse_WorkflowExecuteParameters_RecordsDefaultValues() {
+        const string content = """
+            public class InvoiceFlow : CodedWorkflow
+            {
+                [Workflow]
+                public void Execute(string in_Name, int in_Count = 1, string in_Note = "ok")
+                {
+                }
+            }
+            """;
+
+        var model = new CodedSourceFileParser().Parse("InvoiceFlow.cs", "/p/InvoiceFlow.cs", content);
+
+        Assert.False(model.EntryArguments.Single(a => a.Name == "in_Name").HasDefault);
+        Assert.True(model.EntryArguments.Single(a => a.Name == "in_Count").HasDefault);
+        Assert.True(model.EntryArguments.Single(a => a.Name == "in_Note").HasDefault);
     }
 
     [Fact]

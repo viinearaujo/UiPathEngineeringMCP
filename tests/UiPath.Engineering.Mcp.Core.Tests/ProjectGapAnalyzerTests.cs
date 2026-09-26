@@ -218,7 +218,8 @@ public class ProjectGapAnalyzerTests {
             FileName = "InvoiceFlow.cs",
             ClassName = "InvoiceFlow",
             Kind = CodedFileKind.Workflow,
-            IsCodedWorkflow = true
+            IsCodedWorkflow = true,
+            EntryArguments = [new ArgumentModel { Name = "in_Customer", Type = "CustomerRecord", Direction = "In" }]
         });
         model.CodedWorkflows.Add(new CodedWorkflowModel {
             FileName = "CustomerRecord.cs",

@@ -203,7 +203,8 @@ public sealed class CodedSourceFileParser {
                 args.Add(new ArgumentModel {
                     Name = parameter.Identifier.ValueText.TrimStart('@'),
                     Type = parameter.Type.ToString(),
-                    Direction = "In"
+                    Direction = "In",
+                    HasDefault = parameter.Default is not null
                 });
             }
 

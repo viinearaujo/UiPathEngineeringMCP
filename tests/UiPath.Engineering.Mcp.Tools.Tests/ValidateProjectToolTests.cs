@@ -257,6 +257,57 @@ public class ValidateProjectToolTests {
     }
 
     [Fact]
+    public async Task ValidateProject_ArgumentNameMismatch_DoesNotFailValidation() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var cli = new FakeUiPathCliProvider {
+            Result = new UiPathCliResult { Success = true, Summary = "Validation completed." }
+        };
+        var builder = new FakeProjectModelBuilder {
+            Model = new UiPathProjectModel {
+                ProjectName = "p",
+                MainWorkflow = "Main.xaml",
+                Workflows = [
+                    new WorkflowModel {
+                        FileName = "Main.xaml",
+                        InvokeWorkflows = [
+                            new InvokeWorkflowModel {
+                                SourceWorkflow = "Main.xaml",
+                                TargetWorkflow = "InvoiceFlow.cs",
+                                ArgumentMappings = [
+                                    new ArgumentMappingModel {
+                                        Direction = "In",
+                                        TargetArgument = "in_Legacy",
+                                        Type = "x:String"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                CodedWorkflows = [
+                    new CodedWorkflowModel {
+                        FileName = "InvoiceFlow.cs",
+                        ClassName = "InvoiceFlow",
+                        Kind = CodedFileKind.Workflow,
+                        IsCodedWorkflow = true,
+                        EntryArguments = [
+                            new ArgumentModel { Name = "in_InvoiceId", Direction = "In", Type = "string" }
+                        ]
+                    }
+                ]
+            }
+        };
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs, builder);
+
+        var result = await BackgroundJobs.AwaitFinished(
+            jobs, await tool.ValidateProject("/projects/testProcess", validate: true, build: false, pack: false));
+
+        Assert.Equal("success", result.Status);
+        Assert.Empty(result.ErrorDetails);
+    }
+
+    [Fact]
     public async Task ValidateProject_MapsCliDiagnosticsOntoActivityIdAndSpecFix() {
         const string xaml = """
             <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
