@@ -134,4 +134,135 @@ public class CanvasSnapshotSkeletonTests {
         using var doc = JsonDocument.Parse(draft.Json);
         Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("project").GetProperty("entryPoint").ValueKind);
     }
+
+    [Fact]
+    public void Build_StoresXamlInvokeEdges_RedactsMappings_AndSkipsCodedEdges() {
+        var model = new UiPathProjectModel {
+            ProjectName = "Dispatch",
+            ProjectPath = ProjectPath,
+            MainWorkflow = "Main.xaml",
+            EntryPoints = ["main.xaml", "Coded/Process.cs", "Framework/Extra.xaml"],
+            Workflows = [
+                new WorkflowModel {
+                    FileName = "Main.xaml",
+                    FilePath = "/projects/testProcess/Main.xaml",
+                    RelativePath = "Main.xaml",
+                    InvokeWorkflows = [
+                        new InvokeWorkflowModel {
+                            DisplayName = "Run child",
+                            TargetWorkflow = "Sub.xaml",
+                            ArgumentMappings = [
+                                new ArgumentMappingModel {
+                                    Direction = "In",
+                                    TargetArgument = "in_Config",
+                                    Type = "String",
+                                    Expression = "password=hunter2"
+                                }
+                            ]
+                        },
+                        new InvokeWorkflowModel {
+                            DisplayName = "Run coded",
+                            TargetWorkflow = "Coded/Process.cs"
+                        },
+                        new InvokeWorkflowModel {
+                            DisplayName = "Missing target",
+                            TargetWorkflow = "Missing.xaml"
+                        }
+                    ]
+                },
+                new WorkflowModel {
+                    FileName = "Sub.xaml",
+                    FilePath = "/projects/testProcess/Sub.xaml",
+                    RelativePath = "Sub.xaml"
+                },
+                new WorkflowModel {
+                    FileName = "Process.cs",
+                    FilePath = "/projects/testProcess/Coded/Process.cs",
+                    RelativePath = "Coded/Process.cs",
+                    InvokeWorkflows = [
+                        new InvokeWorkflowModel {
+                            DisplayName = "Coded call",
+                            TargetWorkflow = "Helper.cs"
+                        }
+                    ]
+                }
+            ],
+            CodedWorkflows = [
+                new CodedWorkflowModel {
+                    FileName = "Process.cs",
+                    FilePath = "/projects/testProcess/Coded/Process.cs",
+                    Kind = CodedFileKind.Workflow
+                }
+            ]
+        };
+
+        var draft = CanvasSnapshotSkeleton.Build(
+            model,
+            ProjectPath,
+            "9.9.9",
+            _ => Encoding.UTF8.GetBytes("file"),
+            Stamp);
+
+        Assert.Null(draft.Error);
+        Assert.Equal(3, draft.EdgeCount);
+        using var doc = JsonDocument.Parse(draft.Json);
+        var root = doc.RootElement;
+        Assert.Equal("Main.xaml", root.GetProperty("project").GetProperty("entryPoint").GetString());
+        Assert.Equal(
+            new[] { "Coded/Process.cs", "Framework/Extra.xaml" },
+            root.GetProperty("project").GetProperty("additionalEntryPoints").EnumerateArray().Select(item => item.GetString()).ToArray());
+
+        var edges = root.GetProperty("edges").EnumerateArray().ToList();
+        Assert.Equal("Main.xaml", edges[0].GetProperty("sourceWorkflow").GetString());
+        Assert.Equal("Sub.xaml", edges[0].GetProperty("targetWorkflow").GetString());
+        Assert.Equal("Run child", edges[0].GetProperty("displayName").GetString());
+        Assert.True(edges[0].GetProperty("isResolved").GetBoolean());
+        var mapping = edges[0].GetProperty("argumentMappings").EnumerateArray().Single();
+        Assert.Equal("In", mapping.GetProperty("direction").GetString());
+        Assert.Equal("in_Config", mapping.GetProperty("targetArgument").GetString());
+        Assert.Equal("password=***REDACTED***", mapping.GetProperty("expression").GetString());
+        Assert.False(mapping.TryGetProperty("type", out _));
+        Assert.Equal("Coded/Process.cs", edges[1].GetProperty("targetWorkflow").GetString());
+        Assert.True(edges[1].GetProperty("isResolved").GetBoolean());
+        Assert.Equal("Missing.xaml", edges[2].GetProperty("targetWorkflow").GetString());
+        Assert.False(edges[2].GetProperty("isResolved").GetBoolean());
+        Assert.DoesNotContain("Coded call", draft.Json);
+        Assert.DoesNotContain("Helper.cs", draft.Json);
+    }
+
+    [Fact]
+    public void Build_UnmatchedMain_KeepsNormalizedString() {
+        var model = new UiPathProjectModel {
+            ProjectName = "Dispatch",
+            MainWorkflow = "Framework\\Missing.xaml",
+            Workflows = [
+                new WorkflowModel {
+                    FileName = "Main.xaml",
+                    FilePath = "/projects/testProcess/Main.xaml",
+                    RelativePath = "Main.xaml"
+                }
+            ]
+        };
+
+        var draft = CanvasSnapshotSkeleton.Build(model, ProjectPath, "9.9.9", _ => "x"u8.ToArray(), Stamp);
+
+        using var doc = JsonDocument.Parse(draft.Json);
+        Assert.Equal("Framework/Missing.xaml", doc.RootElement.GetProperty("project").GetProperty("entryPoint").GetString());
+    }
+
+    [Fact]
+    public void Build_DuplicateId_ReturnsErrorAndNoJson() {
+        var model = new UiPathProjectModel {
+            ProjectName = "Dispatch",
+            Workflows = [
+                new WorkflowModel { FileName = "Main.xaml", FilePath = "/a/Main.xaml", RelativePath = "Main.xaml" },
+                new WorkflowModel { FileName = "Other.xaml", FilePath = "/a/Other.xaml", RelativePath = "Main.xaml" }
+            ]
+        };
+
+        var draft = CanvasSnapshotSkeleton.Build(model, ProjectPath, "9.9.9", _ => "x"u8.ToArray(), Stamp);
+
+        Assert.Contains("duplicate id", draft.Error ?? "");
+        Assert.Equal(string.Empty, draft.Json);
+    }
 }

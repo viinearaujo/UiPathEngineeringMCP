@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -41,6 +42,7 @@ public static class CanvasSnapshotSkeleton {
         var generatedAt = FormatGeneratedAt(generatedAtUtc);
         var nodes = new JsonArray();
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        var xamlIds = new HashSet<string>(StringComparer.Ordinal);
         var nodeIds = new List<string>();
 
         foreach (var workflow in model.Workflows.Where(IsXaml)) {
@@ -49,6 +51,7 @@ public static class CanvasSnapshotSkeleton {
                 return Duplicate(id);
             }
 
+            xamlIds.Add(id);
             nodeIds.Add(id);
             nodes.Add(Node(
                 id,
@@ -80,9 +83,11 @@ public static class CanvasSnapshotSkeleton {
         }
 
         var entryPoint = ResolveEntry(model.MainWorkflow, nodeIds);
+        var additional = ResolveAdditional(model.EntryPoints, entryPoint, nodeIds);
+        var edges = BuildEdges(model, xamlIds);
         var project = new JsonObject {
             ["name"] = model.ProjectName,
-            ["additionalEntryPoints"] = new JsonArray(),
+            ["additionalEntryPoints"] = StringArray(additional),
             ["overview"] = ""
         };
         project["entryPoint"] = entryPoint is null ? JsonNull() : JsonValue.Create(entryPoint)!;
@@ -93,13 +98,13 @@ public static class CanvasSnapshotSkeleton {
             ["generator"] = new JsonObject { ["mcpVersion"] = mcpVersion },
             ["project"] = project,
             ["nodes"] = nodes,
-            ["edges"] = new JsonArray()
+            ["edges"] = edges
         };
 
         return new CanvasSnapshotDraft {
             Json = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
             NodeCount = nodes.Count,
-            EdgeCount = 0,
+            EdgeCount = edges.Count,
             GeneratedAt = generatedAt
         };
     }
@@ -116,6 +121,62 @@ public static class CanvasSnapshotSkeleton {
 
         return nodeIds.FirstOrDefault(id => string.Equals(id, normalized, StringComparison.OrdinalIgnoreCase))
             ?? normalized;
+    }
+
+    private static List<string> ResolveAdditional(
+        IReadOnlyList<string> entryPoints,
+        string? entryPoint,
+        IReadOnlyList<string> nodeIds) {
+        var result = new List<string>();
+        foreach (var raw in entryPoints) {
+            if (string.IsNullOrWhiteSpace(raw)) {
+                continue;
+            }
+
+            var normalized = WorkflowPath.NormalizeRef(raw);
+            if (normalized.Length == 0) {
+                continue;
+            }
+
+            var value = nodeIds.FirstOrDefault(id => string.Equals(id, normalized, StringComparison.OrdinalIgnoreCase))
+                ?? normalized;
+            if (entryPoint is not null && string.Equals(value, entryPoint, StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+
+            result.Add(value);
+        }
+
+        return result;
+    }
+
+    private static JsonArray BuildEdges(UiPathProjectModel model, HashSet<string> xamlIds) {
+        var graph = DependencyGraphBuilder.Build(model.Workflows, model.MainWorkflow);
+        var edges = new JsonArray();
+        foreach (var edge in graph.Edges) {
+            if (!xamlIds.Contains(edge.Source)) {
+                continue;
+            }
+
+            var mappings = new JsonArray();
+            foreach (var mapping in edge.ArgumentMappings) {
+                mappings.Add(new JsonObject {
+                    ["direction"] = mapping.Direction,
+                    ["targetArgument"] = mapping.TargetArgument,
+                    ["expression"] = SecretRedactor.Redact(mapping.Expression).Text
+                });
+            }
+
+            edges.Add(new JsonObject {
+                ["sourceWorkflow"] = edge.Source,
+                ["targetWorkflow"] = edge.Target,
+                ["displayName"] = edge.DisplayName,
+                ["isResolved"] = edge.IsResolved,
+                ["argumentMappings"] = mappings
+            });
+        }
+
+        return edges;
     }
 
     private static CanvasSnapshotDraft Duplicate(string id) => new() { Error = $"duplicate id '{id}'" };
@@ -151,6 +212,15 @@ public static class CanvasSnapshotSkeleton {
         };
         node["parseError"] = parseError is null ? JsonNull() : JsonValue.Create(parseError)!;
         return node;
+    }
+
+    private static JsonArray StringArray(IEnumerable<string> values) {
+        var array = new JsonArray();
+        foreach (var value in values) {
+            array.Add(value);
+        }
+
+        return array;
     }
 
     private static JsonNode JsonNull() => JsonNode.Parse("null")!;
