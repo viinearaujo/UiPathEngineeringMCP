@@ -30,3 +30,6 @@ appsettings.Local.json
 # its "Claim changed" column quotes the XAML-first phrases, so tracking it would add noise
 # to the documented `git grep` verification in the divergence file.
 .agents/skills/uipath-rpa/LOCAL-DIVERGENCE.md
+
+# Subagent-driven-development scratch
+.superpowers/

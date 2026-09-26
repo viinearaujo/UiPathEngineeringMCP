@@ -1,4 +1,8 @@
+using System.Text.Json;
+using Microsoft.Extensions.Options;
 using UiPath.Engineering.Mcp.Core;
+using UiPath.Engineering.Mcp.Core.Canvas;
+using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Tools.Tests;
@@ -151,5 +155,83 @@ public class GenerateDocumentationToolTests {
         var tool = new GenerateDocumentationTool(fs, builder);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tool.GenerateDocumentation("/projects/testProcess"));
+    }
+
+    [Fact]
+    public async Task GenerateDocumentation_OmittingFormat_WritesNoSnapshot() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var tool = new GenerateDocumentationTool(fs, new FakeProjectModelBuilder { Model = BuildModel() });
+
+        var result = await tool.GenerateDocumentation("/projects/testProcess");
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal("Documentation data generated for project 'testProcess' (2 workflows, 1 risks).", result.Summary);
+        Assert.Empty(fs.Writes);
+        var method = typeof(GenerateDocumentationTool).GetMethod(nameof(GenerateDocumentationTool.GenerateDocumentation));
+        var attr = method!.GetCustomAttributes(false).OfType<ModelContextProtocol.Server.McpServerToolAttribute>().Single();
+        Assert.False(attr.ReadOnly);
+    }
+
+    [Fact]
+    public async Task GenerateDocumentation_CanvasSnapshot_WritesSkeletonAndShortSummary() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        fs.FileContents["/projects/testProcess/Main.xaml"] = "main-bytes";
+        fs.FileContents["/projects/testProcess/Sub.xaml"] = "sub-bytes";
+        var model = BuildModel();
+        model.Workflows[0].FilePath = "/projects/testProcess/Main.xaml";
+        model.Workflows[0].RelativePath = "Main.xaml";
+        model.Workflows[1].FilePath = "/projects/testProcess/Sub.xaml";
+        model.Workflows[1].RelativePath = "Sub.xaml";
+        model.Workflows[0].InvokeWorkflows[0].ArgumentMappings.Add(new ArgumentMappingModel {
+            Direction = "In",
+            TargetArgument = "in_Config",
+            Expression = "password=hunter2"
+        });
+        var tool = new GenerateDocumentationTool(
+            fs,
+            new FakeProjectModelBuilder { Model = model },
+            Microsoft.Extensions.Options.Options.Create(new McpServerOptions { Version = "9.9.9" }));
+
+        var result = await tool.GenerateDocumentation("/projects/testProcess", "canvasSnapshot");
+
+        Assert.Equal("success", result.Status);
+        var path = CanvasSnapshotPath.ForProject("/projects/testProcess");
+        Assert.Equal(path, fs.Writes.Keys.Single());
+        Assert.Contains(Path.GetDirectoryName(path)!, fs.CreatedDirectories);
+        var payload = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.DoesNotContain("schemaVersion", payload);
+        Assert.Contains("\"nodeCount\":2", payload);
+        Assert.Contains("\"edgeCount\":2", payload);
+        using var doc = JsonDocument.Parse(fs.Writes[path]);
+        var generatedAt = doc.RootElement.GetProperty("generatedAt").GetString();
+        Assert.Contains(generatedAt!, result.Summary);
+        Assert.Contains(path, result.Summary);
+        Assert.Equal("9.9.9", doc.RootElement.GetProperty("generator").GetProperty("mcpVersion").GetString());
+        Assert.Equal("", doc.RootElement.GetProperty("nodes")[0].GetProperty("explanation").GetString());
+        Assert.Contains("password=***REDACTED***", fs.Writes[path]);
+        Assert.DoesNotContain("/projects/testProcess", doc.RootElement.GetRawText());
+    }
+
+    [Fact]
+    public async Task GenerateDocumentation_CanvasSnapshot_PathNotAllowed_WritesNothing() {
+        var fs = new FakeFilesystemProvider { Allowed = false };
+        var tool = new GenerateDocumentationTool(fs, new FakeProjectModelBuilder());
+
+        var result = await tool.GenerateDocumentation("/not/allowed", "canvasSnapshot");
+
+        Assert.Equal("error", result.Status);
+        Assert.Empty(fs.Writes);
+    }
+
+    [Fact]
+    public async Task GenerateDocumentation_UnknownFormat_ReturnsError() {
+        var fs = new FakeFilesystemProvider { Allowed = true };
+        var tool = new GenerateDocumentationTool(fs, new FakeProjectModelBuilder { Model = BuildModel() });
+
+        var result = await tool.GenerateDocumentation("/projects/testProcess", "markdown");
+
+        Assert.Equal("error", result.Status);
+        Assert.Contains("format must be omitted or canvasSnapshot.", result.Summary);
+        Assert.Empty(fs.Writes);
     }
 }

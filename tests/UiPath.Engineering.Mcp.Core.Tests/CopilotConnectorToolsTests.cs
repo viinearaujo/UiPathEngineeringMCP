@@ -6,7 +6,7 @@ public class CopilotConnectorToolsTests {
     [Fact]
     public void DefaultNames_FitsMaxDefaultCountAndIsCodedFirst() {
         Assert.True(CopilotConnectorTools.DefaultNames.Length <= CopilotConnectorTools.MaxDefaultCount);
-        Assert.Equal(25, CopilotConnectorTools.DefaultNames.Length);
+        Assert.Equal(26, CopilotConnectorTools.DefaultNames.Length);
         Assert.Equal(new[] {
             "analyze_project",
             "search_codebase",
@@ -33,6 +33,7 @@ public class CopilotConnectorToolsTests {
             "checkpoint",
             "get_changes",
             "revert_changes",
+            "update_canvas_snapshot",
         }, CopilotConnectorTools.DefaultNames);
         Assert.Contains("check_work", CopilotConnectorTools.DefaultNames);
         Assert.Contains("find_activity", CopilotConnectorTools.DefaultNames);

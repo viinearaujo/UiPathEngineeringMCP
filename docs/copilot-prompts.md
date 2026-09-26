@@ -130,3 +130,57 @@ Intent — update project documentation:
 - Write knowledge and ADRs with manage_project_docs (docs/adr, docs/knowledge). Write other markdown with manage_project_file. Regenerate AGENTS.md with sync_project_context.
 - After writes, validate_project_docs. Ignore category=docs on analyze_project_gaps so docs work does not block RPA done.
 ```
+
+---
+
+## 5. Canvas snapshot
+
+`generate_documentation` is leave-off. Enable it before the skeleton template. `update_canvas_snapshot` is on the default connector. Do not read `.canvas/snapshot.json` into the chat. Do not edit that file with `manage_project_content`.
+
+### 5.1 Skeleton
+
+```
+Follow the Copilot agent instructions; this message is the intent.
+
+projectPath: {PROJECT_PATH}
+
+Intent — canvas skeleton:
+- Enable generate_documentation for this pass (ToolSurface=All or the Copilot Studio toggle).
+- Call generate_documentation once with format "canvasSnapshot" on projectPath.
+- Do not call explain_workflow. Do not call update_canvas_snapshot. Do not write overview, explanation, or decisions.
+- Stop. Report the written path, node count, edge count, and generatedAt.
+- Call canvasSnapshot again only when the user asks to refresh facts. That call replaces prose already in the file.
+```
+
+### 5.2 Overview
+
+```
+Follow the Copilot agent instructions; this message is the intent.
+
+projectPath: {PROJECT_PATH}
+
+Intent — canvas overview:
+- Do not call generate_documentation. Do not call explain_workflow.
+- Read the project with analyze_project (detail=summary) and project-wide get_workflow_dependencies.
+- Call update_canvas_snapshot once with projectPath and overview set to a short plain-language summary of what the process does and how work flows from the entry point. Put no secrets, tokens, passwords, connection strings, or credential-bearing URLs in overview.
+- Stop.
+```
+
+### 5.3 Next workflows
+
+```
+Follow the Copilot agent instructions; this message is the intent.
+
+projectPath: {PROJECT_PATH}
+
+Intent — canvas explanations:
+- Do not call generate_documentation. Do not read .canvas/snapshot.json into the chat. Do not use manage_project_content on that file.
+- Call update_canvas_snapshot with only projectPath. If it reports the snapshot does not exist, stop and say to run the skeleton prompt.
+- If remainingCount is 0, stop and say every workflow explanation is written.
+- Otherwise take at most 3 ids from nextNodeIds. For each id, one at a time:
+  - explain_workflow with projectPath and workflowFile set to that id. Do not pass includeActivityTree.
+  - From Activities, collect DisplayName where Type is If, FlowDecision, Switch, or Pick, in list order. Use [] when none match. Coded workflows always use [].
+  - Write a short explanation of that workflow's logic, arguments, and decisions. Put no secrets, tokens, passwords, connection strings, or credential-bearing URLs in the explanation or decision names.
+  - update_canvas_snapshot for that single node (id, explanation, decisions). Wait for success before the next id.
+- After those nodes, stop. Report explainedCount / totalCount. The next message, including a new chat, is this same template.
+```

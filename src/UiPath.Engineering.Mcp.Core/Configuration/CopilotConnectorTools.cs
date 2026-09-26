@@ -11,7 +11,7 @@ public static class CopilotConnectorTools {
     public const string SurfaceAll = "All";
 
     /// <summary>Copilot Studio connector cap (merged navigator/knowledge/docs tools).</summary>
-    public const int MaxDefaultCount = 25;
+    public const int MaxDefaultCount = 26;
 
     public static readonly string[] DefaultNames = [
         "analyze_project",
@@ -39,6 +39,7 @@ public static class CopilotConnectorTools {
         "checkpoint",
         "get_changes",
         "revert_changes",
+        "update_canvas_snapshot",
     ];
 
     public static readonly string[] LeaveOffNames = [

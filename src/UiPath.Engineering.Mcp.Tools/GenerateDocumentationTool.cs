@@ -1,7 +1,10 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using UiPath.Engineering.Mcp.Core.Abstractions;
+using UiPath.Engineering.Mcp.Core.Canvas;
+using UiPath.Engineering.Mcp.Core.Configuration;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Parsing;
 
@@ -11,26 +14,44 @@ namespace UiPath.Engineering.Mcp.Tools;
 public sealed class GenerateDocumentationTool {
     private readonly IFilesystemProvider _filesystem;
     private readonly IProjectModelBuilder _modelBuilder;
+    private readonly string _mcpVersion;
 
-    public GenerateDocumentationTool(IFilesystemProvider filesystem, IProjectModelBuilder modelBuilder) {
+    public GenerateDocumentationTool(
+        IFilesystemProvider filesystem,
+        IProjectModelBuilder modelBuilder,
+        IOptions<UiPath.Engineering.Mcp.Core.Configuration.McpServerOptions>? serverOptions = null) {
         _filesystem = filesystem;
         _modelBuilder = modelBuilder;
+        _mcpVersion = serverOptions?.Value.Version ?? new UiPath.Engineering.Mcp.Core.Configuration.McpServerOptions().Version;
     }
 
     [McpServerTool(
         UseStructuredContent = true,
         Title = "Generate Documentation",
-        ReadOnly = true,
+        ReadOnly = false,
         Destructive = false,
         Idempotent = true),
-     Description("Leave-off. Structured documentation data (metadata, workflows, dependency graph, risks). Enable on ToolSurface=All for canvas skeleton. Next: analyze_project.")]
+     Description("Leave-off. Omit format for documentation data. format \"canvasSnapshot\" writes <project>/.canvas/snapshot.json and replaces prose already stored. Enable on ToolSurface=All for the skeleton pass. Next: update_canvas_snapshot.")]
     public async Task<ToolResult> GenerateDocumentation(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
+        [Description("Omit, or \"default\", for the documentation payload. \"canvasSnapshot\" writes the fact skeleton.")] string? format = null,
         CancellationToken cancellationToken = default) {
         var sw = Stopwatch.StartNew();
 
         if (ToolResults.GuardAllowedPath(_filesystem, projectPath, sw) is { } guardFailure) {
             return guardFailure;
+        }
+
+        if (string.Equals(format, "canvasSnapshot", StringComparison.Ordinal)) {
+            return await WriteCanvasSnapshot(projectPath, sw, cancellationToken);
+        }
+
+        if (!string.IsNullOrWhiteSpace(format)
+            && !string.Equals(format, "default", StringComparison.OrdinalIgnoreCase)) {
+            return ToolResults.Failure(
+                "format must be omitted or canvasSnapshot.",
+                "format must be omitted or canvasSnapshot.",
+                sw);
         }
 
         var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
@@ -71,6 +92,36 @@ public sealed class GenerateDocumentationTool {
         return ToolResults.Ok(
             $"Documentation data generated for project '{model.ProjectName}' ({model.Workflows.Count} workflows, {model.Risks.Count} risks).",
             data, sw);
+    }
+
+    private async Task<ToolResult> WriteCanvasSnapshot(string projectPath, Stopwatch sw, CancellationToken cancellationToken) {
+        var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
+        var draft = CanvasSnapshotSkeleton.Build(
+            model,
+            projectPath,
+            _mcpVersion,
+            _filesystem.ReadAllBytes,
+            DateTime.UtcNow);
+        if (draft.Error is not null) {
+            return ToolResults.Failure(draft.Error, draft.Error, sw);
+        }
+
+        var path = CanvasSnapshotPath.ForProject(projectPath);
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory)) {
+            _filesystem.CreateDirectory(directory);
+        }
+
+        _filesystem.WriteAllText(path, draft.Json);
+        return ToolResults.Ok(
+            $"Wrote {path} ({draft.NodeCount} nodes, {draft.EdgeCount} edges, generatedAt {draft.GeneratedAt}).",
+            new {
+                path,
+                nodeCount = draft.NodeCount,
+                edgeCount = draft.EdgeCount,
+                generatedAt = draft.GeneratedAt
+            },
+            sw);
     }
 
     // The full activity hierarchy, nesting to any depth. Depth <= 1 truncated the outline to
