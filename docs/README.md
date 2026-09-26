@@ -5,7 +5,7 @@ Docs for running and driving the UiPath Engineering MCP. Tool names live in `Cop
 | Doc | Use |
 |-----|-----|
 | [agent-connection.md](agent-connection.md) | HTTP, stdio, Dev Tunnel, auth, and the authoring loop |
-| [copilot-prompts.md](copilot-prompts.md) | Copy-paste prompts for new work, changes, debug, and project docs |
+| [copilot-prompts.md](copilot-prompts.md) | Copy-paste prompts for new work, changes, debug, project docs, and the canvas snapshot |
 | [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt) | Paste into Copilot Studio. Source of truth for the Copilot loop |
 | [copilot-studio-skills/](copilot-studio-skills/) | Thin Studio skill packages to upload (`rpa-authoring`, `guided-implementation-loop`, `project-docs`) |
 | [copilot-idioms/](copilot-idioms/) | Coded workflow, coded test, and thin REFramework samples |
