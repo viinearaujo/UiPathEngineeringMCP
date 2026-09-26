@@ -58,8 +58,8 @@ Idioms: Match the idioms bundled in the authoring skills. If idiomDir exists in 
 
 Intent — new feature:
 - analyze_project (detail=summary).
-- Author coded-first: add_coded_workflow for business logic; keep XAML as a thin REFramework / InvokeWorkflowFile shell (find_activity + insert_activities, or recommend_activities → validate_activity_spec → build_workflow / insert_activities + manage_workflow_data). Match idiomDir if present.
-- After writes: validate_project(build:false, pack:false), then analyze_project_gaps. Remediate resilience, observability, structure, and coded/XAML boundary gaps before done. Ignore category=docs.
+- Author coded-first: add_coded_workflow for business logic; keep XAML as a thin REFramework / InvokeWorkflowFile shell (find_activity + insert_activities, or search_knowledge mode=activity_docs → validate_activity_spec → build_workflow / insert_activities + manage_workflow_data, using the activity-spec grammar bundled in the skill). Match the idioms.
+- After writes: check_work with the files you touched (one verdict: compile + validate + scoped gaps). Remediate resilience, observability, structure, and coded/XAML boundary issues before done.
 - If a JSON plan is in play, update_plan_task as you go.
 ```
 
@@ -81,8 +81,8 @@ Idioms: Match the idioms bundled in the authoring skills. If idiomDir exists in 
 
 Intent — change existing:
 - analyze_project, then search_codebase / read_workflow_file the files you will touch. Do not write until you have the current text.
-- Surgical edits only: edit_workflow_file for .cs; find_activity + insert_activities for REFramework / InvokeWorkflowFile wiring only.
-- After writes: validate_project(build:false, pack:false), then analyze_project_gaps. Remediate resilience, observability, structure, and coded/XAML boundary gaps before done. Ignore category=docs.
+- Surgical edits only: edit_workflow_file for .cs (navigate_code for symbols); find_activity + insert_activities for REFramework / InvokeWorkflowFile wiring only.
+- After writes: check_work with the files you touched (one verdict: compile + validate + scoped gaps). Remediate resilience, observability, structure, and coded/XAML boundary issues before done.
 - If a JSON plan is in play, update_plan_task as you go.
 ```
 
@@ -104,7 +104,7 @@ Idioms: When a fix must match project shape, match the bundled idioms, or read_w
 
 Intent — debug:
 - Do not author new workflows.
-- Diagnose with get_compile_errors, validate_project(build:false, pack:false), search_codebase, read_workflow_file, find_code_symbol, find_code_references, and get_code_context.
+- Diagnose with check_work (compile + validate + gaps in one call), search_codebase, read_workflow_file, and navigate_code (mode=symbol, references, or context).
 - Report the cause. On structured tool errors, apply fixHint and retry. Only edit after the failure is identified.
 - If docs/implementation-plan.json exists, update_plan_task the failing task to blocked with the cause in notes. Do not add a new plan. If only markdown exists, note the blocker against that task list in your reply.
 ```
@@ -113,7 +113,7 @@ Intent — debug:
 
 ## 4. Update project documentation
 
-Docs extras (`generate_documentation`, `sync_project_context`, `manage_project_file`, `manage_project_docs`, `validate_project_docs`) are on the default connector.
+Every docs write goes through `manage_project_content` (on the default connector): `write_docs` for knowledge and ADRs, `write_file` / `edit_file` for other markdown, `sync_context` for `AGENTS.md`, and `validate_docs` to check the result.
 
 ```
 Follow the Copilot agent instructions; this message is the intent.
@@ -126,9 +126,9 @@ idiomDir: {IDIOM_DIR}
 Plan: If planMd or attached markdown is present, read_workflow_file it first. If docs/implementation-plan.json exists, also get_implementation_plan (read-only context unless a docs task is already on that scratchpad). If only markdown exists, treat it as this session's outline. Never overwrite a mature JSON plan unless the user asked. If no plan, continue without one.
 
 Intent — update project documentation:
-- Read first with analyze_project, search_codebase, read_workflow_file, generate_documentation, and explain_workflow.
-- Write knowledge and ADRs with manage_project_docs (docs/adr, docs/knowledge). Write other markdown with manage_project_file. Regenerate AGENTS.md with sync_project_context.
-- After writes, validate_project_docs. Ignore category=docs on analyze_project_gaps so docs work does not block RPA done.
+- Read first with analyze_project, get_workflow_dependencies, search_codebase, read_workflow_file, and explain_workflow.
+- Write knowledge and ADRs with manage_project_content action=write_docs (kind=memory for docs/knowledge, kind=adr for docs/adr). Write other markdown with action=write_file or edit_file. Regenerate AGENTS.md with action=sync_context.
+- After writes, manage_project_content action=validate_docs. Docs findings never block RPA done; check_work excludes them.
 ```
 
 ---
