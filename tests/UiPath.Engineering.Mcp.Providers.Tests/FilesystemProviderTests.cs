@@ -336,6 +336,17 @@ public class FilesystemProviderTests {
         }
     }
 
+    [Fact]
+    public void ReadAllBytes_ReturnsRawFileBytes() {
+        using var temp = new TempDir();
+        var file = Path.Combine(temp.Path, "Main.xaml");
+        byte[] bytes = [0xFF, 0xFE, 0x61, 0x00];
+        File.WriteAllBytes(file, bytes);
+        var sut = CreateSut(temp.Path);
+
+        Assert.Equal(bytes, sut.ReadAllBytes(file));
+    }
+
     private sealed class TempDir : IDisposable {
         public string Path { get; } =
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mcp-tests-" + Guid.NewGuid().ToString("N"));

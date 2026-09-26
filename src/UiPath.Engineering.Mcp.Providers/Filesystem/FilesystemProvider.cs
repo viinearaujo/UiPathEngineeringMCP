@@ -163,6 +163,11 @@ public sealed class FilesystemProvider : IFilesystemProvider {
         return File.ReadAllText(path);
     }
 
+    public byte[] ReadAllBytes(string filePath) {
+        var path = EnsureAllowed(filePath);
+        return File.ReadAllBytes(path);
+    }
+
     public long GetFileSize(string filePath) {
         var path = EnsureAllowed(filePath);
         return new FileInfo(path).Length;

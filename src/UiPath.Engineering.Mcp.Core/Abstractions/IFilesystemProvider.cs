@@ -8,6 +8,11 @@ public interface IFilesystemProvider {
     IReadOnlyList<string> FindXamlFiles(string projectPath);
     IReadOnlyList<string> FindCSharpFiles(string projectPath);
     string ReadAllText(string filePath);
+
+    // Fakes inherit UTF-8 of ReadAllText. FilesystemProvider overrides with the file bytes.
+    public byte[] ReadAllBytes(string filePath) =>
+        System.Text.Encoding.UTF8.GetBytes(ReadAllText(filePath));
+
     long GetFileSize(string filePath);
     DateTime GetLastWriteTimeUtc(string filePath);
     DirectoryTreeNode GetDirectoryTree(string root, int maxDepth = 3);
