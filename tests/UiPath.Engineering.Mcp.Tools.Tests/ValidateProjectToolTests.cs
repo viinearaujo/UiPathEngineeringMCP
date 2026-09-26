@@ -297,9 +297,11 @@ public class ValidateProjectToolTests {
                 ]
             }
         };
-        var tool = new ValidateProjectTool(cli, fs, builder);
+        var jobs = BackgroundJobs.NewStore();
+        var tool = new ValidateProjectTool(cli, fs, jobs, builder);
 
-        var result = await tool.ValidateProject("/projects/testProcess", validate: true, build: false, pack: false);
+        var result = await BackgroundJobs.AwaitFinished(
+            jobs, await tool.ValidateProject("/projects/testProcess", validate: true, build: false, pack: false));
 
         Assert.Equal("success", result.Status);
         Assert.Empty(result.ErrorDetails);
