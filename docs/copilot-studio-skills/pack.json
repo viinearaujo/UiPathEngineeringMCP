@@ -1,0 +1,20 @@
+{
+  "skills": [
+    {
+      "name": "rpa-authoring",
+      "include": [
+        { "from": "docs/authoring/activity-spec.md", "to": "references/activity-spec.md" }
+      ]
+    },
+    {
+      "name": "guided-implementation-loop",
+      "include": [
+        { "from": "docs/authoring/activity-spec.md", "to": "references/activity-spec.md" }
+      ]
+    },
+    {
+      "name": "project-docs",
+      "include": []
+    }
+  ]
+}
