@@ -17,6 +17,7 @@ The skills feed under `.agents/skills` is **RPA-only**: `uipath-rpa` and `guided
 - 🔍 **Analyze a UiPath project** — parse `project.json`, workflows, coded files, risks, and the invoke graph
 - 💻 **Author coded workflows** — add `.cs` workflows and tests, edit them, and check compile errors in memory
 - ✅ **Validate and close the plan loop** — green gate, gap analysis, then mark the task done
+- 🗺️ **Fill a canvas snapshot** — write `<project>/.canvas/snapshot.json`, then add the overview and workflow explanations in batches
 
 **Contents**
 
@@ -29,6 +30,7 @@ The skills feed under `.agents/skills` is **RPA-only**: `uipath-rpa` and `guided
 - [🤝 Microsoft 365 Copilot](#microsoft-365-copilot)
 - [✨ Coded-first authoring](#coded-first-authoring)
 - [🔁 Autonomous loop](#autonomous-loop)
+- [🗺️ Canvas snapshot](#canvas-snapshot)
 - [🛠️ Toolkit](#toolkit)
 - [🧪 Tests](#tests)
 - [📁 Project layout](#project-layout)
@@ -248,8 +250,33 @@ Example prompt:
 
 Plans live at `docs/implementation-plan.json` (scratchpad). Marking a task `done` is not
 blocked on docs or ADR freshness. Do not use `verify_work` as the done gate. The green gate is
-`check_work` then `update_plan_task`. Connection recipes and traps:
-[docs/agent-connection.md](docs/agent-connection.md).
+`check_work` then `update_plan_task`. Boundary remediation includes coded `Execute` argument
+mismatches on a XAML invoke of a coded workflow. Missing and extra bindings are fixed with
+`insert_activities`. A renamed binding is fixed with `manage_workflow_data`. Connection recipes
+and traps: [docs/agent-connection.md](docs/agent-connection.md).
+
+<a id="canvas-snapshot"></a>
+## 🗺️ Canvas snapshot
+
+A local canvas reads `<project>/.canvas/snapshot.json`. This server writes that file. The path
+must sit inside `Projects:AllowedRoots`. Paste-ready prompts are in
+[docs/copilot-prompts.md](docs/copilot-prompts.md) § 5. Do not read the snapshot into the chat.
+
+1. **Skeleton.** `generate_documentation` with `format` `canvasSnapshot` (leave-off — enable it
+   on `ToolSurface=All` or the Copilot Studio toggle). Writes `schemaVersion` 1, project name
+   and entry points, one node per `.xaml` workflow and coded workflow (`kind=workflow`), and
+   XAML invoke edges. Each node carries `id`, `kind` (`xaml` or `coded`), `sha256`, arguments
+   (`name`, `direction`, `type`), `hasExceptionHandler`, and `parseError`. XAML
+   `hasExceptionHandler` is true when the workflow has a global handler. Coded
+   `hasExceptionHandler` is true when the entry method has a try/catch. `project.overview`,
+   each `explanation`, and each `decisions` array start empty. Invoke-edge expressions are
+   redacted. Calling it again replaces the file, including prose already stored.
+2. **Prose.** `update_canvas_snapshot` (default connector) patches only `project.overview` and
+   node `explanation` / `decisions`. Omit both for status: `explainedCount`, `totalCount`,
+   `remainingCount`, and up to three `nextNodeIds` (entry point, then resolved callees). A
+   node patch requires `id`, a non-blank `explanation`, and `decisions`. Coded nodes require
+   `decisions: []`. Overview, explanations, and decision names are redacted before write. The
+   call fails when `snapshot.json` does not exist.
 
 <a id="toolkit"></a>
 ## 🛠️ Toolkit
@@ -265,7 +292,7 @@ adds hatches and aliases (`LeaveOffNames`).
 - `explain_workflow` — Structured breakdown of one workflow: arguments, variables, activity outline, handlers, invokes, log messages. Coded (`.cs`) files return `kind` (`workflow` / `test` / `source`), class, namespace, entry methods, and public methods.
 - `get_workflow_dependencies` — `InvokeWorkflowFile` graph: project-wide edges, cycles, orphans, unresolved targets; or, with `workflowFile`, that workflow's callers/callees with argument mappings.
 - `validate_project` — Starts `uip rpa validate` / `build` / `pack` as a background job and returns `{ jobId, status: "running" }` immediately; poll `get_job`. Prefer `check_work` for the Copilot green gate. Authoritative CLI compile: `build:true`.
-- `analyze_project_gaps` — Deterministic hygiene gaps (entry point, orphans, exception handling, logging, descriptions, tests, unresolved invokes, coded/XAML invoke boundary) plus plan cross-checks; each gap names the MCP tool that fixes it.
+- `analyze_project_gaps` — Deterministic hygiene gaps (entry point, orphans, exception handling, logging, descriptions, tests, unresolved invokes, coded/XAML invoke boundary, coded `Execute` argument mismatches) plus plan cross-checks; each gap names the MCP tool that fixes it. Mismatch kinds are under [Notes and limits](#notes-and-limits).
 - `check_work` — One green-gate verdict: in-memory Roslyn compile + validate (build/pack false) + scoped gaps; caps top 20 issues. Then `update_plan_task`.
 - `get_job` — Polls a background CLI job; when finished, returns the same ToolResult payload the tool would have returned.
 - `navigate_code` — Roslyn C# navigation: `mode=symbol` (definition), `mode=references` (usages), `mode=context` (signature/calls/source by symbol or file+line).
@@ -284,10 +311,11 @@ adds hatches and aliases (`LeaveOffNames`).
 - `checkpoint` — Snapshots writable project files under `.mcp/checkpoints` (records git HEAD/diff metadata when available; never moves HEAD or pushes).
 - `get_changes` — Unified diff since a checkpoint (100 KB cap, `truncated=true` past that).
 - `revert_changes` — Restores snapshotted files and deletes journaled files created after the checkpoint (no `git reset --hard`).
+- `update_canvas_snapshot` — Status or prose patch for `<project>/.canvas/snapshot.json`. Omit `overview` and `nodes` for `explainedCount`, `totalCount`, `remainingCount`, and `nextNodeIds`. A write replaces only `project.overview` and node `explanation` / `decisions`. See [Canvas snapshot](#canvas-snapshot).
 
 ### Leave-off / `ToolSurface=All`
 
-- `generate_documentation` — Structured docs payload (metadata, workflows, dependency graph, risks). Enable for the canvas skeleton pass.
+- `generate_documentation` — Leave-off. Omit `format` for the documentation payload (metadata, workflows, dependency graph, risks). `format` `canvasSnapshot` writes `<project>/.canvas/snapshot.json` and replaces prose already stored. Enable it for the skeleton pass. Next: `update_canvas_snapshot`.
 - `create_project` — Scaffolds a new UiPath project via `uip rpa init`.
 - `add_xaml_workflow` — Adds a blank `.xaml` with the correct `x:Class` naming.
 - `patch_project_json` — One structured `project.json` operation (entry points, dependencies, fileInfoCollection, exception handler, runtimeOptions).
@@ -354,6 +382,11 @@ adds hatches and aliases (`LeaveOffNames`).
 - `manage_project_content` — See Copilot default.
 - `patch_project_json` — Leave-off.
 
+### 🗺️ Canvas
+
+- `generate_documentation` (`format` `canvasSnapshot`) — Leave-off skeleton. See Leave-off section.
+- `update_canvas_snapshot` — See Copilot default.
+
 ### 🦊 GitLab, CLI, skills
 
 - `search_repository` — Leave-off GitLab hatch (`ToolSurface=All` only). Searches GitLab issues for the configured project (requires the `GitLab` config section; token is never returned).
@@ -374,9 +407,9 @@ The `tests/` folder contains four xUnit test projects plus a shared `UiPath.Engi
 
 | Project | Covers |
 |---------|--------|
-| `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder` (xaml + coded `.cs`), `XamlWorkflowParser`, `CodedSourceFileParser`, `DependencyGraphBuilder`, XAML/C# templates, `ImplementationPlanStore`, `ProjectGapAnalyzer`, project file policy, JSON patcher, knowledge/ADR stores, context renderer, docs validator and search. |
+| `UiPath.Engineering.Mcp.Core.Tests` | `project.json` parsing, `ProjectModelBuilder` (xaml + coded `.cs`), `XamlWorkflowParser`, `CodedSourceFileParser`, `DependencyGraphBuilder`, XAML/C# templates, `ImplementationPlanStore`, `ProjectGapAnalyzer`, coded `Execute` argument mismatches, canvas snapshot skeleton, project file policy, JSON patcher, knowledge/ADR stores, context renderer, docs validator and search. |
 | `UiPath.Engineering.Mcp.Providers.Tests` | Path allow-listing, filesystem write/delete guards, `.xaml`/`.cs` discovery skipping `bin`/`obj`/`.git`, `GetDirectoryTree`, `CliExecutableResolver`, `UiPathCliOutputParser`, `UiPathCliProvider` per-step results, `GitStatusParser`, `GitLabProvider` (token never surfaced). |
-| `UiPath.Engineering.Mcp.Tools.Tests` | Project-docs tools, path/project guards, validate output shape, authoring guards, coded-workflow entry-point registration, `uip rpa init` partial-success, activity-level and spec-based authoring, `read_workflow_file` / `edit_workflow_file`, plan create/update/get (`update_plan_task(done)` is not docs-gated), gap-analysis shape, `verify_work` branches, C# analysis tools, `search_codebase`, structured errors. |
+| `UiPath.Engineering.Mcp.Tools.Tests` | Project-docs tools, path/project guards, validate output shape, authoring guards, coded-workflow entry-point registration, `uip rpa init` partial-success, activity-level and spec-based authoring, `read_workflow_file` / `edit_workflow_file`, plan create/update/get (`update_plan_task(done)` is not docs-gated), gap-analysis shape, canvas snapshot prose patch, `verify_work` branches, C# analysis tools, `search_codebase`, structured errors. |
 | `UiPath.Engineering.Mcp.Server.Tests` | HTTP host, Copilot default connector list, `/sse` API-key auth (on/off, fail-closed empty key, `/health` anonymous), non-Development HTTP startup validation, empty committed `AllowedRoots`, and `update_plan_task(done)` not blocked on docs freshness. |
 | `UiPath.Engineering.Mcp.TestUtilities` | Shared fake-building helpers (e.g. `FakeDirectoryTrees`) used by `Core.Tests` and `Tools.Tests`. Class library — no tests of its own. |
 
@@ -386,7 +419,7 @@ The `tests/` folder contains four xUnit test projects plus a shared `UiPath.Engi
 ```
 src/
   UiPath.Engineering.Mcp.Server/     # ASP.NET host: DI, config, /health, /sse (MapMcp)
-  UiPath.Engineering.Mcp.Core/       # Models, config options, project.json + XAML parsing, dependency graph
+  UiPath.Engineering.Mcp.Core/       # Models, config options, project.json + XAML parsing, dependency graph, canvas snapshot
   UiPath.Engineering.Mcp.Providers/  # Filesystem + UiPath CLI providers (structured CLI output parser)
   UiPath.Engineering.Mcp.Tools/      # [McpServerTool] classes (analyze/validate/explain/document/author)
 tests/                               # xUnit projects and shared fakes
@@ -419,6 +452,16 @@ does not cover. In the spec model an `If` activity's `children` are the **Then**
 are not rewritten. XAML `InvokeWorkflowFile` of a `.cs` workflow may pass BCL and framework
 types (`String`, `Boolean`, `Int32`, `Dictionary`, `IEnumerable`, `DataTable`, arrays); never
 types defined in this automation, and never coded source methods.
+
+**Coded invoke arguments.** When XAML `InvokeWorkflowFile` targets a coded workflow (`kind=workflow`), `analyze_project_gaps` compares the bindings with that workflow's `Execute` parameters.
+
+- **Missing** — a required parameter has no binding. Fix with `insert_activities`.
+- **Extra** — a binding names an argument `Execute` does not declare. Fix with `insert_activities`.
+- **Renamed** — an unbound parameter and an extra binding share a name core (`in_`, `out_`, and `io_` ignored) or a common prefix of at least 4 characters that is at least half the shorter core, and no other pairing scores as high. Fix with `manage_workflow_data`. Medium confidence.
+
+A parameter with a C# default is omitted from the missing list. Names that match ignoring case count as a match. Coded tests, coded source files, and XAML-to-XAML invokes are left alone. `validate_project` still succeeds when these are the only findings. `check_work` counts them as boundary errors and fails until they are fixed. `update_plan_task` still accepts `done`.
+
+**Canvas file.** `generate_documentation` with `format` `canvasSnapshot` overwrites `<project>/.canvas/snapshot.json`, including overview and explanations. `update_canvas_snapshot` changes only `project.overview` and node `explanation` / `decisions`.
 
 **Activity targeting.** `edit_workflow_activity` matches by `DisplayName` (exact, case-sensitive);
 when several activities share a name the edit is rejected and `activityType` must be passed
@@ -460,6 +503,6 @@ future phase. The PowerShell provider is a planned phase, not yet implemented.
 
 - [docs/README.md](docs/README.md) — index of the operator docs
 - [docs/agent-connection.md](docs/agent-connection.md) — stdio, Inspector, and connection traps
-- [docs/copilot-prompts.md](docs/copilot-prompts.md) — prompt recipes
+- [docs/copilot-prompts.md](docs/copilot-prompts.md) — prompt recipes, including the canvas snapshot pack (§ 5)
 - [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) — paste into Copilot Studio
 - Idioms under [`docs/copilot-idioms/`](docs/copilot-idioms/)
