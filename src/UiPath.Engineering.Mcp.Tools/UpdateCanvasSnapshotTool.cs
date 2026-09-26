@@ -27,8 +27,6 @@ public sealed class UpdateCanvasSnapshotTool {
         [Description("Nodes to patch. Each object requires id, explanation, and decisions (string array). Omit or pass [] for a status call.")] JsonElement? nodes = null,
         CancellationToken cancellationToken = default) {
         var sw = Stopwatch.StartNew();
-        _ = overview;
-        _ = nodes;
         _ = cancellationToken;
         if (ToolResults.GuardAllowedPath(_filesystem, projectPath, sw) is { } guardFailure) {
             return Task.FromResult(guardFailure);
@@ -47,11 +45,34 @@ public sealed class UpdateCanvasSnapshotTool {
             return Task.FromResult(ToolResults.Failure(error ?? "invalid JSON", error ?? "invalid JSON", sw));
         }
 
-        var status = CanvasSnapshotDocument.Status(root, written: false);
-        return Task.FromResult(ToolResults.Ok(
-            $"Canvas snapshot status: {status.ExplainedCount}/{status.TotalCount} explanations, {status.RemainingCount} remaining.",
-            Payload(status),
-            sw));
+        var validation = CanvasSnapshotDocument.ValidatePatch(
+            root,
+            overview,
+            nodes,
+            out var overviewText,
+            out var setOverview,
+            out var patches);
+        if (validation is not null) {
+            return Task.FromResult(ToolResults.Failure(validation, validation, sw));
+        }
+
+        var writing = setOverview || patches.Count > 0;
+        if (writing) {
+            CanvasSnapshotDocument.Apply(root, setOverview, overviewText, patches);
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) {
+                _filesystem.CreateDirectory(directory);
+            }
+
+            // Prose patch. Do not call ProjectFilePolicy.ValidateMutatingFile.
+            _filesystem.WriteAllText(path, CanvasSnapshotDocument.ToIndented(root));
+        }
+
+        var status = CanvasSnapshotDocument.Status(root, writing);
+        var summary = writing
+            ? $"Updated canvas snapshot: {status.ExplainedCount}/{status.TotalCount} explanations."
+            : $"Canvas snapshot status: {status.ExplainedCount}/{status.TotalCount} explanations, {status.RemainingCount} remaining.";
+        return Task.FromResult(ToolResults.Ok(summary, Payload(status), sw));
     }
 
     internal static object Payload(CanvasSnapshotStatus status) => new {

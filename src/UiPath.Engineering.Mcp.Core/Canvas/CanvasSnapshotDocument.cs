@@ -1,7 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using UiPath.Engineering.Mcp.Core;
 
 namespace UiPath.Engineering.Mcp.Core.Canvas;
+
+public sealed record CanvasNodePatch(string Id, string Explanation, IReadOnlyList<string> Decisions);
 
 public sealed record CanvasSnapshotStatus(
     bool Written,
@@ -191,6 +194,115 @@ public static class CanvasSnapshotDocument {
 
     public static string ToIndented(JsonObject root) =>
         root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+
+    public static string? ValidatePatch(
+        JsonObject root,
+        JsonElement? overview,
+        JsonElement? nodes,
+        out string? overviewText,
+        out bool setOverview,
+        out List<CanvasNodePatch> patches) {
+        overviewText = null;
+        setOverview = false;
+        patches = [];
+
+        if (overview is { } overviewElement && overviewElement.ValueKind != JsonValueKind.Undefined) {
+            if (overviewElement.ValueKind != JsonValueKind.String) {
+                return "overview must be a string";
+            }
+
+            setOverview = true;
+            overviewText = SecretRedactor.Redact(overviewElement.GetString() ?? string.Empty).Text;
+        }
+
+        if (nodes is not { } nodeElement
+            || nodeElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
+            || (nodeElement.ValueKind == JsonValueKind.Array && nodeElement.GetArrayLength() == 0)) {
+            return null;
+        }
+
+        if (nodeElement.ValueKind != JsonValueKind.Array) {
+            return "decisions is required";
+        }
+
+        var index = Index(root);
+        foreach (var item in nodeElement.EnumerateArray()) {
+            if (item.ValueKind != JsonValueKind.Object
+                || !item.TryGetProperty("id", out var idElement)
+                || idElement.ValueKind != JsonValueKind.String
+                || string.IsNullOrWhiteSpace(idElement.GetString())) {
+                return "unknown node id";
+            }
+
+            var id = idElement.GetString()!;
+            if (!index.TryGetValue(id, out var node)) {
+                return "unknown node id";
+            }
+
+            if (!item.TryGetProperty("explanation", out var explanationElement)
+                || explanationElement.ValueKind != JsonValueKind.String
+                || string.IsNullOrWhiteSpace(explanationElement.GetString())) {
+                return "explanation is blank";
+            }
+
+            if (!item.TryGetProperty("decisions", out var decisionsElement)
+                || decisionsElement.ValueKind != JsonValueKind.Array) {
+                return "decisions is required";
+            }
+
+            var decisions = new List<string>();
+            foreach (var decision in decisionsElement.EnumerateArray()) {
+                if (decision.ValueKind != JsonValueKind.String) {
+                    return "decisions is required";
+                }
+
+                var trimmed = decision.GetString()!.Trim();
+                if (trimmed.Length == 0) {
+                    continue;
+                }
+
+                decisions.Add(SecretRedactor.Redact(trimmed).Text);
+            }
+
+            if (string.Equals(ReadString(node["kind"]), "coded", StringComparison.Ordinal) && decisions.Count > 0) {
+                return "coded node decisions must be empty";
+            }
+
+            patches.Add(new CanvasNodePatch(
+                id,
+                SecretRedactor.Redact(explanationElement.GetString()!.Trim()).Text,
+                decisions));
+        }
+
+        return null;
+    }
+
+    public static void Apply(
+        JsonObject root,
+        bool setOverview,
+        string? overviewText,
+        IReadOnlyList<CanvasNodePatch> patches) {
+        if (setOverview) {
+            if (root["project"] is not JsonObject project) {
+                project = new JsonObject();
+                root["project"] = project;
+            }
+
+            project["overview"] = overviewText ?? string.Empty;
+        }
+
+        var index = Index(root);
+        foreach (var patch in patches) {
+            var node = index[patch.Id];
+            node["explanation"] = patch.Explanation;
+            var decisions = new JsonArray();
+            foreach (var decision in patch.Decisions) {
+                decisions.Add(decision);
+            }
+
+            node["decisions"] = decisions;
+        }
+    }
 
     internal static Dictionary<string, JsonObject> Index(JsonObject root) {
         var index = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
