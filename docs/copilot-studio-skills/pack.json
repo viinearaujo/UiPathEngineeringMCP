@@ -1,0 +1,26 @@
+{
+  "skills": [
+    {
+      "name": "rpa-authoring",
+      "include": [
+        { "from": "docs/authoring/activity-spec.md", "to": "references/activity-spec.md" },
+        { "from": "docs/copilot-idioms/coded-workflow-try-log.md", "to": "references/idioms/coded-workflow-try-log.md" },
+        { "from": "docs/copilot-idioms/thin-reframework-invoke.md", "to": "references/idioms/thin-reframework-invoke.md" },
+        { "from": "docs/copilot-idioms/coded-testcase.md", "to": "references/idioms/coded-testcase.md" }
+      ]
+    },
+    {
+      "name": "guided-implementation-loop",
+      "include": [
+        { "from": "docs/authoring/activity-spec.md", "to": "references/activity-spec.md" },
+        { "from": "docs/copilot-idioms/coded-workflow-try-log.md", "to": "references/idioms/coded-workflow-try-log.md" },
+        { "from": "docs/copilot-idioms/thin-reframework-invoke.md", "to": "references/idioms/thin-reframework-invoke.md" },
+        { "from": "docs/copilot-idioms/coded-testcase.md", "to": "references/idioms/coded-testcase.md" }
+      ]
+    },
+    {
+      "name": "project-docs",
+      "include": []
+    }
+  ]
+}

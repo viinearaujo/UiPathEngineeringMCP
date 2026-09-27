@@ -15,4 +15,10 @@
     <InternalsVisibleTo Include="UiPath.Engineering.Mcp.Server" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\authoring\activity-spec.md"
+                      LogicalName="UiPath.Engineering.Mcp.Tools.activity-spec.md"
+                      Link="Resources\activity-spec.md" />
+  </ItemGroup>
+
 </Project>

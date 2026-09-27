@@ -1,6 +1,6 @@
 # Coded workflow — `try` / `Log` on the entry method
 
-Copy into a UiPath project’s `docs/idioms/`. Business logic lives in a `[Workflow]` method, not in XAML.
+Match this shape for every coded `[Workflow]` entry. Business logic lives in a `[Workflow]` method, not in XAML.
 
 One class per file; class name equals file name. Wrap the entry method in `try` / `catch`. Log start, success, and failures. Re-throw with `throw;` (bare) so the stack is preserved. Use `UiPath.Core.BusinessRuleException` for data that must not be retried.
 

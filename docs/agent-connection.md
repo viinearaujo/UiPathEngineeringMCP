@@ -26,11 +26,15 @@ Tools resolve **only** `docs/implementation-plan.json` inside the target UiPath 
 
 This MCP is RPA (`.xaml` / `.cs`) only. Agent instructions (source of truth for the loop): [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt). Uploaded Copilot Studio skills plus `CopilotConnectorTools.DefaultNames` are the Copilot path.
 
-Enable `CopilotConnectorTools.DefaultNames` on the default Copilot connector (skills, coded intelligence, XAML spec path, plan/scaffold, and project docs — including `analyze_project_gaps`). Canonical list: README recommended-tools line and the DEFAULT CONNECTOR line in [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions.txt) — both must match the C# array. The agent green gate is `validate_project` (`build` defaults to false, `pack: false`), then `analyze_project_gaps`, then `update_plan_task`. XAML shell: `find_activity` + `insert_activities` (REFramework / InvokeWorkflowFile only), or `recommend_activities` → `validate_activity_spec` → `build_workflow` / `insert_activities` + `manage_workflow_data`. `edit_workflow_activity` is a leave-off fragment hatch.
+Enable `CopilotConnectorTools.DefaultNames` on the default Copilot connector (coded intelligence, XAML spec path, plan, green gate, knowledge, and project docs — including `analyze_project_gaps`). Canonical list: the README recommended-tools line, which must match the C# array. The agent green gate is `check_work` (Roslyn compile + `validate` with `build:false, pack:false` + scoped gaps in one call), then `update_plan_task`. XAML shell: `find_activity` + `insert_activities` (REFramework / InvokeWorkflowFile only), or `search_knowledge` (`mode=activity_docs`) → `validate_activity_spec` → `build_workflow` / `insert_activities` + `manage_workflow_data`. `edit_workflow_activity` is a leave-off fragment hatch.
+
+The Copilot Studio skills are packed by `scripts/pack-copilot-skills.ps1` ([copilot-studio-skills/README.md](copilot-studio-skills/README.md)). The authoring zips carry the activity-spec grammar ([authoring/activity-spec.md](authoring/activity-spec.md), the same file the `uipath://authoring/activity-spec` resource serves) and the idioms, so Copilot reads them without a tool call. `CopilotStudioSkillsDriftTests` fails when a skill names a tool outside `DefaultNames` or a reference file that is neither packed nor in the vendored playbook.
+
+Copilot Studio documents skills and memory for agents on the GitHub Copilot harness (Build / Preview / Evaluate / Monitor tabs). On that harness, Preview chats, evaluations, and every MCP tool call consume Copilot Credits (developer and trial environments included from September 1, 2026); the agent's Monitor tab shows consumption. Prefer one `check_work` call over `validate_project` + `get_job` polling + `analyze_project_gaps`.
 
 HTTP `McpServer:ToolSurface` defaults to `CopilotDefault` and advertises only those names. Keep work Copilot on `CopilotDefault`. Set `All` for Inspector hatches only. GitLab tools stay registered on the server.
 
-Leave-off names live in `CopilotConnectorTools.LeaveOffNames` (hatches and aliases only): `write_workflow_file` (full-file overwrite on `ToolSurface=All` only), `edit_workflow_activity` (prefer `insert_activities`), `compile_project` → `validate_project(build:true)`, `verify_work` → `validate_project` then `update_plan_task`, `run_ui_path_cli`, `list_skills` (uploaded skills already name the playbooks), GitLab (`search_repository`, `create_work_items`). Do not leave `analyze_project_gaps` off the default connector.
+Leave-off names live in `CopilotConnectorTools.LeaveOffNames` (hatches and aliases only): `write_workflow_file` (full-file overwrite on `ToolSurface=All` only), `edit_workflow_activity` (prefer `insert_activities`), `compile_project` → `validate_project(build:true)`, `verify_work` → `check_work` then `update_plan_task`, `run_ui_path_cli`, `list_skills` (prefer `search_knowledge` with `mode=skill`), GitLab (`search_repository`, `create_work_items`). Do not leave `analyze_project_gaps` off the default connector.
 
 Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`. `Skills:SkillsRoot` (default `.agents/skills`) contains only `uipath-rpa` and `guided-implementation-loop`.
 
@@ -39,9 +43,9 @@ Do not expect Maestro, IXP, Insights, or Agents playbooks from `list_skills`. `S
 `.local` is on the filesystem provider's ignore lists, so it never appears in `search_codebase` or the folder tree and generated code cannot leak into the project model or the authoring surfaces. It is still readable by an exact path (`.local/...` through `read_workflow_file`), and two tools read it directly:
 
 - `CSharpContextBuilder` supplies `.local/.codedworkflows/*.cs` to the Roslyn compilation, so the generated `Descriptors.<App>.<Screen>.<Element>` types resolve.
-- `search_activity_docs` indexes `{PROJECT_DIR}/.local/docs/packages` first — those are the docs the project's own installed packages ship, so they match the installed versions — then falls back to the vendored `.agents/skills/uipath-rpa/references/activity-docs` snapshot. It resolves the `.local` path through `PathPolicy.TryResolveProjectRelative`, the same canonicalizing sandbox used everywhere else, so the ignore lists stay intact and discovery is served by the tool instead of by unhiding the folder.
+- `search_knowledge` with `mode=activity_docs` indexes `{PROJECT_DIR}/.local/docs/packages` first — those are the docs the project's own installed packages ship, so they match the installed versions — then falls back to the vendored `.agents/skills/uipath-rpa/references/activity-docs` snapshot. It resolves the `.local` path through `PathPolicy.TryResolveProjectRelative`, the same canonicalizing sandbox used everywhere else, so the ignore lists stay intact and discovery is served by the tool instead of by unhiding the folder.
 
-`search_uipath_knowledge` covers the guide corpus plus the activity docs, and `uipath://idioms/{name}` serves the shipped Copilot idiom samples directly, so the prompt pack's manual "copy `docs/copilot-idioms/` into the target project" step is no longer required.
+`search_knowledge` with `mode=knowledge` covers the guide corpus plus the activity docs. The shipped Copilot idiom samples travel in the authoring skill zips (`references/idioms/`), and `uipath://idioms/{name}` serves the same files to MCP clients that read resources, so no copy into the target project is needed.
 
 ## Safe authoring loop
 
@@ -50,13 +54,12 @@ analyze_project (detail=summary)
   → get_implementation_plan (create_implementation_plan if none exists)
   → add_coded_workflow / edit_workflow_file  (or find_activity + insert_activities for REFramework/Invoke)
   → search_codebase / read_workflow_file to confirm the write
-  → validate_project(build:false, pack:false)
-  → analyze_project_gaps
-  → remediate resilience / observability / structure / boundary (ignore category=docs)
+  → check_work(files you touched)
+  → remediate resilience / observability / structure / boundary issues
   → update_plan_task(done|blocked)
 ```
 
-Close tasks with `validate_project(build:false, pack:false)`, then `analyze_project_gaps`, then `update_plan_task`. Remediate `resilience`, `observability`, `structure`, and coded/XAML boundary gaps before `done`. Ignore `category=docs`. Marking `done` is not blocked on docs/ADR freshness. `verify_work` still refuses auto-done on docs errors and is not the green gate.
+Close tasks with `check_work` on the files you touched, then `update_plan_task`. Remediate `resilience`, `observability`, `structure`, and coded/XAML boundary issues before `done`. `check_work` already excludes `category=docs`, and marking `done` is not blocked on docs/ADR freshness. `verify_work` still refuses auto-done on docs errors and is not the green gate.
 
 File truth is `read_workflow_file` / `search_codebase`, not `analyze_project` alone.
 
@@ -92,7 +95,7 @@ Stdio (`--stdio`) is a separate process with a persistent bidirectional stream, 
 | Symptom | What to do |
 |---------|------------|
 | `edit_workflow_file` twice on the same file in parallel | Serialize writes to one file. |
-| `project.json` change needed | `patch_project_json`. Do not emit a patch or overwrite the file. |
+| `project.json` change needed | `patch_project_json` (leave-off, `ToolSurface=All`). On Copilot, ask the user. Do not emit a patch or overwrite the file. |
 | Host timeout / JSON-RPC `-32603` | Retry once. Do not send the identical payload three times; change flags (`detail`, `page`, `build:false`) or split the call. |
 | Read of a credential file is masked | Keep the mask. Never write the redacted body back. |
 | `update_plan_task(done)` after validate | Plan scratchpad only. Docs/ADR freshness does not block `done`. |
@@ -100,17 +103,19 @@ Stdio (`--stdio`) is a separate process with a persistent bidirectional stream, 
 
 ## validate_project flags
 
-The agent green gate is `validate=true`, `build=false` (the tool default), `pack=false` (typically 24–91s, 0/0). Pass `build:true` or `compile_project` only for an authoritative CLI compile.
+`check_work` runs `validate=true`, `build=false`, `pack=false` (typically 24–91s, 0/0) and waits for the verdict. Start `validate_project` directly (then poll `get_job`) with `build:true`, or use `compile_project`, only for an authoritative CLI compile.
 
 ## Prompt
 
-Clients that support MCP Prompts can load `implement_uipath_goal` with `projectPath` and `goal`. It is a thin recipe of the Copilot agent instructions.
+Clients that support MCP Prompts can load `implement_uipath_goal` with `projectPath` and `goal`. It is a thin recipe of the Copilot agent instructions. Copilot Studio does not read MCP prompts; paste a template from [copilot-prompts.md](copilot-prompts.md) instead.
 
 ## Resources
 
-> ⚠️ **Every resource registered by this server is a URI *template*, so `resources/list` returns an empty array.** A client that only reads `resources/list` sees zero resources. Enumerate them with `resources/listResourceTemplates`, then `resources/read` a concrete URI built by substituting the `{...}` placeholders.
->
-> **Verify this against the actual Copilot Studio registration.** If Studio's resource discovery reads only `resources/list`, it currently sees none of the resources below despite them being implemented and reachable by exact URI.
+`resources/list` returns only the fixed guide `uipath://authoring/activity-spec`. Every other resource is a URI *template*: enumerate them with `resources/listResourceTemplates`, then `resources/read` a concrete URI built by substituting the `{...}` placeholders.
+
+Copilot Studio routes an agent through tools; do not rely on it reading these resources. The activity-spec grammar and the idioms reach Copilot inside the skill zips, and `search_knowledge` serves the playbook files.
+
+Fixed resource: `uipath://authoring/activity-spec` — the JSON activity-spec grammar ([authoring/activity-spec.md](authoring/activity-spec.md)).
 
 URI templates (MCP resources):
 
@@ -120,7 +125,7 @@ URI templates (MCP resources):
 - `uipath://project/{projectPath}/workflow/{relativePath}`
 - `uipath://project/{projectPath}/knowledge`
 - `uipath://activity/{projectPath}/{name}` — one activity's full authoring surface as JSON. Substitute the literal `global` for `projectPath` to read the built-in fallback catalog.
-- `uipath://idioms/{name}` — a shipped Copilot idiom sample (`coded-workflow-try-log.md`, `thin-reframework-invoke.md`, `coded-testcase.md`). Read it over the resource instead of copying the sample into the target project.
+- `uipath://idioms/{name}` — a shipped Copilot idiom sample (`coded-workflow-try-log.md`, `thin-reframework-invoke.md`, `coded-testcase.md`), the same files the authoring skill zips carry.
 
 `projectPath` and `relativePath` must be percent-encoded, including forward slashes. A raw `C:/...` URI fails. The `uipath://activity/...` template has no project requirement: `global` selects the built-in catalog, and any other value must be an allowed project directory.
 
@@ -130,6 +135,6 @@ Worked example for a Windows project root:
 
 ## Copilot prompt pack
 
-Copy-paste user messages (new feature, change existing, debug, update project documentation) live in [copilot-prompts.md](copilot-prompts.md). Each template carries `{PROJECT_PATH}`, `{GOAL}`, optional `{PLAN_MD}`, and optional `{IDIOM_DIR}` (default `docs/idioms`).
+Copy-paste user messages (new feature, change existing, debug, update project documentation, canvas snapshot) live in [copilot-prompts.md](copilot-prompts.md). Each template carries `{PROJECT_PATH}`, `{GOAL}`, optional `{PLAN_MD}`, and optional `{IDIOM_DIR}` (default `docs/idioms`).
 
-Idiom samples to copy into a UiPath project’s `docs/idioms/` are in [copilot-idioms/](copilot-idioms/). Copilot grounds on those local paths with `read_workflow_file` — not SharePoint or Dataverse. The files must sit inside an allowed project (`project.json` + `Projects:AllowedRoots`).
+The idiom samples in [copilot-idioms/](copilot-idioms/) ship inside the authoring skill zips. `{IDIOM_DIR}` names project-specific idioms that override them; Copilot reads those with `read_workflow_file`, so they must sit inside an allowed project (`project.json` + `Projects:AllowedRoots`). Ground on local paths, not SharePoint or Dataverse.

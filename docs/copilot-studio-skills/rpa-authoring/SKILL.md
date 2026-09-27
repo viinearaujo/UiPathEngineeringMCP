@@ -5,7 +5,7 @@ description: "Creates, edits, and debugs UiPath RPA coded (.cs) and XAML (.xaml)
 
 # RPA authoring
 
-Create, edit, and debug `.cs` / `.xaml` in a UiPath project through advertised Engineering MCP tools. This MCP is **RPA only**. Decline Maestro, IXP, Insights, Agents, Coded Apps, Connector Builder, Admin, Governance, solution packaging, Orchestrator runtime, and publish/deploy.
+Create, edit, and debug `.cs` / `.xaml` in a UiPath project through the Engineering MCP tools on the Copilot connector. This MCP is **RPA only**. Decline Maestro, IXP, Insights, Agents, Coded Apps, Connector Builder, Admin, Governance, solution packaging, Orchestrator runtime, and publish/deploy.
 
 New work is **coded** unless the task is REFramework or orchestration XAML. XAML may invoke coded workflows with BCL and framework types (Dictionary, IEnumerable, DataTable, arrays); never types defined in this automation or source-file methods from XAML.
 
@@ -13,43 +13,52 @@ For a multi-step feature through a plan, use the `guided-implementation-loop` sk
 
 ## Before writing
 
-1. Confirm `projectPath` (folder that contains `project.json`) inside the allowed roots. Never guess paths.
+1. Confirm `projectPath` (folder that contains `project.json`) inside the allowed roots. Never guess paths. If Memory recalls a `projectPath` or plan state, confirm it with `analyze_project` / `get_implementation_plan` before acting.
 2. Call `analyze_project` (`detail=summary`). Pass `workflowFile` or `detail=full` only when one workflow's activities are needed.
 3. Confirm file truth with `read_workflow_file` or `search_codebase` (`text` / `symbol` / `activity` / `workflow`).
-4. No project yet and the user asked to create one: `create_project`, then `analyze_project`.
-5. Deep policy lives in the MCP `uipath-rpa` playbook. Call `read_skill` with `name` `uipath-rpa` and `file` set to the reference below. Do not invent activity property surfaces.
+4. No project yet: stop and ask the user to create it in UiPath Studio. Project scaffolding is not on the Copilot connector.
+5. Deep policy lives in the MCP `uipath-rpa` playbook. Call `search_knowledge` with `mode=skill`, `query=uipath-rpa`, and `file` set to a reference from the table below. Do not invent activity property surfaces; look them up with `search_knowledge` (`mode=activity_docs`, `projectPath`, `query`).
+
+## Idioms
+
+Match the house-style samples bundled with this skill before writing:
+
+- `references/idioms/coded-workflow-try-log.md` — coded `[Workflow]` entry with try/catch and `Log`.
+- `references/idioms/coded-testcase.md` — coded `[TestCase]` with Arrange / Act / Assert.
+- `references/idioms/thin-reframework-invoke.md` — thin REFramework / `InvokeWorkflowFile` XAML shell.
+
+When the project has its own `docs/idioms/` folder (or the user names one), read those files with `read_workflow_file`; they override the bundled samples.
 
 ## Coded path (default)
 
-1. `add_coded_workflow` with `kind` `workflow` / `test` / `source`. Process `kind=test` defaults to `Tests\`; pass `relativeFolder` for other layouts (empty string forces the project root). `kind=test` registers `fileInfoCollection`, never `entryPoints`. `kind=workflow` registers `entryPoints`. `kind=source` is a plain helper class.
+1. `add_coded_workflow` with `className` and `kind` `workflow` / `test` / `source`. Process `kind=test` defaults to `Tests\`; pass `relativeFolder` for other layouts (empty string forces the project root). `kind=test` registers `fileInfoCollection`, never `entryPoints`. `kind=workflow` registers `entryPoints`. `kind=source` is a plain helper class.
 2. `read_workflow_file`, then surgical edits with `edit_workflow_file`.
-3. Fast `.cs` check: `get_compile_errors`. For a symbol: `find_code_symbol` → `get_code_context` → `find_code_references`.
+3. For a symbol: `navigate_code` with `mode=symbol` (definition), `mode=context` (signature, calls, source by symbol or `file` + `line`), or `mode=references` (usages). Prefer it over reading whole `.cs` files.
 4. Coded `[Workflow]` entry: try/catch plus `Log(...)`. Do not put business logic or UI clicks in XAML.
-5. Dependencies, entry points, or `fileInfoCollection`: `patch_project_json`. Never change `expressionLanguage` or `targetFramework`.
+5. Package or `project.json` changes beyond what `add_coded_workflow` registers are not on the Copilot connector: stop and ask the user. Never change `expressionLanguage` or `targetFramework`.
 
-Call `read_skill("uipath-rpa", file: "references/coded/operations-guide.md")` before non-trivial coded work; add `references/coded/coding-guidelines.md` when debugging compile errors.
+Read the `references/coded/operations-guide.md` playbook file before non-trivial coded work; add `references/coded/codedworkflow-reference.md` (coded rules and the `CodedWorkflow` base class) when fixing compile errors.
 
 ## XAML shell
 
 REFramework and `InvokeWorkflowFile` wiring only:
 
-1. New blank file: `add_xaml_workflow`.
-2. Locate the container: `find_activity` (IDs are per-parse-snapshot — recapture after every structural edit).
-3. Insert: `insert_activities`.
+1. New file: `build_workflow` from a minimal spec (for example `{ "name": "Sequence" }`) at the target `relativePath`.
+2. Locate the container: `find_activity` (IDs are per-parse-snapshot — recapture after every structural edit; pass `workflowFile` with `activityId`).
+3. Insert: `insert_activities` with `activityId`.
 4. Arguments and variables: `manage_workflow_data`.
 
 ## Spec-based XAML
 
 When the shell pair is not enough (full activity surface):
 
-1. Unknown activity type: `recommend_activities`.
-2. Dry-run: `validate_activity_spec`. Do not write files from an invalid spec.
-3. New file: `build_workflow`. Existing file: `insert_activities`.
-4. Arguments and variables: `manage_workflow_data`.
+1. Read `references/activity-spec.md`, bundled with this skill. It is the spec grammar: node shape, container slots, and the expression-language rules (VisualBasic uses `[expr]` brackets; CSharp takes raw expressions with no brackets).
+2. Unknown activity type or properties: `search_knowledge` with `mode=activity_docs`.
+3. Dry-run: `validate_activity_spec` with `projectPath`. Do not write files from an invalid spec.
+4. New file: `build_workflow`. Existing file: `insert_activities`.
+5. Arguments and variables: `manage_workflow_data`.
 
-Spec shape: `{ name, properties, children, variables (root only), catches (TryCatch only), else (If), cases/default (Switch), arguments (InvokeWorkflowFile) }`. Strings in `[expr]` brackets are expressions; everything else is a literal. `If` `children` is the Then branch; `else` is the Else branch.
-
-Call `read_skill("uipath-rpa", file: "references/xaml/xaml-basics-and-rules.md")` before generating XAML; add `references/xaml/workflow-guide.md` for the authoring phases.
+Read the `references/xaml/xaml-basics-and-rules.md` playbook file before generating XAML; add `references/xaml/common-pitfalls.md` when a validation error persists.
 
 ## UI automation (placeholders)
 
@@ -59,27 +68,31 @@ When the work is UI (open an app/browser, click, type, scrape, submit, verify UI
 
 Do not replace UIA steps with `Log` stubs. Do not substitute Selenium, Playwright, Chrome DevTools Protocol, raw DOM JavaScript, or HTTP form posts for UI interaction.
 
-Call `read_skill("uipath-rpa", file: "references/ui-automation-guide.md")` and follow the Placeholder-Selector Stub Pattern before any UIA work.
+Read the `references/uia-starter-guide.md` playbook file and follow its Placeholder-Selector Stub Pattern section before any UIA work.
 
 ## Deep references
 
-| Need | `read_skill("uipath-rpa", file: ...)` |
-|------|--------------------------------------|
+Read each with `search_knowledge` (`mode=skill`, `query=uipath-rpa`, `file=<path>`):
+
+| Need | `file` |
+|------|--------|
 | Coded vs XAML / hybrid | `references/coded-vs-xaml-guide.md` |
 | Coded create/edit | `references/coded/operations-guide.md` |
-| XAML create/edit | `references/xaml/workflow-guide.md` |
-| XAML anatomy | `references/xaml/xaml-basics-and-rules.md` |
-| UI automation / placeholders | `references/ui-automation-guide.md` |
+| Coded rules / `CodedWorkflow` API | `references/coded/codedworkflow-reference.md` |
+| XAML anatomy and authoring flow | `references/xaml/xaml-basics-and-rules.md` |
+| XAML validation pitfalls | `references/xaml/common-pitfalls.md` |
+| UI automation / placeholders | `references/uia-starter-guide.md` |
 | Try/Catch, retry, GEH | `references/error-handling-guide.md` |
 | Test cases | `references/testing-guide.md` |
-| New project / templates | `references/environment-setup.md` |
+| REFramework | `references/reframework-guide.md` |
 
 ## After every change
 
 1. Confirm writes with `read_workflow_file` or `search_codebase`. Never rewrite a redacted credential body (`***REDACTED***`) back to disk.
-2. `validate_project` with `build: false` and `pack: false`. Pass `build: true` only for an authoritative CLI compile.
-3. `analyze_project_gaps`. Remediate resilience, observability, structure, and coded/XAML boundary gaps. Ignore `category=docs`.
-4. If a plan task is in progress, `update_plan_task` to `done` or `blocked`. Marking done is not blocked on ADR or knowledge freshness.
+2. `check_work` with `projectPath` and `files` set to the project-relative files you touched. One call returns the Roslyn compile, `validate`, and scoped gaps. Remediate resilience, observability, structure, and coded/XAML boundary issues it reports.
+3. If a plan task is in progress, `update_plan_task` to `done` or `blocked`. Marking done is not blocked on ADR or knowledge freshness.
+
+Use `checkpoint` before a risky edit, and `get_changes` / `revert_changes` to inspect or undo it. Start `validate_project` with `build: true` (then poll `get_job`) only when the user asks for an authoritative CLI compile.
 
 On structured errors, read `fixHint`, correct the call, and retry.
 
@@ -87,4 +100,4 @@ Understand an existing file with `explain_workflow` or `get_workflow_dependencie
 
 ## Stop
 
-Stop and ask when the project path is ambiguous, a wholesale file rewrite seems necessary, live Indicate is required, or validation stays broken after retries. Surgical `.cs` edits go through `edit_workflow_file`; XAML inserts go through `insert_activities`.
+Stop and ask when the project path is ambiguous, a wholesale file rewrite seems necessary, live Indicate is required, or `check_work` stays red after retries. Surgical `.cs` edits go through `edit_workflow_file`; XAML inserts go through `insert_activities`.

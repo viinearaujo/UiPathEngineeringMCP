@@ -1,6 +1,6 @@
 # Coded test case — `[TestCase]`
 
-Copy into a UiPath project’s `docs/idioms/`. Add with `add_coded_workflow` `kind=test` (Process projects default to `Tests\`). Registers `fileInfoCollection`, never `entryPoints`.
+Match this shape for every coded test. Add with `add_coded_workflow` `kind=test` (Process projects default to `Tests\`). Registers `fileInfoCollection`, never `entryPoints`.
 
 Same `CodedWorkflow` base as a workflow; the entry method is `[TestCase]`, not `[Workflow]`. Arrange / Act / Assert. Call the workflow under test with `workflows.Name(...)`. Assert with `testing.VerifyExpression` / `testing.VerifyAreEqual`.
 

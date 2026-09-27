@@ -6,8 +6,8 @@ Follow [copilot-studio-agent-instructions.txt](copilot-studio-agent-instructions
 
 ## Setup (human)
 
-1. Copy the markdown files in [copilot-idioms/](copilot-idioms/) into the **target** UiPath project at `docs/idioms/` (or another project-relative folder). `read_workflow_file` only opens files inside an allowed project (`project.json` + `Projects:AllowedRoots`). They cannot live only in this MCP repo.
-2. Replace the placeholders. You may attach the same idiom files or a markdown plan in the Copilot chat; still pass `{PROJECT_PATH}` so tools can write.
+1. Upload the skill zips from `scripts/pack-copilot-skills.ps1` ([copilot-studio-skills/README.md](copilot-studio-skills/README.md)). The `rpa-authoring` and `guided-implementation-loop` zips already carry the idioms in [copilot-idioms/](copilot-idioms/), so no copy into the target project is needed.
+2. Replace the placeholders. You may attach a markdown plan in the Copilot chat; still pass `{PROJECT_PATH}` so tools can write.
 3. Paste one template into the Copilot user message.
 
 Grounding is a local path plus `read_workflow_file`. Do not add SharePoint or Dataverse as Copilot knowledge.
@@ -19,7 +19,7 @@ Grounding is a local path plus `read_workflow_file`. Do not add SharePoint or Da
 | `{PROJECT_PATH}` | yes | Folder that contains `project.json` |
 | `{GOAL}` | yes | What to build, change, debug, or document |
 | `{PLAN_MD}` | no | Project-relative path, usually `docs/implementation-plan.md` (the markdown mirror next to `docs/implementation-plan.json`). You can paste the markdown into the message instead. |
-| `{IDIOM_DIR}` | no | Project-relative folder of idiom samples. Default: `docs/idioms` |
+| `{IDIOM_DIR}` | no | Project-relative folder of project-specific idioms that override the bundled ones. Default: `docs/idioms` |
 
 ## Optional plan (`{PLAN_MD}` vs JSON scratchpad)
 
@@ -28,9 +28,9 @@ Grounding is a local path plus `read_workflow_file`. Do not add SharePoint or Da
 - If only markdown exists (hand-written, no JSON): treat that markdown as this session’s task list. You may call `create_implementation_plan` only when `docs/implementation-plan.json` is missing.
 - If no plan: `create_implementation_plan` for a multi-step goal, or continue without one for a small change.
 
-## Idiom files in `{IDIOM_DIR}`
+## Idioms
 
-Shipped samples (copy into the target project):
+The authoring skills bundle these samples as `references/idioms/<file>`:
 
 | File | Match this shape |
 |------|------------------|
@@ -38,7 +38,7 @@ Shipped samples (copy into the target project):
 | `thin-reframework-invoke.md` | Thin REFramework / `InvokeWorkflowFile` shell, BCL/framework args only |
 | `coded-testcase.md` | Coded `[TestCase]` (Arrange / Act / Assert) |
 
-If `{IDIOM_DIR}` exists, `read_workflow_file` those files first and match them. If the folder is missing, skip — do not invent a second playbook.
+If `{IDIOM_DIR}` exists in the project, `read_workflow_file` those files first; they override the bundled samples. If the folder is missing, use the bundled samples — do not invent a second playbook.
 
 ---
 
@@ -54,12 +54,12 @@ idiomDir: {IDIOM_DIR}
 
 Plan: If planMd or attached markdown is present, read_workflow_file it first. If docs/implementation-plan.json exists, also get_implementation_plan and follow that JSON scratchpad with update_plan_task. If none exists, create_implementation_plan. Never overwrite a mature JSON plan unless the user asked. If only markdown exists, treat it as this session's task list. If no plan, continue without one for a small change.
 
-Idioms: If idiomDir exists (default docs/idioms), read_workflow_file those files first and match them.
+Idioms: Match the idioms bundled in the authoring skills. If idiomDir exists in the project (default docs/idioms), read_workflow_file those files first; they override the bundled ones.
 
 Intent — new feature:
 - analyze_project (detail=summary).
-- Author coded-first: add_coded_workflow for business logic; keep XAML as a thin REFramework / InvokeWorkflowFile shell (find_activity + insert_activities, or recommend_activities → validate_activity_spec → build_workflow / insert_activities + manage_workflow_data). Match idiomDir if present.
-- After writes: validate_project(build:false, pack:false), then analyze_project_gaps. Remediate resilience, observability, structure, and coded/XAML boundary gaps before done. Ignore category=docs.
+- Author coded-first: add_coded_workflow for business logic; keep XAML as a thin REFramework / InvokeWorkflowFile shell (find_activity + insert_activities, or search_knowledge mode=activity_docs → validate_activity_spec → build_workflow / insert_activities + manage_workflow_data, using the activity-spec grammar bundled in the skill). Match the idioms.
+- After writes: check_work with the files you touched (one verdict: compile + validate + scoped gaps). Remediate resilience, observability, structure, and coded/XAML boundary issues before done.
 - If a JSON plan is in play, update_plan_task as you go.
 ```
 
@@ -77,12 +77,12 @@ idiomDir: {IDIOM_DIR}
 
 Plan: If planMd or attached markdown is present, read_workflow_file it first. If docs/implementation-plan.json exists, also get_implementation_plan and follow that JSON scratchpad with update_plan_task. If none exists, create_implementation_plan. Never overwrite a mature JSON plan unless the user asked. If only markdown exists, treat it as this session's task list. If no plan, continue without one for a small change.
 
-Idioms: If idiomDir exists (default docs/idioms), read_workflow_file those files first and match them.
+Idioms: Match the idioms bundled in the authoring skills. If idiomDir exists in the project (default docs/idioms), read_workflow_file those files first; they override the bundled ones.
 
 Intent — change existing:
 - analyze_project, then search_codebase / read_workflow_file the files you will touch. Do not write until you have the current text.
-- Surgical edits only: edit_workflow_file for .cs; find_activity + insert_activities for REFramework / InvokeWorkflowFile wiring only.
-- After writes: validate_project(build:false, pack:false), then analyze_project_gaps. Remediate resilience, observability, structure, and coded/XAML boundary gaps before done. Ignore category=docs.
+- Surgical edits only: edit_workflow_file for .cs (navigate_code for symbols); find_activity + insert_activities for REFramework / InvokeWorkflowFile wiring only.
+- After writes: check_work with the files you touched (one verdict: compile + validate + scoped gaps). Remediate resilience, observability, structure, and coded/XAML boundary issues before done.
 - If a JSON plan is in play, update_plan_task as you go.
 ```
 
@@ -100,11 +100,11 @@ idiomDir: {IDIOM_DIR}
 
 Plan: If planMd or attached markdown is present, read_workflow_file it first. If docs/implementation-plan.json exists, also get_implementation_plan and follow that JSON scratchpad with update_plan_task. If only markdown exists, treat it as this session's task list. Never overwrite a mature JSON plan unless the user asked. If no plan, continue without one.
 
-Idioms: If idiomDir exists (default docs/idioms), read_workflow_file those files first when a fix must match project shape.
+Idioms: When a fix must match project shape, match the bundled idioms, or read_workflow_file the idiomDir files first when that folder exists in the project (default docs/idioms).
 
 Intent — debug:
 - Do not author new workflows.
-- Diagnose with get_compile_errors, validate_project(build:false, pack:false), search_codebase, read_workflow_file, find_code_symbol, find_code_references, and get_code_context.
+- Diagnose with check_work (compile + validate + gaps in one call), search_codebase, read_workflow_file, and navigate_code (mode=symbol, references, or context).
 - Report the cause. On structured tool errors, apply fixHint and retry. Only edit after the failure is identified.
 - If docs/implementation-plan.json exists, update_plan_task the failing task to blocked with the cause in notes. Do not add a new plan. If only markdown exists, note the blocker against that task list in your reply.
 ```
@@ -113,7 +113,7 @@ Intent — debug:
 
 ## 4. Update project documentation
 
-Docs extras (`generate_documentation`, `sync_project_context`, `manage_project_file`, `manage_project_docs`, `validate_project_docs`) are on the default connector.
+Every docs write goes through `manage_project_content` (on the default connector): `write_docs` for knowledge and ADRs, `write_file` / `edit_file` for other markdown, `sync_context` for `AGENTS.md`, and `validate_docs` to check the result.
 
 ```
 Follow the Copilot agent instructions; this message is the intent.
@@ -126,9 +126,9 @@ idiomDir: {IDIOM_DIR}
 Plan: If planMd or attached markdown is present, read_workflow_file it first. If docs/implementation-plan.json exists, also get_implementation_plan (read-only context unless a docs task is already on that scratchpad). If only markdown exists, treat it as this session's outline. Never overwrite a mature JSON plan unless the user asked. If no plan, continue without one.
 
 Intent — update project documentation:
-- Read first with analyze_project, search_codebase, read_workflow_file, generate_documentation, and explain_workflow.
-- Write knowledge and ADRs with manage_project_docs (docs/adr, docs/knowledge). Write other markdown with manage_project_file. Regenerate AGENTS.md with sync_project_context.
-- After writes, validate_project_docs. Ignore category=docs on analyze_project_gaps so docs work does not block RPA done.
+- Read first with analyze_project, get_workflow_dependencies, search_codebase, read_workflow_file, and explain_workflow.
+- Write knowledge and ADRs with manage_project_content action=write_docs (kind=memory for docs/knowledge, kind=adr for docs/adr). Write other markdown with action=write_file or edit_file. Regenerate AGENTS.md with action=sync_context.
+- After writes, manage_project_content action=validate_docs. Docs findings never block RPA done; check_work excludes them.
 ```
 
 ---
