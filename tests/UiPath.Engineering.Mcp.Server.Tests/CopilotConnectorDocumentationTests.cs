@@ -29,6 +29,9 @@ public class CopilotConnectorDocumentationTests {
         Assert.Contains("write_workflow_file", readme);
         Assert.Contains("ToolSurface=All", readme);
         Assert.Contains("ReadOnly", readme);
+        Assert.Contains(".canvas/snapshot.json", readme);
+        Assert.Contains("canvasSnapshot", readme);
+        Assert.Contains("`Execute` argument mismatches", readme);
     }
 
     [Fact]
