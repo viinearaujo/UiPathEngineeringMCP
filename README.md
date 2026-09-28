@@ -4,6 +4,7 @@
 ![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-555)
 ![Windows](https://img.shields.io/badge/Windows-0078D4?logo=windows&logoColor=white)
 ![RPA](https://img.shields.io/badge/RPA-UiPath-FA4616)
+![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)
 
 A custom **.NET 10** Model Context Protocol (MCP) server that lets an AI client
 (Microsoft 365 Copilot, MCP Inspector, Claude, and friends) analyze and validate
@@ -34,6 +35,7 @@ The skills feed under `.agents/skills` is **RPA-only**: `uipath-rpa` and `guided
 - [📁 Project layout](#project-layout)
 - [📌 Notes and limits](#notes-and-limits)
 - [📚 Further reading](#further-reading)
+- [📄 License](#license)
 
 ---
 
@@ -465,3 +467,14 @@ future phase. The PowerShell provider is a planned phase, not yet implemented.
 - [docs/copilot-studio-agent-instructions.txt](docs/copilot-studio-agent-instructions.txt) — paste into Copilot Studio
 - Idioms under [`docs/copilot-idioms/`](docs/copilot-idioms/)
 - [docs/copilot-studio-skills/README.md](docs/copilot-studio-skills/README.md) — pack and upload the Copilot Studio skills
+
+<a id="license"></a>
+## 📄 License
+
+Copyright (c) 2026 Vinicius de Araujo.
+
+Personal use and study are free. This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) (`PolyForm-Noncommercial-1.0.0`). You may use, copy, modify, and share it for noncommercial purposes, including personal study, research, experiments, hobby projects, and use by schools, charities, and other noncommercial organizations.
+
+Commercial use, including selling this software or using it to earn money, requires a separate license from the copyright holder.
+
+Copies of this project that were already published under the MIT License remain under the MIT License.
