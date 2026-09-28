@@ -54,6 +54,17 @@ public interface IUiPathCliProvider {
     Task<UiPathCliResult> RunAsync(string verb, string arguments, string? workingDirectory = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Runs one CLI invocation from pre-split argument tokens. Values are not re-quoted, so a
+    /// description that contains <c>"</c> stays a single argument.
+    /// </summary>
+    Task<UiPathCliResult> RunArgumentsAsync(
+        string verb,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory = null,
+        CancellationToken cancellationToken = default) =>
+        RunAsync(verb, CliVerbArguments.ToArgumentString(arguments), workingDirectory, cancellationToken);
+
+    /// <summary>
     /// Runs one CLI invocation from pre-built ArgumentList tokens and parses the response
     /// envelope. <paramref name="tokens"/> includes the top-level verb, e.g.
     /// <c>["rpa", "run", "--file-path", "Main.xaml", ...]</c>; <paramref name="verb"/> is the

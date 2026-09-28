@@ -39,6 +39,13 @@ public class ActivityFindParserTests {
         Assert.Empty(ActivityFindParser.Parse("{ not json"));
 
     [Fact]
+    public void Parse_SuccessEnvelopeWithANameField_IsNotAnActivity() {
+        const string json = """{ "Result": "Success", "name": "NotAnActivity", "Message": "ok" }""";
+
+        Assert.Empty(ActivityFindParser.Parse(json));
+    }
+
+    [Fact]
     public void Parse_PropertiesArray_MapsKinds() {
         const string json = """
             { "name": "Assign", "properties": [

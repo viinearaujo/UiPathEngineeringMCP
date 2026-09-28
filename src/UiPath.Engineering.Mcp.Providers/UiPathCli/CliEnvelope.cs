@@ -36,7 +36,7 @@ public static class CliEnvelopeParser {
 
         var text = stdOut!;
         return TryParseCore(text, out envelope)
-            || (ExtractJsonCandidate(text) is { } candidate && TryParseCore(candidate, out envelope));
+            || (ExtractJsonObject(text) is { } candidate && TryParseCore(candidate, out envelope));
     }
 
     private static bool TryParseCore(string text, out CliEnvelope envelope) {
@@ -82,10 +82,100 @@ public static class CliEnvelopeParser {
         return null;
     }
 
-    private static string? ExtractJsonCandidate(string text) {
-        var start = text.IndexOf('{');
-        var end = text.LastIndexOf('}');
-        return start >= 0 && end > start ? text[start..(end + 1)] : null;
+    /// <summary>
+    /// The first balanced JSON object in <paramref name="text"/> that looks like a CLI envelope,
+    /// or the first balanced object when none of them carry envelope fields. Braces inside
+    /// strings are ignored, so a banner such as <c>Updated {cli}</c> is not the payload.
+    /// </summary>
+    internal static string? ExtractJsonObject(string text) {
+        string? fallback = null;
+        var index = 0;
+        while (index < text.Length) {
+            var start = text.IndexOf('{', index);
+            if (start < 0) {
+                break;
+            }
+
+            if (!TryReadBalancedObject(text, start, out var end)) {
+                index = start + 1;
+                continue;
+            }
+
+            var candidate = text[start..(end + 1)];
+            index = end + 1;
+            try {
+                using var document = JsonDocument.Parse(candidate);
+                if (document.RootElement.ValueKind != JsonValueKind.Object) {
+                    continue;
+                }
+
+                if (HasEnvelopeShape(document.RootElement)) {
+                    return candidate;
+                }
+
+                fallback ??= candidate;
+            } catch (JsonException) {
+                // Not a JSON object; keep scanning.
+            }
+        }
+
+        return fallback;
+    }
+
+    private static bool HasEnvelopeShape(JsonElement root) {
+        foreach (var property in root.EnumerateObject()) {
+            if (property.NameEquals("Result") || property.NameEquals("result")
+                || property.NameEquals("Data") || property.NameEquals("data")
+                || property.NameEquals("success") || property.NameEquals("Success")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryReadBalancedObject(string text, int start, out int end) {
+        var depth = 0;
+        var inString = false;
+        var escape = false;
+        for (var i = start; i < text.Length; i++) {
+            var c = text[i];
+            if (inString) {
+                if (escape) {
+                    escape = false;
+                    continue;
+                }
+
+                if (c == '\\') {
+                    escape = true;
+                    continue;
+                }
+
+                if (c == '"') {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (c == '"') {
+                inString = true;
+                continue;
+            }
+
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    end = i;
+                    return true;
+                }
+            }
+        }
+
+        end = -1;
+        return false;
     }
 
     /// <summary>Case-insensitive property lookup on a parsed element.</summary>

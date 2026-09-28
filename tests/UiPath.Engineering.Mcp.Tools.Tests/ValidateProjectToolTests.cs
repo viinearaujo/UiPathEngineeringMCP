@@ -84,16 +84,19 @@ public class ValidateProjectToolTests {
         var result = await BackgroundJobs.AwaitFinished(jobs, started);
 
         Assert.Equal("error", result.Status);
-        Assert.Contains("boom", result.Summary);
+        Assert.Equal("The background job failed.", result.Summary);
+        Assert.DoesNotContain("boom", string.Join('\n', result.Errors));
+        Assert.Contains(result.ErrorDetails, e => e.ErrorCode == "OPERATION_FAILED");
     }
 
     private static JsonElement SerializeData(object? data) =>
         JsonSerializer.SerializeToElement(data);
 
     private static void AssertJobStarted(ToolResult started) {
-        Assert.Equal("success", started.Status);
+        Assert.Equal("pending", started.Status);
         var data = SerializeData(started.Data);
-        Assert.Equal("running", data.GetProperty("status").GetString());
+        Assert.Equal("running", data.GetProperty("phase").GetString());
+        Assert.False(data.TryGetProperty("status", out _));
         Assert.False(string.IsNullOrWhiteSpace(data.GetProperty("jobId").GetString()));
     }
 

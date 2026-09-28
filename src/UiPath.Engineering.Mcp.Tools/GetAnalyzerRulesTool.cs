@@ -39,7 +39,7 @@ public sealed class GetAnalyzerRulesTool {
         ReadOnly = true,
         Destructive = false,
         Idempotent = true),
-     Description("Leave-off. Starts analyzer-rules list as a background job; returns {jobId,status:running}. Always pass scope. Next: get_job.")]
+     Description("Leave-off. Starts analyzer-rules list as a background job; returns {jobId,phase:running} with status pending. Always pass scope. Next: get_job.")]
     public Task<ToolResult> GetAnalyzerRules(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Scope filter: Activity, Workflow, Project, or Coded Workflow. Defaults to Workflow. Pass 'All' only deliberately — the unscoped call enumerates every installed package's rules and can take a minute or more.")]

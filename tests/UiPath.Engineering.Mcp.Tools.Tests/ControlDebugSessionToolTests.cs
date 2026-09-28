@@ -148,6 +148,8 @@ public class ControlDebugSessionToolTests {
 
         var result = await BackgroundJobs.AwaitFinished(jobs, await sut.ControlDebugSession(CliToolFixtures.ProjectPath, "state"));
 
+        Assert.Equal("pending", result.Status);
+        Assert.DoesNotContain(result.Errors, e => e.Length > 0);
         Assert.Contains(result.Warnings, w => w.Contains("command=state", StringComparison.Ordinal));
     }
 

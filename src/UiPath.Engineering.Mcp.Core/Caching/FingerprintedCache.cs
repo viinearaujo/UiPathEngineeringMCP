@@ -7,17 +7,21 @@ namespace UiPath.Engineering.Mcp.Core.Caching;
 /// <summary>
 /// Cross-request decorator over <see cref="BoundedCache{TValue}"/> keyed by the normalized
 /// project path. Each call recomputes a fingerprint for the project and rebuilds the cached
-/// value only when the fingerprint changed. When an <see cref="IProjectChangeWatcher"/> is
-/// active and not dirty, the previous fingerprint is reused without walking the tree.
-/// A fingerprint failure serves the cached value with the caller's stale flag set rather
-/// than throwing; an inner build exception is never cached. Watchers are disposed when
-/// the project entry is evicted or the cache is disposed.
+/// value only when the fingerprint changed. A clean <see cref="IProjectChangeWatcher"/> skips
+/// that walk until <see cref="CleanRecheckInterval"/> elapses, then the fingerprint is
+/// computed again. A fingerprint failure serves the cached value with the caller's stale
+/// flag set rather than throwing; when nothing is cached yet, the built value is stored as
+/// stale so the next failure does not rebuild. An inner build exception is never cached.
+/// Watchers are disposed when the project entry is evicted or the cache is disposed.
 /// </summary>
 public sealed class FingerprintedCache<TValue> : IDisposable {
-    private sealed record CacheEntry(TValue Value, string Fingerprint);
+    public static readonly TimeSpan CleanRecheckInterval = TimeSpan.FromSeconds(2);
+
+    private sealed record CacheEntry(TValue Value, string Fingerprint, DateTimeOffset VerifiedUtc, bool FingerprintVerified);
 
     private readonly string _label;
     private readonly BoundedCache<CacheEntry> _cache;
+    private readonly TimeProvider _time;
     private readonly ILogger _logger;
     private readonly IProjectChangeWatcherFactory? _watcherFactory;
     private readonly bool _reuseWhenClean;
@@ -35,6 +39,7 @@ public sealed class FingerprintedCache<TValue> : IDisposable {
         _label = label;
         _watcherFactory = watcherFactory;
         _reuseWhenClean = reuseWhenClean;
+        _time = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger.Instance;
         _cache = new BoundedCache<CacheEntry>(maxEntries, ttl, timeProvider, OnEntryEvicted);
     }
@@ -58,18 +63,24 @@ public sealed class FingerprintedCache<TValue> : IDisposable {
         var key = Path.GetFullPath(projectPath);
         return await _cache.RunExclusiveAsync(key, async ct => {
             var watcher = GetOrCreateWatcher(key);
+            var now = _time.GetUtcNow();
             if (_reuseWhenClean
                 && watcher is { IsActive: true, IsDirty: false }
-                && _cache.TryGet(key, out var cleanHit)) {
+                && _cache.TryGet(key, out var cleanHit)
+                && cleanHit.FingerprintVerified
+                && now - cleanHit.VerifiedUtc < CleanRecheckInterval) {
                 _logger.LogDebug("{Label} cache hit (watcher clean) for {CacheKey}", _label, key);
                 setStale(cleanHit.Value, false);
                 return cleanHit.Value;
             }
 
             if (tryComputeFingerprint(projectPath) is { } fingerprint) {
-                if (_cache.TryGet(key, out var entry) && entry.Fingerprint == fingerprint) {
+                if (_cache.TryGet(key, out var entry)
+                    && entry.FingerprintVerified
+                    && entry.Fingerprint == fingerprint) {
                     _logger.LogDebug("{Label} cache hit for {CacheKey}", _label, key);
                     setStale(entry.Value, false);
+                    _cache.Set(key, entry with { VerifiedUtc = now });
                     watcher?.MarkClean();
                     return entry.Value;
                 }
@@ -77,7 +88,7 @@ public sealed class FingerprintedCache<TValue> : IDisposable {
                 _logger.LogDebug("{Label} cache miss for {CacheKey}", _label, key);
                 var built = await buildAsync(ct);
                 setStale(built, false);
-                _cache.Set(key, new CacheEntry(built, fingerprint));
+                _cache.Set(key, new CacheEntry(built, fingerprint, now, true));
                 watcher?.MarkClean();
                 return built;
             }
@@ -89,7 +100,10 @@ public sealed class FingerprintedCache<TValue> : IDisposable {
             }
 
             _logger.LogDebug("{Label} cache miss for {CacheKey}", _label, key);
-            return await buildAsync(ct);
+            var cold = await buildAsync(ct);
+            setStale(cold, true);
+            _cache.Set(key, new CacheEntry(cold, string.Empty, now, false));
+            return cold;
         }, cancellationToken);
     }
 

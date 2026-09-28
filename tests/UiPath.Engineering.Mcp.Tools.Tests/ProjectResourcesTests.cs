@@ -59,8 +59,8 @@ public class ProjectResourcesTests : IDisposable {
     }
 
     [Fact]
-    public void Plan_ReadsFixedJsonPathOnly() {
-        _plans.Save(_projectPath, new ImplementationPlan { Goal = "g", Tasks = [] });
+    public async Task Plan_ReadsFixedJsonPathOnly() {
+        await _plans.SaveAsync(_projectPath, new ImplementationPlan { Goal = "g", Tasks = [] });
 
         var json = Create().GetProjectPlan(_projectPath);
         Assert.Contains("\"Goal\": \"g\"", json);

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 
@@ -10,17 +11,29 @@ public sealed class ProjectJsonParser {
     public ProjectJsonParser(IFilesystemProvider filesystem) => _filesystem = filesystem;
 
     public UiPathProjectModel Parse(string projectJsonPath, string projectRoot) {
+        var size = _filesystem.GetFileSize(projectJsonPath);
+        if (size > FileReadLimits.MaxFileBytes) {
+            throw new JsonException(FileReadLimits.OversizedMessage("project.json", size));
+        }
+
         var jsonContent = _filesystem.ReadAllText(projectJsonPath);
+        if (jsonContent.Length > FileReadLimits.MaxFileBytes) {
+            throw new JsonException(FileReadLimits.OversizedMessage("project.json", jsonContent.Length));
+        }
+
         using var doc = JsonDocument.Parse(jsonContent);
         var root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Object) {
+            throw new JsonException("project.json must be a JSON object.");
+        }
 
-        var mainWorkflow = root.TryGetProperty("main", out var main) ? main.GetString() : null;
+        var mainWorkflow = ReadOptionalString(root, "main");
 
         var entryPoints = new List<string>();
         if (root.TryGetProperty("entryPoints", out var eps) && eps.ValueKind == JsonValueKind.Array) {
             foreach (var ep in eps.EnumerateArray()) {
-                var filePath = ep.ValueKind == JsonValueKind.Object && ep.TryGetProperty("filePath", out var fp)
-                    ? fp.GetString()
+                var filePath = ep.ValueKind == JsonValueKind.Object
+                    ? ReadOptionalString(ep, "filePath")
                     : null;
                 if (!string.IsNullOrWhiteSpace(filePath)) {
                     entryPoints.Add(filePath);
@@ -34,8 +47,8 @@ public sealed class ProjectJsonParser {
             && designOptions.TryGetProperty("fileInfoCollection", out var fic)
             && fic.ValueKind == JsonValueKind.Array) {
             foreach (var item in fic.EnumerateArray()) {
-                var fileName = item.ValueKind == JsonValueKind.Object && item.TryGetProperty("fileName", out var fn)
-                    ? fn.GetString()
+                var fileName = item.ValueKind == JsonValueKind.Object
+                    ? ReadOptionalString(item, "fileName")
                     : null;
                 if (!string.IsNullOrWhiteSpace(fileName)) {
                     fileInfoCollection.Add(fileName);
@@ -47,7 +60,11 @@ public sealed class ProjectJsonParser {
         var packages = new List<PackageModel>();
         if (root.TryGetProperty("dependencies", out var deps) && deps.ValueKind == JsonValueKind.Object) {
             foreach (var p in deps.EnumerateObject()) {
-                var version = p.Value.GetString() ?? "unknown";
+                var version = p.Value.ValueKind switch {
+                    JsonValueKind.String => p.Value.GetString() ?? "unknown",
+                    JsonValueKind.Null => "unknown",
+                    _ => throw new JsonException($"project.json dependency '{p.Name}' version must be a string.")
+                };
                 dependencies.Add($"{p.Name} ({version})");
                 packages.Add(new PackageModel { Id = p.Name, Version = version });
             }
@@ -56,13 +73,13 @@ public sealed class ProjectJsonParser {
         return new UiPathProjectModel {
             ProjectPath = projectRoot,
             ProjectJsonPath = projectJsonPath,
-            ProjectName = root.TryGetProperty("name", out var name) ? name.GetString() ?? "Unknown" : "Unknown",
+            ProjectName = ReadOptionalString(root, "name") ?? "Unknown",
             MainWorkflow = mainWorkflow,
             EntryPoints = entryPoints,
             FileInfoCollection = fileInfoCollection,
-            Description = root.TryGetProperty("description", out var desc) ? desc.GetString() : null,
-            TargetFramework = root.TryGetProperty("targetFramework", out var tf) ? tf.GetString() : null,
-            ExpressionLanguage = root.TryGetProperty("expressionLanguage", out var el) ? el.GetString() : null,
+            Description = ReadOptionalString(root, "description"),
+            TargetFramework = ReadOptionalString(root, "targetFramework"),
+            ExpressionLanguage = ReadOptionalString(root, "expressionLanguage"),
             OutputType = ReadOutputType(root),
             Dependencies = dependencies,
             Packages = packages
@@ -74,6 +91,18 @@ public sealed class ProjectJsonParser {
             return null;
         }
 
-        return design.TryGetProperty("outputType", out var outputType) ? outputType.GetString() : null;
+        return ReadOptionalString(design, "outputType");
+    }
+
+    private static string? ReadOptionalString(JsonElement owner, string field) {
+        if (!owner.TryGetProperty(field, out var value)) {
+            return null;
+        }
+
+        return value.ValueKind switch {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Null => null,
+            _ => throw new JsonException($"project.json field '{field}' must be a string.")
+        };
     }
 }

@@ -182,6 +182,21 @@ public class UiPathCliProviderTests {
     }
 
     [Fact]
+    public void BuildRawOutputLines_CapsAtMaxChars() {
+        var lines = UiPathCliProvider.BuildRawOutputLines(new string('a', 100), "tail", maxChars: 16);
+
+        Assert.Contains(lines, l => l.Contains("[truncated]", StringComparison.Ordinal));
+        Assert.True(string.Concat(lines).Length < 100);
+    }
+
+    [Fact]
+    public void ClampTimeoutSeconds_ReplacesNonPositiveAndCapsTheUpperBound() {
+        Assert.Equal(300, UiPathCliProvider.ClampTimeoutSeconds(0, -1));
+        Assert.Equal(90, UiPathCliProvider.ClampTimeoutSeconds(null, 90));
+        Assert.Equal(3600, UiPathCliProvider.ClampTimeoutSeconds(9000, 90));
+    }
+
+    [Fact]
     public async Task RunAsync_ExitZeroWithEnvelopeErrors_IsFailure() {
         var cmd = Path.Combine(Path.GetTempPath(), "mcp-fake-uip-" + Guid.NewGuid().ToString("N") + ".cmd");
         await File.WriteAllTextAsync(cmd, """

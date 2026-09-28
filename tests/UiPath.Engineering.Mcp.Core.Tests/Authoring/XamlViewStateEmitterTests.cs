@@ -172,4 +172,19 @@ public class XamlViewStateEmitterTests {
             .Descendants().Single(e => e.Name.LocalName == "Dictionary");
         Assert.Contains("assembly=mscorlib", dictionary.Name.NamespaceName);
     }
+
+    [Fact]
+    public void Apply_ContinuesIdRefsDeclaredUnderAnotherAttributeName() {
+        var doc = Doc("""
+            <Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+                      xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation">
+              <Sequence sap:WorkflowViewState.IdRef="Sequence_4" />
+            </Activity>
+            """);
+
+        XamlViewStateEmitter.Apply(doc);
+
+        var sequence = doc.Root!.Descendants().Single(e => e.Name.LocalName == "Sequence");
+        Assert.Equal("Sequence_5", sequence.Attribute(XamlViewStateEmitter.Sap2010 + "WorkflowViewState.IdRef")!.Value);
+    }
 }

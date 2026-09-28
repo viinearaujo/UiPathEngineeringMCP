@@ -28,8 +28,8 @@ public class VerifyWorkToolTests : IDisposable {
 
     // Seeds a plan whose task-1 expects Main.xaml, and registers Main.xaml as
     // existing for the filesystem fake (resolved the same way the tool resolves it).
-    private void SeedPlanWithExistingTarget() {
-        _store.Save(_projectPath, new ImplementationPlan {
+    private async Task SeedPlanWithExistingTarget() {
+        await _store.SaveAsync(_projectPath, new ImplementationPlan {
             Goal = "g",
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main workflow", TargetFiles = ["Main.xaml"] }]
         });
@@ -59,7 +59,7 @@ public class VerifyWorkToolTests : IDisposable {
 
     [Fact]
     public async Task VerifyWork_WhenTaskUnknown_ReturnsError() {
-        SeedPlanWithExistingTarget();
+        await SeedPlanWithExistingTarget();
 
         var result = await CreateTool().VerifyWork(_projectPath, ["task-99"]);
 
@@ -70,7 +70,7 @@ public class VerifyWorkToolTests : IDisposable {
 
     [Fact]
     public async Task VerifyWork_CliSuccessAndExpectationsMet_MarksTasksDone() {
-        SeedPlanWithExistingTarget();
+        await SeedPlanWithExistingTarget();
         _cli.Result = new UiPathCliResult { Success = true, Summary = "Validation completed." };
 
         var result = await CreateTool().VerifyWork(_projectPath, ["task-1"]);
@@ -90,7 +90,7 @@ public class VerifyWorkToolTests : IDisposable {
 
     [Fact]
     public async Task VerifyWork_CliFailure_MarksTasksBlockedWithErrors() {
-        SeedPlanWithExistingTarget();
+        await SeedPlanWithExistingTarget();
         _cli.Result = new UiPathCliResult {
             Success = false,
             Summary = "Validation failed.",
@@ -112,7 +112,7 @@ public class VerifyWorkToolTests : IDisposable {
 
     [Fact]
     public async Task VerifyWork_CliThrows_PropagatesToHostExceptionBoundary() {
-        SeedPlanWithExistingTarget();
+        await SeedPlanWithExistingTarget();
         _cli.ValidateException = new InvalidOperationException("uip.exe not found");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => CreateTool().VerifyWork(_projectPath, ["task-1"]));
@@ -121,7 +121,7 @@ public class VerifyWorkToolTests : IDisposable {
 
     [Fact]
     public async Task VerifyWork_CliSuccessButExpectedFileMissing_LeavesTasksUnchanged() {
-        _store.Save(_projectPath, new ImplementationPlan {
+        await _store.SaveAsync(_projectPath, new ImplementationPlan {
             Goal = "g",
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main workflow", TargetFiles = ["Main.xaml"] }]
         });
@@ -139,7 +139,7 @@ public class VerifyWorkToolTests : IDisposable {
 
     [Fact]
     public async Task VerifyWork_BuildTrue_ForwardsBuildFlag() {
-        SeedPlanWithExistingTarget();
+        await SeedPlanWithExistingTarget();
         _cli.Result = new UiPathCliResult { Success = true, Summary = "Validation completed." };
 
         await CreateTool().VerifyWork(_projectPath, ["task-1"], build: true);
@@ -149,7 +149,7 @@ public class VerifyWorkToolTests : IDisposable {
 
     [Fact]
     public async Task VerifyWork_BuildFailsButValidateOk_LeavesTasksUnchanged() {
-        SeedPlanWithExistingTarget();
+        await SeedPlanWithExistingTarget();
         _cli.Result = new UiPathCliResult {
             Success = false,
             Summary = "Build failed.",

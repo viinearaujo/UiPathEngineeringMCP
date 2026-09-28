@@ -1,4 +1,5 @@
 using UiPath.Engineering.Mcp.Core.Jobs;
+using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Core.Tests;
 
@@ -16,6 +17,19 @@ public class BackgroundJobStoreTests {
         Assert.Equal("validating", loaded.Phase);
         Assert.NotNull(loaded.Result);
         Assert.NotNull(loaded.FinishedUtc);
+    }
+
+    [Fact]
+    public void Complete_ErrorToolResult_IsFailedAndKeepsPayload() {
+        var store = new BackgroundJobStore();
+        var job = store.Create("validate_project");
+        store.Complete(job.JobId, new ToolResult { Status = "error", Summary = "Validation failed." });
+
+        Assert.True(store.TryGet(job.JobId, out var loaded));
+        Assert.Equal(BackgroundJobStates.Failed, loaded.State);
+        var result = Assert.IsType<ToolResult>(loaded.Result);
+        Assert.Equal("error", result.Status);
+        Assert.Null(loaded.Error);
     }
 
     [Fact]
@@ -42,6 +56,16 @@ public class BackgroundJobStoreTests {
         Assert.False(store.TryGet(first.JobId, out _));
         Assert.True(store.TryGet(second.JobId, out _));
         Assert.True(store.TryGet(third.JobId, out _));
+    }
+
+    [Fact]
+    public void Create_WhenEverySlotIsStillRunning_Rejects() {
+        var store = new BackgroundJobStore(maxJobs: 1);
+        var first = store.Create("a");
+
+        Assert.Throws<BackgroundJobCapacityException>(() => store.Create("b"));
+        Assert.True(store.TryGet(first.JobId, out var loaded));
+        Assert.Equal(BackgroundJobStates.Queued, loaded.State);
     }
 
     [Fact]

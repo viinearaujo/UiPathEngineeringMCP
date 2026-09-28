@@ -9,9 +9,9 @@ namespace UiPath.Engineering.Mcp.Providers.UiPathCli;
 /// ({"Result":"Success|...","Message":"...","Data":...}); Data is walked for
 /// diagnostic objects/arrays. Otherwise falls back to line-based heuristics:
 /// analyzer-style lines, compiler/NuGet-style lines, and
-/// <c>file.xaml(line): error CODE: message</c>. Unrecognized lines mentioning a
-/// severity keyword are preserved verbatim; all non-empty stderr lines are treated
-/// as errors so nothing is lost.
+/// <c>file.xaml(line): error CODE: message</c>. A severity word has to be a line
+/// prefix; summary prose such as "0 errors" is not a diagnostic. Stderr lines are
+/// errors only when stdout has no successful response envelope.
 /// </summary>
 public static class UiPathCliOutputParser {
     public static CliParsedOutput Parse(string verb, string? stdOut, string? stdErr) {
@@ -34,22 +34,17 @@ public static class UiPathCliOutputParser {
                 var prefixed = CliDiagnosticExtractor.SeverityPrefixLine.Match(line);
                 if (prefixed.Success) {
                     CliDiagnosticExtractor.Add(prefixed, line, verb, output);
-                    continue;
-                }
-
-                var word = CliDiagnosticExtractor.SeverityWord.Match(line);
-                if (word.Success) {
-                    // Keep the full line so no information is lost.
-                    CliDiagnosticExtractor.Add(word.Groups["severity"].Value, $"[{verb}] {line}", output);
                 }
             }
         }
 
-        foreach (var line in SplitLines(stdErr)) {
-            output.Errors.Add(CliOutputRedactor.Redact($"[{verb}] {line}"));
-            var diagnostic = CliDiagnosticExtractor.TryParseDiagnosticLine(line);
-            if (diagnostic is not null) {
-                output.Diagnostics.Add(CliOutputRedactor.Redact(diagnostic));
+        if (!output.EnvelopeSucceeded) {
+            foreach (var line in SplitLines(stdErr)) {
+                output.Errors.Add(CliOutputRedactor.Redact($"[{verb}] {line}"));
+                var diagnostic = CliDiagnosticExtractor.TryParseDiagnosticLine(line);
+                if (diagnostic is not null) {
+                    output.Diagnostics.Add(CliOutputRedactor.Redact(diagnostic));
+                }
             }
         }
 

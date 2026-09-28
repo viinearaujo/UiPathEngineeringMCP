@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Core.Jobs;
 
@@ -42,6 +43,10 @@ public sealed class BackgroundJobStore : IBackgroundJobStore {
 
         lock (_gate) {
             EvictOldestFinishedUnlocked();
+            if (_jobs.Count >= _maxJobs) {
+                throw new BackgroundJobCapacityException();
+            }
+
             _jobs[job.JobId] = job;
         }
 
@@ -77,7 +82,12 @@ public sealed class BackgroundJobStore : IBackgroundJobStore {
 
         job.Result = result;
         job.Error = null;
-        job.State = BackgroundJobStates.Succeeded;
+        // A finished CLI call can still be a failed tool verdict. The job state follows that
+        // verdict so get_job does not report Succeeded over an error ToolResult.
+        job.State = result is ToolResult { Status: var status }
+            && string.Equals(status, "error", StringComparison.OrdinalIgnoreCase)
+            ? BackgroundJobStates.Failed
+            : BackgroundJobStates.Succeeded;
         job.FinishedUtc = _time.GetUtcNow();
         PurgeExpired();
         lock (_gate) {
@@ -121,5 +131,12 @@ public sealed class BackgroundJobStore : IBackgroundJobStore {
 
             _jobs.TryRemove(oldest.JobId, out _);
         }
+    }
+}
+
+/// <summary>Thrown when every job slot is still running and none can be evicted.</summary>
+public sealed class BackgroundJobCapacityException : Exception {
+    public BackgroundJobCapacityException()
+        : base("Too many background jobs are still running.") {
     }
 }

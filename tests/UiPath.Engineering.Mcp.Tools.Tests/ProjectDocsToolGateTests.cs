@@ -46,7 +46,7 @@ public class ProjectDocsToolGateTests {
     [Fact]
     public async Task VerifyWork_DoesNotMarkDoneOnDocsErrors() {
         var store = new UiPath.Engineering.Mcp.Core.Planning.ImplementationPlanStore(_fs);
-        store.Save(_projectPath, new ImplementationPlan {
+        await store.SaveAsync(_projectPath, new ImplementationPlan {
             Goal = "g",
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main workflow", TargetFiles = ["Main.xaml"] }]
         });

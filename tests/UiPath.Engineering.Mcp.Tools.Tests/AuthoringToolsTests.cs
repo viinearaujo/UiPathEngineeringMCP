@@ -420,10 +420,34 @@ public class CreateProjectToolTests {
 
         Assert.Equal("success", result.Status);
         Assert.Equal("rpa", cli.LastVerb);
-        Assert.Contains("init", cli.LastArguments);
-        Assert.Contains("--name \"NewProject\"", cli.LastArguments);
-        Assert.Contains("--expression-language VisualBasic", cli.LastArguments);
-        Assert.Contains("--target-framework Portable", cli.LastArguments);
+        Assert.NotNull(cli.LastArgumentList);
+        Assert.Contains("init", cli.LastArgumentList);
+        Assert.Equal("NewProject", cli.LastArgumentList[Array.IndexOf(cli.LastArgumentList.ToArray(), "--name") + 1]);
+        Assert.Contains("VisualBasic", cli.LastArgumentList);
+        Assert.Contains("Portable", cli.LastArgumentList);
+        Assert.Equal("desc", cli.LastArgumentList[Array.IndexOf(cli.LastArgumentList.ToArray(), "--description") + 1]);
+    }
+
+    [Fact]
+    public async Task CreateProject_QuoteInDescription_StaysOneArgument() {
+        var cli = new FakeUiPathCliProvider();
+        var tool = new CreateProjectTool(cli, new FakeFilesystemProvider());
+
+        var result = await tool.CreateProject("Orders", "/projects", description: "Say \"hi\"");
+
+        Assert.Equal("success", result.Status);
+        Assert.Equal("Say \"hi\"", cli.LastArgumentList![Array.IndexOf(cli.LastArgumentList.ToArray(), "--description") + 1]);
+    }
+
+    [Fact]
+    public async Task CreateProject_PathLikeName_IsRejected() {
+        var cli = new FakeUiPathCliProvider();
+        var tool = new CreateProjectTool(cli, new FakeFilesystemProvider());
+
+        var result = await tool.CreateProject("../outside", "/projects");
+
+        Assert.Equal("error", result.Status);
+        Assert.Null(cli.LastArgumentList);
     }
 
     [Fact]

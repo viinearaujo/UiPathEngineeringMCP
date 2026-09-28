@@ -206,13 +206,32 @@ public sealed class SearchKnowledgeTool {
         var wantsGuides = !string.Equals(kind, KnowledgeActivityDocs, StringComparison.OrdinalIgnoreCase);
         var wantsActivityDocs = !string.Equals(kind, KnowledgeGuides, StringComparison.OrdinalIgnoreCase);
 
-        if (wantsGuides && KnowledgePaths.ResolveReferenceGuidesRoot(_skills) is { } guides) {
+        var guides = wantsGuides ? KnowledgePaths.ResolveReferenceGuidesRoot(_skills) : null;
+        var activityDocs = wantsActivityDocs ? KnowledgePaths.ResolveActivityDocsRoot(_skills) : null;
+
+        if (guides is not null) {
             corpora.Add(new KnowledgeCorpus(guides, KnowledgeSource.Vendored));
-        } else if (wantsActivityDocs && KnowledgePaths.ResolveActivityDocsRoot(_skills) is { } activityDocs) {
+        }
+
+        // The activity-docs tree lives under the guides root in the shipped layout. Searching
+        // both would score the same files twice. Add it on its own when it is not already covered.
+        if (activityDocs is not null && !IsNestedUnder(activityDocs, guides)) {
             corpora.Add(new KnowledgeCorpus(activityDocs, KnowledgeSource.Vendored));
         }
 
         return corpora;
+    }
+
+    private static bool IsNestedUnder(string child, string? parent) {
+        if (string.IsNullOrWhiteSpace(parent)) {
+            return false;
+        }
+
+        var childFull = Path.GetFullPath(child).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var parentFull = Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        return childFull.StartsWith(parentFull, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static object ToPayload(KnowledgeExcerpt excerpt) => new {

@@ -159,12 +159,13 @@ public class McpHttpAuthMiddlewareTests {
     }
 
     [Fact]
-    public void EntraObjectIdGate_EmptyAllowList_AcceptsAnyPrincipal() {
+    public void EntraObjectIdGate_EmptyAllowList_RejectsEveryPrincipal() {
         var principal = new System.Security.Claims.ClaimsPrincipal(
             new System.Security.Claims.ClaimsIdentity(
                 [new System.Security.Claims.Claim("oid", "any-oid")],
                 authenticationType: "test"));
-        Assert.True(EntraBearerAuthenticator.IsObjectIdAllowed(principal, []));
+        Assert.False(EntraBearerAuthenticator.IsObjectIdAllowed(principal, []));
+        Assert.False(EntraBearerAuthenticator.IsObjectIdAllowed(principal, null));
     }
 
     [Fact]

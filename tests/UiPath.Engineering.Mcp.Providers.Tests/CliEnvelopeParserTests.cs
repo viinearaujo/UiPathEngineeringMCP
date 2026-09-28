@@ -29,6 +29,18 @@ public class CliEnvelopeParserTests {
     }
 
     [Fact]
+    public void TryParse_BannerWithBraces_DoesNotSwallowTheEnvelope() {
+        const string stdOut = """
+            Updated {cli} to 1.2.
+            {"Result":"Success","Data":{"message":"ok"}}
+            """;
+
+        Assert.True(CliEnvelopeParser.TryParse(stdOut, out var envelope));
+        Assert.True(envelope.IsSuccess);
+        Assert.Equal("ok", CliEnvelopeParser.GetString(envelope.Data!.Value, "message"));
+    }
+
+    [Fact]
     public void TryParse_FailureResult_IsNotSuccess() {
         const string stdOut = """{"Result":"ValidationError","Message":"The project is invalid."}""";
 

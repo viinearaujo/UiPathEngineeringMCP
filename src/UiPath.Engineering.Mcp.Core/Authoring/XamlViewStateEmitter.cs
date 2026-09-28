@@ -138,11 +138,15 @@ public static class XamlViewStateEmitter {
         }
 
         foreach (var element in doc.Root.DescendantsAndSelf()) {
-            if (element.Attribute(Sap2010 + "WorkflowViewState.IdRef")?.Value is not { Length: > 0 } idRef) {
-                continue;
+            foreach (var attribute in element.Attributes()) {
+                var local = attribute.Name.LocalName;
+                if (local.Equals("IdRef", StringComparison.Ordinal)
+                    || local.EndsWith(".IdRef", StringComparison.Ordinal)) {
+                    if (attribute.Value.Length > 0) {
+                        Seed(counters, element.Name.LocalName, attribute.Value);
+                    }
+                }
             }
-
-            Seed(counters, element.Name.LocalName, idRef);
         }
 
         return counters;
@@ -154,7 +158,7 @@ public static class XamlViewStateEmitter {
             return;
         }
 
-        if (int.TryParse(idRef[(underscore + 1)..], out var ordinal)) {
+        if (int.TryParse(idRef[(underscore + 1)..], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var ordinal)) {
             counters[typeName] = Math.Max(counters.TryGetValue(typeName, out var current) ? current : 0, ordinal);
         }
     }

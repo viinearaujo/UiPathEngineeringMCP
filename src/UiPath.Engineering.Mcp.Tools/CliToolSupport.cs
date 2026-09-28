@@ -332,9 +332,9 @@ internal static class CliToolSupport {
     }
 
     /// <summary>
-    /// Starts long CLI work on a background task and returns <c>{ jobId, status: "running" }</c>
-    /// immediately. The request <see cref="CancellationToken"/> is not linked into the job —
-    /// cancelling a later <c>get_job</c> poll must not kill the work.
+    /// Starts long CLI work on a background task and returns <c>{ jobId, phase: "running" }</c>
+    /// with status <c>pending</c> immediately. The request <see cref="CancellationToken"/> is not
+    /// linked into the job — cancelling a later <c>get_job</c> poll must not kill the work.
     /// </summary>
     public static ToolResult StartBackgroundJob(
         IBackgroundJobStore jobs,
@@ -342,7 +342,19 @@ internal static class CliToolSupport {
         Func<JobProgress, CancellationToken, Task<ToolResult>> work,
         IProgress<ProgressNotificationValue>? progress,
         Stopwatch sw) {
-        var job = jobs.Create(toolName);
+        BackgroundJob job;
+        try {
+            job = jobs.Create(toolName);
+        } catch (BackgroundJobCapacityException) {
+            return ToolResults.Failure(
+                "Background job limit reached.",
+                [new ToolError(
+                    ToolErrorCodes.OperationFailed,
+                    "Too many background jobs are still running.",
+                    "Poll get_job until a running job finishes, then retry.")],
+                sw);
+        }
+
         var progressAlive = progress;
         _ = Task.Run(async () => {
             jobs.MarkRunning(job.JobId);
@@ -354,15 +366,23 @@ internal static class CliToolSupport {
                 jobs.Complete(job.JobId, result);
                 jobProgress.Report(result.Status == "success" ? "succeeded" : "finished with errors");
             } catch (Exception ex) {
-                jobs.Fail(job.JobId, ex.Message);
+                var error = McpToolErrorMapper.ToToolError(ex, "The background job failed.");
+                jobs.Complete(job.JobId, new ToolResult {
+                    Status = "error",
+                    Summary = "The background job failed.",
+                    Errors = [$"{error.ErrorCode}: {error.Message}"],
+                    ErrorDetails = [error]
+                });
                 jobProgress.Report("failed");
             }
         });
 
-        return ToolResults.Ok(
-            $"Started '{toolName}'. Poll get_job with this jobId.",
-            new { jobId = job.JobId, status = BackgroundJobStates.Running },
-            sw);
+        return new ToolResult {
+            Status = "pending",
+            Summary = $"Started '{toolName}'. Poll get_job with this jobId.",
+            Data = new { jobId = job.JobId, phase = BackgroundJobStates.Running },
+            DurationMs = sw.ElapsedMilliseconds
+        };
     }
 
     /// <summary>

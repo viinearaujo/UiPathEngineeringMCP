@@ -36,7 +36,7 @@ public sealed class ValidateProjectTool {
         ReadOnly = false,
         Destructive = true,
         Idempotent = false),
-     Description("Starts uip validate/build/pack as a background job; returns {jobId,status:running} immediately. Poll get_job. Prefer check_work for the Copilot green gate. Next: get_job.")]
+     Description("Starts uip validate/build/pack as a background job; returns {jobId,phase:running} with status pending. Poll get_job until status is success or error. Prefer check_work for the Copilot green gate. Next: get_job.")]
     public Task<ToolResult> ValidateProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Run validate (project diagnostics)?")] bool validate = true,
@@ -144,8 +144,13 @@ public sealed class ValidateProjectTool {
                     g.SuggestedTool))
                 .ToList();
             return (errors, null);
-        } catch (Exception ex) {
-            return ([], $"Coded/XAML boundary lint was skipped: {ex.GetType().Name}.");
+        } catch (Exception) {
+            return ([
+                new ToolError(
+                    ToolErrorCodes.OperationFailed,
+                    "Coded/XAML boundary lint could not run.",
+                    "Check the server logs for the project-model failure, then retry validate_project.")
+            ], null);
         }
     }
 

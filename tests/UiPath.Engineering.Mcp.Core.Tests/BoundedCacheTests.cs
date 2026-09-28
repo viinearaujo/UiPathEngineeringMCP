@@ -4,7 +4,7 @@ namespace UiPath.Engineering.Mcp.Core.Tests;
 
 public class BoundedCacheTests {
     [Fact]
-    public async Task Set_OverMaxEntries_EvictsLruAndKeepsSemaphores() {
+    public async Task Set_OverMaxEntries_EvictsLruAndIdleLocks() {
         using var cache = new BoundedCache<string>(maxEntries: 2, ttl: TimeSpan.FromHours(1));
 
         await cache.RunExclusiveAsync("a", _ => { cache.Set("a", "A"); return Task.FromResult(0); });
@@ -17,9 +17,7 @@ public class BoundedCacheTests {
         Assert.Equal("B", b);
         Assert.True(cache.TryGet("c", out var c));
         Assert.Equal("C", c);
-        // Per-key semaphores are retained for the cache lifetime: disposing an idle
-        // semaphore on eviction can race another caller's GetOrAdd/WaitAsync pair.
-        Assert.Equal(3, cache.LockCount);
+        Assert.Equal(2, cache.LockCount);
     }
 
     [Fact]

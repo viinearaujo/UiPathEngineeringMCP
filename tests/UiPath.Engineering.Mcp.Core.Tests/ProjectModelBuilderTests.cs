@@ -126,6 +126,44 @@ public class ProjectModelBuilderTests {
     }
 
     [Fact]
+    public async Task BuildAsync_DuplicateCodedFileNames_KeepsInvokesOnTheMatchingFile() {
+        var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
+        fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";
+        const string shared = """
+            namespace testProcess
+            {
+                public class Process : CodedWorkflow
+                {
+                    [Workflow]
+                    public void Execute() { }
+                }
+            }
+            """;
+        const string caller = """
+            namespace testProcess
+            {
+                public class Process : CodedWorkflow
+                {
+                    [Workflow]
+                    public void Execute() { RunWorkflow("Other.xaml"); }
+                }
+            }
+            """;
+        fs.CSharpFiles.Add($"{Root}/A/Process.cs");
+        fs.CSharpFiles.Add($"{Root}/B/Process.cs");
+        fs.FileContents[$"{Root}/A/Process.cs"] = shared;
+        fs.FileContents[$"{Root}/B/Process.cs"] = caller;
+
+        var model = await new ProjectModelBuilder(fs).BuildAsync(Root);
+
+        Assert.Equal(2, model.CodedWorkflows.Count);
+        var callerNode = Assert.Single(model.Workflows, w => w.RelativePath.Replace('\\', '/').EndsWith("B/Process.cs", StringComparison.OrdinalIgnoreCase));
+        var otherNode = Assert.Single(model.Workflows, w => w.RelativePath.Replace('\\', '/').EndsWith("A/Process.cs", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(callerNode.InvokeWorkflows, invoke => invoke.TargetWorkflow == "Other.xaml");
+        Assert.DoesNotContain(otherNode.InvokeWorkflows, invoke => invoke.TargetWorkflow == "Other.xaml");
+    }
+
+    [Fact]
     public async Task BuildAsync_UnreadableCodedFile_AddsRiskWithoutThrowing() {
         var fs = new FakeFilesystemProvider { ProjectJsonPath = Json };
         fs.FileContents[Json] = """{ "name": "testProcess", "main": "Main.xaml" }""";

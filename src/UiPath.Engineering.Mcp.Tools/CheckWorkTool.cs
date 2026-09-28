@@ -77,7 +77,9 @@ public sealed class CheckWorkTool {
             .ToList();
 
         var model = await _modelBuilder.BuildAsync(projectPath, cancellationToken);
-        _ = ToolResults.LoadPlanOrFail(_planStore, projectPath, sw, out var plan);
+        if (ToolResults.LoadPlanOrFail(_planStore, projectPath, sw, out var plan) is { } planFailure) {
+            return planFailure;
+        }
         var docsFindings = _docsValidator.Validate(projectPath, model);
         var gaps = ProjectGapAnalyzer.Analyze(model, plan, docsFindings, _filesystem)
             .Where(g => !string.Equals(g.Category, "docs", StringComparison.OrdinalIgnoreCase))

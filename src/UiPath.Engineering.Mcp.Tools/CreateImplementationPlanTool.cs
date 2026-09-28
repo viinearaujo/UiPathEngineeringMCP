@@ -38,7 +38,7 @@ public sealed class CreateImplementationPlanTool {
         Destructive = true,
         Idempotent = false),
      Description("Creates docs/implementation-plan.json with tasks for the goal. Do not overwrite a mature plan unless asked. Next: update_plan_task.")]
-    public ToolResult CreateImplementationPlan(
+    public async Task<ToolResult> CreateImplementationPlan(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Overall goal of the implementation plan.")] string goal,
         [Description("Tasks to schedule, in execution order.")] List<PlanTaskInput> tasks,
@@ -84,7 +84,7 @@ public sealed class CreateImplementationPlanTool {
             }).ToList()
         };
 
-        _planStore.Save(projectPath, plan);
+        await _planStore.SaveAsync(projectPath, plan);
 
         return ToolResults.Ok($"Implementation plan created with {plan.Tasks.Count} task(s).", plan, sw);
     }

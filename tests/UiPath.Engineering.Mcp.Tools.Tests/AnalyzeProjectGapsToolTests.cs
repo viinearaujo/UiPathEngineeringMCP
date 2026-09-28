@@ -92,7 +92,7 @@ public class AnalyzeProjectGapsToolTests : IDisposable {
 
     [Fact]
     public async Task AnalyzeProjectGaps_WithGapsAndPlan_ReportsCountsAndPlanProgress() {
-        _store.Save(_projectPath, new ImplementationPlan {
+        await _store.SaveAsync(_projectPath, new ImplementationPlan {
             Goal = "g",
             Tasks = [
                 new PlanTask { Id = "task-1", Title = "a", Status = PlanTask.Done },
@@ -177,7 +177,7 @@ public class AnalyzeProjectGapsToolTests : IDisposable {
     public async Task AnalyzeProjectGaps_PlanCrossCheckUsesFilesystemProvider_NotRawDisk() {
         // The plan target exists only in the provider's in-memory view; nothing was written
         // to disk. The analyzer must see it, which proves the seam is used.
-        _store.Save(_projectPath, new ImplementationPlan {
+        await _store.SaveAsync(_projectPath, new ImplementationPlan {
             Goal = "g",
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main", TargetFiles = ["Main.xaml"] }]
         });

@@ -390,4 +390,25 @@ public class DependencyGraphBuilderTests {
         Assert.DoesNotContain(graph.Edges, e => e.Source.Contains("Util", StringComparison.OrdinalIgnoreCase)
             || e.Target.Contains("Util", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void AttachInvokes_DuplicateBasenames_DoesNotBindTheWrongFile() {
+        var tree = CSharpSyntaxTree.ParseText(
+            "class Process { void M() { RunWorkflow(\"Wrong.xaml\"); } }",
+            path: "/tmp/flat/Process.cs");
+        var compilation = CSharpCompilation.Create("dup", [tree]);
+        var context = new CSharpAnalysisContext {
+            Compilation = compilation,
+            Mode = CSharpAnalysisMode.SyntaxOnly,
+            HasCSharpFiles = true
+        };
+        var nodes = new List<WorkflowModel> {
+            new() { FileName = "Process.cs", FilePath = "/proj/A/Process.cs", RelativePath = "A/Process.cs" },
+            new() { FileName = "Process.cs", FilePath = "/proj/B/Process.cs", RelativePath = "B/Process.cs" }
+        };
+
+        CodedWorkflowInvokeScanner.AttachInvokes(nodes, context);
+
+        Assert.All(nodes, node => Assert.DoesNotContain(node.InvokeWorkflows, invoke => invoke.TargetWorkflow == "Wrong.xaml"));
+    }
 }
