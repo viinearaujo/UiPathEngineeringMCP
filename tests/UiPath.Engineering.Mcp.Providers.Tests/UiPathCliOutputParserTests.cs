@@ -28,7 +28,7 @@ public class UiPathCliOutputParserTests {
     public void Parse_AnalyzerErrorAndWarningLines_ExtractsStructuredEntries() {
         var (errors, warnings) = UiPathCliOutputParser.Parse("analyze", AnalyzeWithIssuesOutput, "");
 
-        Assert.Equal(2, errors.Count);
+        Assert.Single(errors);
         Assert.Contains(errors, e => e.Contains("ST-USG-010") && e.Contains("UiPath.Excel.Activities is not used"));
         Assert.Single(warnings);
         Assert.Contains(warnings, w => w.Contains("ST-DBP-020") && w.Contains("Write Line"));
@@ -57,13 +57,27 @@ public class UiPathCliOutputParserTests {
     }
 
     [Fact]
-    public void Parse_UnrecognizedLineMentioningError_IsPreservedVerbatim() {
+    public void Parse_SummaryLineMentioningErrors_IsNotADiagnostic() {
         var stdOut = "The operation completed with 3 unexpected errors.";
 
         var (errors, warnings) = UiPathCliOutputParser.Parse("pack", stdOut, "");
 
-        Assert.Single(errors);
-        Assert.Equal("[pack] The operation completed with 3 unexpected errors.", errors[0]);
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Parse_BannerThenFailureEnvelope_IsAnError() {
+        const string stdOut = """
+            Checking for updates.
+            Updated {cli} to 1.2.
+            {"Result":"ValidationError","Message":"The project is invalid."}
+            """;
+
+        var (errors, _) = UiPathCliOutputParser.Parse("validate", stdOut, "");
+
+        var error = Assert.Single(errors);
+        Assert.Contains("The project is invalid.", error);
     }
 
     [Fact]
@@ -117,24 +131,34 @@ public class UiPathCliOutputParserTests {
     }
 
     [Fact]
-    public void Parse_JsonEnvelopeSuccess_StillReportsStdErrLines() {
+    public void Parse_JsonEnvelopeSuccess_IgnoresStdErrNoise() {
         const string stdOut = """{"Result":"Success"}""";
 
-        var (errors, _) = UiPathCliOutputParser.Parse("validate", stdOut, "some stderr noise");
+        var (errors, warnings) = UiPathCliOutputParser.Parse("validate", stdOut, "some stderr noise");
 
-        Assert.Single(errors);
-        Assert.Equal("[validate] some stderr noise", errors[0]);
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
     }
 
     [Fact]
-    public void Parse_JsonWithoutResultField_FallsBackToLineBasedParsing() {
+    public void Parse_JsonEnvelopeFailure_StillReportsStdErrLines() {
+        const string stdOut = """{"Result":"ValidationError","Message":"broken"}""";
+
+        var (errors, _) = UiPathCliOutputParser.Parse("validate", stdOut, "some stderr noise");
+
+        Assert.Contains(errors, e => e.Contains("broken", StringComparison.Ordinal));
+        Assert.Contains(errors, e => e.Contains("some stderr noise", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Parse_JsonWithoutEnvelopeFields_IgnoresAnEmbeddedSeverityWord() {
         const string stdOut = """{"ErrorCode":"invalid_argument","Message":"error NU1101: boom"}""";
 
-        var (errors, _) = UiPathCliOutputParser.Parse("build", stdOut, "");
+        var (errors, warnings) = UiPathCliOutputParser.Parse("build", stdOut, "");
 
-        // No "Result" string -> line-based heuristics run on the raw text.
-        Assert.Single(errors);
-        Assert.Contains("NU1101", errors[0]);
+        // Not an envelope, and the line does not start with a severity prefix.
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
     }
 
     [Fact]

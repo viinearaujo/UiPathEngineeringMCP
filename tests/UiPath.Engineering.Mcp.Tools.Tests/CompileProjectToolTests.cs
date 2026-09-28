@@ -28,7 +28,8 @@ public class CompileProjectToolTests {
 
         var started = await tool.CompileProject("/projects/testProcess");
         var data = JsonSerializer.SerializeToElement(started.Data);
-        Assert.Equal("running", data.GetProperty("status").GetString());
+        Assert.Equal("pending", started.Status);
+        Assert.Equal("running", data.GetProperty("phase").GetString());
         var result = await BackgroundJobs.AwaitFinished(jobs, started);
 
         Assert.Equal((false, true, false), cli.LastValidateFlags);

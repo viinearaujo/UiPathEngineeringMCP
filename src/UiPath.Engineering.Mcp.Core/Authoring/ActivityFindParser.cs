@@ -44,9 +44,7 @@ public static class ActivityFindParser {
 
                 if (element.TryGetProperty("Result", out var result) || element.TryGetProperty("result", out result)) {
                     foreach (var nested in Collect(result)) yield return nested;
-                    if (result.ValueKind is not JsonValueKind.String) {
-                        yield break;
-                    }
+                    yield break;
                 }
 
                 if (LooksLikeActivity(element)) {

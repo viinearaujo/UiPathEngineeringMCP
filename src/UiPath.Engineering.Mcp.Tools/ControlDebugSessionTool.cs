@@ -40,7 +40,7 @@ public sealed class ControlDebugSessionTool {
         ReadOnly = false,
         Destructive = true,
         Idempotent = false),
-     Description("Leave-off execution (needs UiPathCli:EnableExecution). Starts a debug CLI command as a background job; returns {jobId,status:running}. Poll get_job. Next: get_job.")]
+     Description("Leave-off execution (needs UiPathCli:EnableExecution). Starts a debug CLI command as a background job; returns {jobId,phase:running} with status pending. Poll get_job. A finished result with status pending means DebugState is still Running — poll command=state. Next: get_job.")]
     public Task<ToolResult> ControlDebugSession(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Debug command: start, state, step-over, step-into, step-out, continue, continue-retry, continue-ignore, resume, break, restart-from-top, set-breakpoints, or cancel.")]
@@ -218,11 +218,20 @@ public sealed class ControlDebugSessionTool {
             warnings.Add("The session is still alive. Send command=cancel when done so the run or session ends cleanly.");
         }
 
+        // Paused and Suspended need a decision, so they stay a non-failure. Running means the
+        // wait timed out with no outcome — pending, not success, so callers keep polling.
+        var needsDecision = verdict.IsPaused || verdict.IsSuspended;
+        var status = verdict.Succeeded || needsDecision
+            ? "success"
+            : verdict.IsRunning
+                ? "pending"
+                : "error";
+
         return new ToolResult {
-            Status = verdict.Succeeded || verdict.IsAwaitingDecision ? "success" : "error",
+            Status = status,
             Summary = Summarize(command, filePath, verdict),
             Data = CliToolSupport.VerdictPayload(verdict, cli.Command, cli.ExitCode, includeLogEntries),
-            Errors = verdict.Succeeded || verdict.IsAwaitingDecision ? [] : FailureEntries(verdict, cli),
+            Errors = verdict.Succeeded || needsDecision || verdict.IsRunning ? [] : FailureEntries(verdict, cli),
             Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         };

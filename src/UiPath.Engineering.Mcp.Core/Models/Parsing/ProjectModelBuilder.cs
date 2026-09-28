@@ -1,3 +1,4 @@
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Models;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.CodeAnalysis;
@@ -38,15 +39,19 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
     }
 
     private void TryReadReadme(UiPathProjectModel model, string projectPath) {
-        try {
-            var readme = _filesystem.ReadAllText(projectPath.TrimEnd('/', '\\') + "/README.md");
-            var summary = readme.Trim();
-            model.ReadmeSummary = summary.Length > ReadmeSummaryMaxLength
-                ? summary[..ReadmeSummaryMaxLength]
-                : summary;
-        } catch (Exception ex) when (ex is FileNotFoundException or IOException or UnauthorizedAccessException) {
-            // README.md is optional; leave ReadmeSummary null.
+        var path = projectPath.TrimEnd('/', '\\') + "/README.md";
+        if (!TryReadWithinLimit(path, out var readme, out var oversized, out var readError)) {
+            if (oversized && readError is not null) {
+                model.Risks.Add(readError);
+            }
+
+            return;
         }
+
+        var summary = readme.Trim();
+        model.ReadmeSummary = summary.Length > ReadmeSummaryMaxLength
+            ? summary[..ReadmeSummaryMaxLength]
+            : summary;
     }
 
     private void ParseWorkflows(UiPathProjectModel model, string projectPath, CancellationToken cancellationToken) {
@@ -56,15 +61,26 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
             var fileName = Path.GetFileName(xamlPath) ?? xamlPath;
             var relativePath = WorkflowPath.ToRelativePath(projectPath, xamlPath);
             WorkflowModel workflow;
-            try {
-                workflow = _xamlParser.Parse(fileName, xamlPath, _filesystem.ReadAllText(xamlPath));
-            } catch (Exception ex) when (ex is FileNotFoundException or IOException or UnauthorizedAccessException) {
+            if (!TryReadWithinLimit(xamlPath, out var xaml, out var oversized, out var readError)) {
                 workflow = new WorkflowModel {
                     FileName = fileName,
                     FilePath = xamlPath,
                     HasParseError = true,
-                    ParseError = $"XAML parse failure: could not read file ({ex.Message})"
+                    ParseError = oversized
+                        ? readError
+                        : $"XAML parse failure: could not read file ({readError})"
                 };
+            } else {
+                try {
+                    workflow = _xamlParser.Parse(fileName, xamlPath, xaml);
+                } catch (Exception ex) when (ex is FileNotFoundException or IOException or UnauthorizedAccessException) {
+                    workflow = new WorkflowModel {
+                        FileName = fileName,
+                        FilePath = xamlPath,
+                        HasParseError = true,
+                        ParseError = $"XAML parse failure: could not read file ({ex.Message})"
+                    };
+                }
             }
 
             workflow.RelativePath = relativePath;
@@ -92,16 +108,27 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
             var relativePath = WorkflowPath.ToRelativePath(projectPath, csPath);
             string? content = null;
             CodedWorkflowModel coded;
-            try {
-                content = _filesystem.ReadAllText(csPath);
-                coded = _codedParser.Parse(fileName, csPath, content);
-            } catch (Exception ex) when (ex is FileNotFoundException or IOException or UnauthorizedAccessException) {
+            if (!TryReadWithinLimit(csPath, out var source, out var oversized, out var readError)) {
                 coded = new CodedWorkflowModel {
                     FileName = fileName,
                     FilePath = csPath,
                     HasParseError = true,
-                    ParseError = $"C# parse failure: could not read file ({ex.Message})"
+                    ParseError = oversized
+                        ? readError
+                        : $"C# parse failure: could not read file ({readError})"
                 };
+            } else {
+                try {
+                    content = source;
+                    coded = _codedParser.Parse(fileName, csPath, content);
+                } catch (Exception ex) when (ex is FileNotFoundException or IOException or UnauthorizedAccessException) {
+                    coded = new CodedWorkflowModel {
+                        FileName = fileName,
+                        FilePath = csPath,
+                        HasParseError = true,
+                        ParseError = $"C# parse failure: could not read file ({ex.Message})"
+                    };
+                }
             }
 
             model.CodedWorkflows.Add(coded);
@@ -152,12 +179,21 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
         if (analysis is not null) {
             CodedWorkflowInvokeScanner.AttachInvokes(codedNodes, analysis);
         } else {
-            // Syntax-only fallback when no compilation is available.
-            var byFileName = codedNodes.ToDictionary(w => w.FileName, StringComparer.OrdinalIgnoreCase);
+            // Syntax-only fallback when no compilation is available. Duplicate basenames
+            // (two Process.cs files) are matched by relative path only, never by filename.
+            var byRelative = UniqueBy(
+                codedNodes.Where(w => !string.IsNullOrWhiteSpace(w.RelativePath)),
+                w => w.RelativePath.Replace('\\', '/'));
+            var byFileName = UniqueBy(codedNodes, w => w.FileName);
             foreach (var source in codedSources) {
                 if (!string.Equals(source.Model.Kind, CodedFileKind.Workflow, StringComparison.OrdinalIgnoreCase)
-                    || source.Content is null
-                    || !byFileName.TryGetValue(source.Model.FileName, out var node)) {
+                    || source.Content is null) {
+                    continue;
+                }
+
+                var relative = source.RelativePath.Replace('\\', '/');
+                if (!byRelative.TryGetValue(relative, out var node)
+                    && !byFileName.TryGetValue(source.Model.FileName, out node)) {
                     continue;
                 }
 
@@ -172,6 +208,57 @@ public sealed class ProjectModelBuilder : IProjectModelBuilder {
         foreach (var node in codedNodes) {
             model.InvokeWorkflows.AddRange(node.InvokeWorkflows);
         }
+    }
+
+    private bool TryReadWithinLimit(string path, out string content, out bool oversized, out string? error) {
+        content = string.Empty;
+        oversized = false;
+        error = null;
+        try {
+            var size = _filesystem.GetFileSize(path);
+            if (size > FileReadLimits.MaxFileBytes) {
+                oversized = true;
+                error = FileReadLimits.OversizedMessage(Path.GetFileName(path), size);
+                return false;
+            }
+
+            content = _filesystem.ReadAllText(path);
+            if (content.Length > FileReadLimits.MaxFileBytes) {
+                var length = content.Length;
+                content = string.Empty;
+                oversized = true;
+                error = FileReadLimits.OversizedMessage(Path.GetFileName(path), length);
+                return false;
+            }
+
+            return true;
+        } catch (Exception ex) when (ex is FileNotFoundException or IOException or UnauthorizedAccessException) {
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    private static Dictionary<string, WorkflowModel> UniqueBy(
+        IEnumerable<WorkflowModel> nodes, Func<WorkflowModel, string> key) {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in nodes) {
+            var value = key(node);
+            if (string.IsNullOrWhiteSpace(value)) {
+                continue;
+            }
+
+            counts[value] = counts.TryGetValue(value, out var count) ? count + 1 : 1;
+        }
+
+        var unique = new Dictionary<string, WorkflowModel>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in nodes) {
+            var value = key(node);
+            if (!string.IsNullOrWhiteSpace(value) && counts.TryGetValue(value, out var count) && count == 1) {
+                unique[value] = node;
+            }
+        }
+
+        return unique;
     }
 
     private static void AppendDependencyGraphRisks(UiPathProjectModel model) {

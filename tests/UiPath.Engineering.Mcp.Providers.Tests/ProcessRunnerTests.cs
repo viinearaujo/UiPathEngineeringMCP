@@ -107,12 +107,57 @@ public class ProcessRunnerTests {
     }
 
     [Fact]
-    public async Task DrainOutputAsync_CompletedTasks_ReturnsOutput() {
-        var (stdOut, stdErr) = await ProcessRunner.DrainOutputAsync(
-            Task.FromResult("out"), Task.FromResult("err"));
+    public async Task WaitForReadsAsync_CompletedTasks_Finishes() {
+        using var cts = new CancellationTokenSource();
+        var finished = await ProcessRunner.WaitForReadsAsync(Task.CompletedTask, Task.CompletedTask, cts);
 
-        Assert.Equal("out", stdOut);
-        Assert.Equal("err", stdErr);
+        Assert.True(finished);
+    }
+
+    [Fact]
+    public async Task RunAsync_CapsCapturedOutput() {
+        var run = await ProcessRunner.RunAsync(
+            "bash",
+            ["-c", "printf '%2000s' ''"],
+            null,
+            TimeSpan.FromSeconds(10),
+            CancellationToken.None,
+            maxCapturedChars: 100);
+
+        Assert.Equal(0, run.ExitCode);
+        Assert.True(run.OutputTruncated);
+        Assert.True(run.StdOut.Length <= 100);
+        Assert.StartsWith(" ", run.StdOut);
+    }
+
+    [Fact]
+    public async Task RunAsync_GrandchildHoldingStdout_ReturnsPartialOutput() {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS()) {
+            Assert.Skip("Unix fork keeps the inherited stdout pipe open.");
+        }
+
+        const string script = """
+            import os, sys, time
+            pid = os.fork()
+            if pid == 0:
+                time.sleep(8)
+                os._exit(0)
+            sys.stdout.write("hello\n")
+            sys.stdout.flush()
+            os._exit(0)
+            """;
+        var run = await ProcessRunner.RunAsync(
+            "python3",
+            ["-c", script],
+            null,
+            TimeSpan.FromSeconds(8),
+            CancellationToken.None);
+
+        Assert.Null(run.StartError);
+        Assert.False(run.TimedOut);
+        Assert.Equal(0, run.ExitCode);
+        Assert.Contains("hello", run.StdOut);
+        Assert.True(run.OutputTruncated);
     }
 
     private static (string FileName, string[] Arguments) LongRunningCommand() =>

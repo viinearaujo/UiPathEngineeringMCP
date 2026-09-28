@@ -13,7 +13,10 @@ public static class CliOutputEnvelopeParser {
         }
 
         try {
-            using var doc = JsonDocument.Parse(stdOut);
+            using var doc = ParseDocument(stdOut);
+            if (doc is null) {
+                return false;
+            }
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object) {
                 return false;
@@ -34,10 +37,13 @@ public static class CliOutputEnvelopeParser {
             }
 
             if (hasResult) {
+                output.EnvelopeRecognized = true;
                 if (string.Equals(result.GetString(), "Success", StringComparison.OrdinalIgnoreCase)) {
+                    output.EnvelopeSucceeded = true;
                     return true;
                 }
 
+                output.EnvelopeSucceeded = false;
                 if (!CliDiagnosticExtractor.HasErrorDiagnostic(output)) {
                     AddEnvelopeFailure(verb, root, result, output);
                 } else {
@@ -48,6 +54,8 @@ public static class CliOutputEnvelopeParser {
             }
 
             if (hasSuccess) {
+                output.EnvelopeRecognized = true;
+                output.EnvelopeSucceeded = success.GetBoolean();
                 if (success.GetBoolean()) {
                     return true;
                 }
@@ -62,9 +70,32 @@ public static class CliOutputEnvelopeParser {
                 return true;
             }
 
-            return output.Diagnostics.Count > 0;
+            if (output.Diagnostics.Count == 0) {
+                return false;
+            }
+
+            output.EnvelopeRecognized = true;
+            output.EnvelopeSucceeded = !CliDiagnosticExtractor.HasErrorDiagnostic(output);
+            return true;
         } catch (JsonException) {
             return false;
+        }
+    }
+
+    private static JsonDocument? ParseDocument(string stdOut) {
+        try {
+            return JsonDocument.Parse(stdOut);
+        } catch (JsonException) {
+            var candidate = CliEnvelopeParser.ExtractJsonObject(stdOut);
+            if (candidate is null) {
+                return null;
+            }
+
+            try {
+                return JsonDocument.Parse(candidate);
+            } catch (JsonException) {
+                return null;
+            }
         }
     }
 

@@ -2,7 +2,9 @@ using System.Reflection;
 using System.Text.Json;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Configuration;
+using UiPath.Engineering.Mcp.Core.Models;
 
 namespace UiPath.Engineering.Mcp.Server;
 
@@ -59,12 +61,29 @@ internal static class CopilotToolSurface {
         }
     }
 
-    private static CallToolResult Reject(string message) => new() {
-        IsError = true,
-        Content = [
-            new TextContentBlock { Text = message }
-        ]
+    private static readonly JsonSerializerOptions RejectJson = new() {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
+
+    private static CallToolResult Reject(string message) {
+        var error = new ToolError(
+            ToolErrorCodes.OperationFailed,
+            message,
+            "Call a tool that is on the active McpServer:ToolSurface.");
+        var payload = new ToolResult {
+            Status = "error",
+            Summary = message,
+            Errors = [$"{error.ErrorCode}: {error.Message}"],
+            ErrorDetails = [error]
+        };
+        return new CallToolResult {
+            IsError = true,
+            StructuredContent = JsonSerializer.SerializeToElement(payload, RejectJson),
+            Content = [
+                new TextContentBlock { Text = $"{error.ErrorCode}: {message}" }
+            ]
+        };
+    }
 
     private static HashSet<string> DiscoverReadOnlyAnnotatedNames() {
         var names = new HashSet<string>(StringComparer.Ordinal);

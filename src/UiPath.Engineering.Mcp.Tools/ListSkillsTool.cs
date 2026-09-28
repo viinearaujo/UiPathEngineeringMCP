@@ -28,9 +28,10 @@ public sealed class ListSkillsTool {
         IReadOnlyList<SkillSummary> skills;
         try {
             skills = await _skills.ListAsync(cancellationToken);
-        } catch (DirectoryNotFoundException ex) {
+        } catch (DirectoryNotFoundException) {
             return ToolResults.Failure("Skills root not found.",
-                [new ToolError(ToolErrorCodes.SkillsRootMissing, ex.Message,
+                [new ToolError(ToolErrorCodes.SkillsRootMissing,
+                    "The skills root directory was not found.",
                     "Set Skills:SkillsRoot in appsettings.json to a directory containing */SKILL.md.")], sw);
         }
 

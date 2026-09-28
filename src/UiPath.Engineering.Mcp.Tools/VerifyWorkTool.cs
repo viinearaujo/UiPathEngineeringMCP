@@ -109,7 +109,7 @@ public sealed class VerifyWorkTool {
                 tasksUpdated.Add(new { taskId = task.Id, status = task.Status });
             }
             if (tasksUpdated.Count > 0) {
-                _planStore.Save(projectPath, plan!);
+                await _planStore.SaveAsync(projectPath, plan!, cancellationToken);
             }
 
             var warnings = cliResult.Warnings.Concat(docsWarnings).ToList();
@@ -132,7 +132,7 @@ public sealed class VerifyWorkTool {
                 tasksUpdated.Add(new { taskId = task.Id, status = task.Status });
             }
             if (tasksUpdated.Count > 0) {
-                _planStore.Save(projectPath, plan!);
+                await _planStore.SaveAsync(projectPath, plan!, cancellationToken);
             }
         }
 

@@ -72,9 +72,6 @@ public sealed class ImplementationPlanStore {
         }
     }
 
-    public void Save(string projectPath, ImplementationPlan plan) =>
-        SaveAsync(projectPath, plan).GetAwaiter().GetResult();
-
     /// <summary>
     /// Cancellable save. Honours the token while waiting for the per-project write lock and
     /// before touching disk, so a cancelled request does not queue behind another writer.
@@ -84,7 +81,7 @@ public sealed class ImplementationPlanStore {
 
         var key = Path.GetFullPath(projectPath);
         var gate = _saveLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken);
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try {
             cancellationToken.ThrowIfCancellationRequested();
             _filesystem.CreateDirectory(Path.Combine(projectPath, PlanDirectoryName));
@@ -92,11 +89,6 @@ public sealed class ImplementationPlanStore {
             _filesystem.WriteAllText(GetMarkdownPath(projectPath), RenderMarkdown(plan));
         } finally {
             gate.Release();
-            // Evict idle per-project locks so the dictionary does not retain a
-            // SemaphoreSlim for every project path forever.
-            if (gate.CurrentCount == 1) {
-                _saveLocks.TryRemove(new KeyValuePair<string, SemaphoreSlim>(key, gate));
-            }
         }
     }
 

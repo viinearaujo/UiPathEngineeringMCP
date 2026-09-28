@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using UiPath.Engineering.Mcp.Core;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Authoring;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -14,10 +15,11 @@ public static class ValidateDiagnosticMapper {
         string projectPath,
         IFilesystemProvider filesystem,
         IEnumerable<CliDiagnostic> diagnostics) {
+        var xamlFiles = filesystem.FindXamlFiles(projectPath);
         var cache = new Dictionary<string, IReadOnlyList<LocatedActivity>>(StringComparer.OrdinalIgnoreCase);
         var mapped = new List<ValidateFixDiagnostic>();
         foreach (var diagnostic in diagnostics) {
-            mapped.Add(MapOne(projectPath, filesystem, diagnostic, cache));
+            mapped.Add(MapOne(projectPath, filesystem, diagnostic, xamlFiles, cache));
         }
 
         return mapped;
@@ -27,8 +29,9 @@ public static class ValidateDiagnosticMapper {
         string projectPath,
         IFilesystemProvider filesystem,
         CliDiagnostic diagnostic,
+        IReadOnlyList<string> xamlFiles,
         Dictionary<string, IReadOnlyList<LocatedActivity>> cache) {
-        var xamlPath = ResolveXamlPath(projectPath, diagnostic.FilePath, filesystem);
+        var xamlPath = ResolveXamlPath(projectPath, diagnostic.FilePath, xamlFiles, filesystem);
         LocatedActivity? located = null;
         string? workflowFile = WorkflowFileName(projectPath, xamlPath, diagnostic.FilePath);
 
@@ -66,7 +69,7 @@ public static class ValidateDiagnosticMapper {
             }
 
             if (byRef.Count > 1) {
-                return Disambiguate(byRef, diagnostic) ?? byRef[0];
+                return Disambiguate(byRef, diagnostic);
             }
         }
 
@@ -82,7 +85,7 @@ public static class ValidateDiagnosticMapper {
             }
 
             if (byName.Count > 1) {
-                return Disambiguate(byName, diagnostic) ?? byName[0];
+                return Disambiguate(byName, diagnostic);
             }
         }
 
@@ -126,11 +129,21 @@ public static class ValidateDiagnosticMapper {
 
         IReadOnlyList<LocatedActivity> located;
         try {
-            var content = filesystem.ReadAllText(xamlPath);
-            var doc = XDocument.Parse(content, LoadOptions.SetLineInfo);
-            located = XamlActivityLocator.Locate(doc);
+            var size = filesystem.GetFileSize(xamlPath);
+            if (size > FileReadLimits.MaxFileBytes) {
+                located = [];
+            } else {
+                var content = filesystem.ReadAllText(xamlPath);
+                if (content.Length > FileReadLimits.MaxFileBytes) {
+                    located = [];
+                } else {
+                    var doc = XDocument.Parse(content, LoadOptions.SetLineInfo);
+                    located = XamlActivityLocator.Locate(doc);
+                }
+            }
         } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException
-            or System.Xml.XmlException or InvalidOperationException or UnauthorizedAccessException) {
+            or System.Xml.XmlException or InvalidOperationException or UnauthorizedAccessException
+            or IOException) {
             located = [];
         }
 
@@ -139,23 +152,31 @@ public static class ValidateDiagnosticMapper {
     }
 
     private static string? ResolveXamlPath(
-        string projectPath, string? filePath, IFilesystemProvider filesystem) {
+        string projectPath, string? filePath, IReadOnlyList<string> xamlFiles, IFilesystemProvider filesystem) {
         if (string.IsNullOrWhiteSpace(filePath)) {
             return null;
         }
 
-        var name = Path.GetFileName(filePath);
-        foreach (var xaml in filesystem.FindXamlFiles(projectPath)) {
-            if (string.Equals(Path.GetFileName(xaml), name, StringComparison.OrdinalIgnoreCase)) {
-                return xaml;
+        var normalizedFile = filePath.Replace('\\', '/').Trim().TrimStart('/');
+        var project = projectPath.Replace('\\', '/').TrimEnd('/');
+        var matches = new List<string>();
+        foreach (var xaml in xamlFiles) {
+            var relative = RelativeToProject(project, xaml);
+            if (relative.Equals(normalizedFile, StringComparison.OrdinalIgnoreCase)
+                || relative.EndsWith("/" + normalizedFile, StringComparison.OrdinalIgnoreCase)) {
+                matches.Add(xaml);
             }
+        }
 
-            var normalizedXaml = xaml.Replace('\\', '/');
-            var normalizedFile = filePath.Replace('\\', '/');
-            if (normalizedXaml.EndsWith(normalizedFile, StringComparison.OrdinalIgnoreCase)
-                || normalizedXaml.EndsWith('/' + name, StringComparison.OrdinalIgnoreCase)) {
-                return xaml;
-            }
+        if (matches.Count == 1) {
+            return matches[0];
+        }
+
+        if (matches.Count > 1) {
+            var exact = matches
+                .Where(xaml => RelativeToProject(project, xaml).Equals(normalizedFile, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            return exact.Count == 1 ? exact[0] : null;
         }
 
         var combined = Path.IsPathRooted(filePath)
@@ -170,6 +191,14 @@ public static class ValidateDiagnosticMapper {
         }
 
         return null;
+    }
+
+    private static string RelativeToProject(string project, string xaml) {
+        var normalized = xaml.Replace('\\', '/');
+        var prefix = project + "/";
+        return normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? normalized[prefix.Length..]
+            : normalized;
     }
 
     private static string? WorkflowFileName(string projectPath, string? resolvedPath, string? original) {

@@ -102,4 +102,43 @@ public class ValidateDiagnosticMapperTests {
 
         Assert.Equal("Rename the activity to include the type.", Assert.Single(mapped).SpecFix!.Hint);
     }
+
+    [Fact]
+    public void Map_DuplicateBasenames_UsesTheRelativePath() {
+        var fs = ProjectWithMain();
+        const string other = "/projects/testProcess/Other/Main.xaml";
+        fs.XamlFiles.Add(other);
+        fs.FileContents[other] = SampleXaml.Replace("LogMessage_1", "LogMessage_9", StringComparison.Ordinal);
+
+        var mapped = ValidateDiagnosticMapper.Map(ProjectPath, fs, [
+            new CliDiagnostic {
+                Message = "other file",
+                FilePath = "Other/Main.xaml",
+                IdRef = "LogMessage_9",
+                Property = "Message"
+            }
+        ]);
+
+        Assert.Equal("Other/Main.xaml", Assert.Single(mapped).SpecFix!.WorkflowFile);
+    }
+
+    [Fact]
+    public void Map_AmbiguousBasename_LeavesActivityIdUnset() {
+        var fs = new FakeFilesystemProvider { ProjectJsonPath = $"{ProjectPath}/project.json" };
+        foreach (var folder in new[] { "Sub", "Other" }) {
+            var path = $"{ProjectPath}/{folder}/Main.xaml";
+            fs.XamlFiles.Add(path);
+            fs.FileContents[path] = SampleXaml;
+        }
+
+        var mapped = ValidateDiagnosticMapper.Map(ProjectPath, fs, [
+            new CliDiagnostic {
+                Message = "which Main?",
+                FilePath = "Main.xaml",
+                IdRef = "LogMessage_1"
+            }
+        ]);
+
+        Assert.Null(Assert.Single(mapped).ActivityId);
+    }
 }

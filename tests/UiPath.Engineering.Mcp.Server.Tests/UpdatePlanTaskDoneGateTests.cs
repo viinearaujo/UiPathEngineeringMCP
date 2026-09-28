@@ -24,7 +24,7 @@ public class UpdatePlanTaskDoneGateTests : IDisposable {
 
     [Fact]
     public async Task Done_SucceedsWithoutGeneratedDocs() {
-        _store.Save(_projectPath, new ImplementationPlan {
+        await _store.SaveAsync(_projectPath, new ImplementationPlan {
             Goal = "g",
             Tasks = [new PlanTask { Id = "task-1", Title = "Create Main workflow" }]
         });

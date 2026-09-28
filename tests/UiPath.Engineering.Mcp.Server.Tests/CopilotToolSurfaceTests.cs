@@ -70,5 +70,6 @@ public class CopilotToolSurfaceTests {
         Assert.NotNull(rejected);
         Assert.True(rejected.IsError);
         Assert.Contains("ReadOnly", ((TextContentBlock)rejected.Content![0]).Text, StringComparison.Ordinal);
+        Assert.Equal("error", rejected.StructuredContent!.Value.GetProperty("status").GetString());
     }
 }

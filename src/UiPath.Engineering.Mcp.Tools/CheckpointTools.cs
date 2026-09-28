@@ -44,7 +44,7 @@ public sealed class CheckpointTool {
                 },
                 sw);
         } catch (Exception ex) {
-            return ToolResults.Failure($"Checkpoint failed: {ex.Message}", sw);
+            return ToolResults.FromException(ex, "Checkpoint failed.", sw);
         }
     }
 }
@@ -99,7 +99,7 @@ public sealed class GetChangesTool {
                 },
                 sw);
         } catch (Exception ex) {
-            return ToolResults.Failure($"get_changes failed: {ex.Message}", sw);
+            return ToolResults.FromException(ex, "get_changes failed.", sw);
         }
     }
 }
@@ -140,7 +140,7 @@ public sealed class RevertChangesTool {
                 new { checkpointId = checkpointId.Trim(), restoredFiles = restored },
                 sw);
         } catch (Exception ex) {
-            return ToolResults.Failure($"revert_changes failed: {ex.Message}", sw);
+            return ToolResults.FromException(ex, "revert_changes failed.", sw);
         }
     }
 }

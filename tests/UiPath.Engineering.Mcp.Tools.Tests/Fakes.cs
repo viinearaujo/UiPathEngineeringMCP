@@ -113,6 +113,7 @@ internal sealed class FakeUiPathCliProvider : IUiPathCliProvider {
     public (bool Validate, bool Build, bool Pack)? LastValidateFlags { get; private set; }
     public string? LastVerb { get; private set; }
     public string? LastArguments { get; private set; }
+    public IReadOnlyList<string>? LastArgumentList { get; private set; }
 
     public Task<UiPathCliResult> ValidateAsync(
         string projectPath, bool validate, bool build, bool pack, CancellationToken cancellationToken = default) {
@@ -127,6 +128,17 @@ internal sealed class FakeUiPathCliProvider : IUiPathCliProvider {
         string verb, string arguments, string? workingDirectory = null, CancellationToken cancellationToken = default) {
         LastVerb = verb;
         LastArguments = arguments;
+        return Task.FromResult(RunResult);
+    }
+
+    public Task<UiPathCliResult> RunArgumentsAsync(
+        string verb,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory = null,
+        CancellationToken cancellationToken = default) {
+        LastVerb = verb;
+        LastArgumentList = arguments;
+        LastArguments = string.Join(" ", arguments);
         return Task.FromResult(RunResult);
     }
 }

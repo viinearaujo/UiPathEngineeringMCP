@@ -30,7 +30,7 @@ public sealed class CompileProjectTool {
         ReadOnly = false,
         Destructive = true,
         Idempotent = false),
-     Description("Leave-off CLI build as a background job; returns {jobId,status:running}. Prefer validate_project(build:true) or check_work. Next: get_job.")]
+     Description("Leave-off CLI build as a background job; returns {jobId,phase:running} with status pending. Prefer validate_project(build:true) or check_work. Next: get_job.")]
     public Task<ToolResult> CompileProject(
         [Description("Absolute path to the UiPath project directory.")] string projectPath,
         [Description("Optional progress sink. The MCP SDK binds this automatically when the client sent a progress token; do not pass it from a caller.")] IProgress<ProgressNotificationValue>? progress = null,

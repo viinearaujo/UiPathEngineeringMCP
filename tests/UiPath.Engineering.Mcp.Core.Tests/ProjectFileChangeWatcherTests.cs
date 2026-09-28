@@ -58,6 +58,64 @@ public class ProjectFileChangeWatcherTests {
         Assert.Contains(disposed, d => d.Contains("a", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task FingerprintedCache_CleanWatcher_RefingerprintsAfterInterval() {
+        var time = new ManualTimeProvider();
+        var fingerprints = 0;
+        var builds = 0;
+        using var cache = new FingerprintedCache<string>(
+            "test",
+            timeProvider: time,
+            watcherFactory: new TrackingFactory([]),
+            reuseWhenClean: true);
+
+        string Fingerprint(string _) {
+            fingerprints++;
+            return "v1";
+        }
+
+        Task<string> Build(CancellationToken _) {
+            builds++;
+            return Task.FromResult("a");
+        }
+
+        await cache.GetOrBuildAsync("/p/a", Fingerprint, Build, (_, _) => { });
+        await cache.GetOrBuildAsync("/p/a", Fingerprint, Build, (_, _) => { });
+        Assert.Equal(1, fingerprints);
+        Assert.Equal(1, builds);
+
+        time.Advance(FingerprintedCache<string>.CleanRecheckInterval + TimeSpan.FromMilliseconds(1));
+        await cache.GetOrBuildAsync("/p/a", Fingerprint, Build, (_, _) => { });
+        Assert.Equal(2, fingerprints);
+        Assert.Equal(1, builds);
+    }
+
+    [Fact]
+    public async Task FingerprintedCache_FingerprintFailure_CachesTheBuiltValueAsStale() {
+        var builds = 0;
+        var stale = new List<bool>();
+        using var cache = new FingerprintedCache<string>("test");
+
+        Task<string> Build(CancellationToken _) {
+            builds++;
+            return Task.FromResult("built");
+        }
+
+        var first = await cache.GetOrBuildAsync("/p/a", _ => null, Build, (_, isStale) => stale.Add(isStale));
+        var second = await cache.GetOrBuildAsync("/p/a", _ => null, Build, (_, isStale) => stale.Add(isStale));
+
+        Assert.Equal("built", first);
+        Assert.Equal("built", second);
+        Assert.Equal(1, builds);
+        Assert.Equal([true, true], stale);
+    }
+
+    private sealed class ManualTimeProvider : TimeProvider {
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan delta) => _now += delta;
+    }
+
     private sealed class TrackingFactory(List<string> disposed) : IProjectChangeWatcherFactory {
         public IProjectChangeWatcher? TryCreate(string projectPath) =>
             new TrackingWatcher(projectPath, disposed);

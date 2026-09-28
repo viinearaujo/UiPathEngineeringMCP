@@ -64,8 +64,8 @@ public class ImplementationPlanStoreTests {
     }
 
     [Fact]
-    public void TryLoad_WhenPlanIsValid_ReturnsItWithoutError() {
-        _store.Save(_projectPath, SamplePlan());
+    public async Task TryLoad_WhenPlanIsValid_ReturnsItWithoutError() {
+        await _store.SaveAsync(_projectPath, SamplePlan());
 
         Assert.True(_store.TryLoad(_projectPath, out var plan, out var error));
         Assert.Null(error);
@@ -74,8 +74,8 @@ public class ImplementationPlanStoreTests {
     }
 
     [Fact]
-    public void Save_WritesJsonAndMarkdownMirror() {
-        _store.Save(_projectPath, SamplePlan());
+    public async Task Save_WritesJsonAndMarkdownMirror() {
+        await _store.SaveAsync(_projectPath, SamplePlan());
 
         Assert.True(_fs.FileExists(ImplementationPlanStore.GetJsonPath(_projectPath)));
         Assert.True(_fs.FileExists(ImplementationPlanStore.GetMarkdownPath(_projectPath)));
@@ -88,10 +88,10 @@ public class ImplementationPlanStoreTests {
     }
 
     [Fact]
-    public void Save_ThenLoad_RoundTripsPlan() {
+    public async Task Save_ThenLoad_RoundTripsPlan() {
         var plan = SamplePlan();
 
-        _store.Save(_projectPath, plan);
+        await _store.SaveAsync(_projectPath, plan);
         var loaded = _store.Load(_projectPath);
 
         Assert.NotNull(loaded);
@@ -110,14 +110,14 @@ public class ImplementationPlanStoreTests {
     }
 
     [Fact]
-    public void Save_UpdatesTimestampAndPersistsStatusChanges() {
+    public async Task Save_UpdatesTimestampAndPersistsStatusChanges() {
         var plan = SamplePlan();
-        _store.Save(_projectPath, plan);
+        await _store.SaveAsync(_projectPath, plan);
 
         var loaded = _store.Load(_projectPath)!;
         loaded.Tasks[0].Status = PlanTask.Done;
         loaded.Tasks[0].Notes = "Verified by verify_work.";
-        _store.Save(_projectPath, loaded);
+        await _store.SaveAsync(_projectPath, loaded);
 
         var reloaded = _store.Load(_projectPath)!;
         Assert.Equal(PlanTask.Done, reloaded.Tasks[0].Status);
@@ -127,8 +127,8 @@ public class ImplementationPlanStoreTests {
     }
 
     [Fact]
-    public void Save_LeavesNoTempFiles() {
-        _store.Save(_projectPath, SamplePlan());
+    public async Task Save_LeavesNoTempFiles() {
+        await _store.SaveAsync(_projectPath, SamplePlan());
 
         Assert.False(_fs.FileExists(ImplementationPlanStore.GetJsonPath(_projectPath) + ".tmp"));
         Assert.False(_fs.FileExists(ImplementationPlanStore.GetMarkdownPath(_projectPath) + ".tmp"));
@@ -136,11 +136,11 @@ public class ImplementationPlanStoreTests {
 
     [Fact]
     public async Task Save_ConcurrentCalls_LeaveValidJson() {
-        var tasks = Enumerable.Range(0, 16).Select(i => Task.Run(() => {
+        var tasks = Enumerable.Range(0, 16).Select(i => Task.Run(async () => {
             var plan = SamplePlan();
             plan.Goal = "Concurrent goal " + i;
             plan.Tasks[0].Notes = "notes-" + i;
-            _store.Save(_projectPath, plan);
+            await _store.SaveAsync(_projectPath, plan);
         }));
 
         await Task.WhenAll(tasks);

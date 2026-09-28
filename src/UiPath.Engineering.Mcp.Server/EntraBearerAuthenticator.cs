@@ -46,7 +46,7 @@ public sealed class EntraBearerAuthenticator : IEntraBearerAuthenticator {
 
     internal static bool IsObjectIdAllowed(ClaimsPrincipal principal, IReadOnlyList<string>? allowedObjectIds) {
         if (allowedObjectIds is null || allowedObjectIds.Count == 0) {
-            return true;
+            return false;
         }
 
         var oid = principal.FindFirst(ObjectIdClaimType)?.Value

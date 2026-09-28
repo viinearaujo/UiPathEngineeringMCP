@@ -73,6 +73,13 @@ public static class CodedWorkflowInvokeScanner {
 
         var byPath = new Dictionary<string, WorkflowModel>(StringComparer.OrdinalIgnoreCase);
         var byFileName = new Dictionary<string, WorkflowModel>(StringComparer.OrdinalIgnoreCase);
+        var fileNameCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in codedWorkflowNodes) {
+            if (!string.IsNullOrWhiteSpace(node.FileName)) {
+                fileNameCounts[node.FileName] = fileNameCounts.TryGetValue(node.FileName, out var count) ? count + 1 : 1;
+            }
+        }
+
         foreach (var node in codedWorkflowNodes) {
             if (!string.IsNullOrWhiteSpace(node.FilePath)) {
                 byPath.TryAdd(NormalizePath(node.FilePath), node);
@@ -83,7 +90,11 @@ public static class CodedWorkflowInvokeScanner {
                 byPath.TryAdd(NormalizePath(identity), node);
             }
 
-            byFileName.TryAdd(node.FileName, node);
+            if (!string.IsNullOrWhiteSpace(node.FileName)
+                && fileNameCounts.TryGetValue(node.FileName, out var nameCount)
+                && nameCount == 1) {
+                byFileName.TryAdd(node.FileName, node);
+            }
         }
 
         if (context is null) {

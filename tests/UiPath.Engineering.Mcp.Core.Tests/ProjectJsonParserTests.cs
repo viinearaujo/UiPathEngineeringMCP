@@ -113,4 +113,18 @@ public class ProjectJsonParserTests {
         Assert.Equal("CSharp", model.ExpressionLanguage);
         Assert.Equal("Process", model.OutputType);
     }
+
+    [Fact]
+    public void Parse_NonStringFields_ThrowsJsonException() {
+        var fs = new FakeFilesystemProvider { ProjectJsonPath = ProjectJsonPath };
+        fs.FileContents[ProjectJsonPath] = """
+            {
+              "name": 12,
+              "dependencies": { "UiPath.System.Activities": { "version": "1.0" } }
+            }
+            """;
+        var parser = new ProjectJsonParser(fs);
+
+        Assert.Throws<System.Text.Json.JsonException>(() => parser.Parse(ProjectJsonPath, ProjectRoot));
+    }
 }

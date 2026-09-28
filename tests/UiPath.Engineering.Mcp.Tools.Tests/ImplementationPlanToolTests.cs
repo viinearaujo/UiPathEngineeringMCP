@@ -32,44 +32,44 @@ public class CreateImplementationPlanToolTests : IDisposable {
     ];
 
     [Fact]
-    public void CreateImplementationPlan_WhenPathNotAllowed_ReturnsError() {
+    public async Task CreateImplementationPlan_WhenPathNotAllowed_ReturnsError() {
         _fs.Allowed = false;
 
-        var result = CreateTool().CreateImplementationPlan(_projectPath, "goal", TwoTasks());
+        var result = await CreateTool().CreateImplementationPlan(_projectPath, "goal", TwoTasks());
 
         Assert.Equal("error", result.Status);
         Assert.Null(result.Data);
     }
 
     [Fact]
-    public void CreateImplementationPlan_WhenProjectJsonMissing_ReturnsError() {
+    public async Task CreateImplementationPlan_WhenProjectJsonMissing_ReturnsError() {
         _fs.ProjectJson = null;
 
-        var result = CreateTool().CreateImplementationPlan(_projectPath, "goal", TwoTasks());
+        var result = await CreateTool().CreateImplementationPlan(_projectPath, "goal", TwoTasks());
 
         Assert.Equal("error", result.Status);
         Assert.Null(result.Data);
     }
 
     [Fact]
-    public void CreateImplementationPlan_WithoutTasks_ReturnsError() {
-        var result = CreateTool().CreateImplementationPlan(_projectPath, "goal", []);
+    public async Task CreateImplementationPlan_WithoutTasks_ReturnsError() {
+        var result = await CreateTool().CreateImplementationPlan(_projectPath, "goal", []);
 
         Assert.Equal("error", result.Status);
         Assert.Null(result.Data);
     }
 
     [Fact]
-    public void CreateImplementationPlan_WithoutGoal_ReturnsError() {
-        var result = CreateTool().CreateImplementationPlan(_projectPath, " ", TwoTasks());
+    public async Task CreateImplementationPlan_WithoutGoal_ReturnsError() {
+        var result = await CreateTool().CreateImplementationPlan(_projectPath, " ", TwoTasks());
 
         Assert.Equal("error", result.Status);
         Assert.Null(result.Data);
     }
 
     [Fact]
-    public void CreateImplementationPlan_HappyPath_WritesPlanFilesWithSequentialIds() {
-        var result = CreateTool().CreateImplementationPlan(_projectPath, "Build it", TwoTasks());
+    public async Task CreateImplementationPlan_HappyPath_WritesPlanFilesWithSequentialIds() {
+        var result = await CreateTool().CreateImplementationPlan(_projectPath, "Build it", TwoTasks());
         var data = JsonSerializer.SerializeToElement(result.Data);
 
         Assert.Equal("success", result.Status);
@@ -86,15 +86,15 @@ public class CreateImplementationPlanToolTests : IDisposable {
     }
 
     [Fact]
-    public void CreateImplementationPlan_WhenPlanExists_RefusesUnlessOverwrite() {
-        Assert.Equal("success", CreateTool().CreateImplementationPlan(_projectPath, "first", TwoTasks()).Status);
+    public async Task CreateImplementationPlan_WhenPlanExists_RefusesUnlessOverwrite() {
+        Assert.Equal("success", (await CreateTool().CreateImplementationPlan(_projectPath, "first", TwoTasks())).Status);
 
-        var refused = CreateTool().CreateImplementationPlan(_projectPath, "second", TwoTasks());
+        var refused = await CreateTool().CreateImplementationPlan(_projectPath, "second", TwoTasks());
         Assert.Equal("error", refused.Status);
         Assert.Null(refused.Data);
         Assert.Equal("first", _store.Load(_projectPath)!.Goal);
 
-        var overwritten = CreateTool().CreateImplementationPlan(_projectPath, "second", TwoTasks(), overwrite: true);
+        var overwritten = await CreateTool().CreateImplementationPlan(_projectPath, "second", TwoTasks(), overwrite: true);
         Assert.Equal("success", overwritten.Status);
         Assert.Equal("second", _store.Load(_projectPath)!.Goal);
     }
@@ -119,7 +119,7 @@ public class UpdatePlanTaskToolTests : IDisposable {
 
     private UpdatePlanTaskTool CreateTool() => new(_fs, _store);
 
-    private void SeedPlan() => _store.Save(_projectPath, new ImplementationPlan {
+    private Task SeedPlan() => _store.SaveAsync(_projectPath, new ImplementationPlan {
         Goal = "g",
         Tasks = [new PlanTask { Id = "task-1", Title = "Create Main workflow" }]
     });
@@ -145,7 +145,7 @@ public class UpdatePlanTaskToolTests : IDisposable {
 
     [Fact]
     public async Task UpdatePlanTask_WhenTaskUnknown_ReturnsError() {
-        SeedPlan();
+        await SeedPlan();
 
         var result = await CreateTool().UpdatePlanTask(_projectPath, "task-99", PlanTask.Done);
 
@@ -156,7 +156,7 @@ public class UpdatePlanTaskToolTests : IDisposable {
 
     [Fact]
     public async Task UpdatePlanTask_WhenStatusInvalid_ReturnsError() {
-        SeedPlan();
+        await SeedPlan();
 
         var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", "finished");
 
@@ -177,7 +177,7 @@ public class UpdatePlanTaskToolTests : IDisposable {
 
     [Fact]
     public async Task UpdatePlanTask_HappyPath_PersistsStatusAndNotes() {
-        SeedPlan();
+        await SeedPlan();
 
         var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.InProgress, "started");
         var data = JsonSerializer.SerializeToElement(result.Data);
@@ -193,7 +193,7 @@ public class UpdatePlanTaskToolTests : IDisposable {
 
     [Fact]
     public async Task UpdatePlanTask_Done_SucceedsWhenGeneratedContextIsStale() {
-        SeedPlan();
+        await SeedPlan();
         await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.InProgress);
 
         var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
@@ -205,7 +205,7 @@ public class UpdatePlanTaskToolTests : IDisposable {
 
     [Fact]
     public async Task UpdatePlanTask_Done_DoesNotRequireDocsSync() {
-        SeedPlan();
+        await SeedPlan();
 
         var result = await CreateTool().UpdatePlanTask(_projectPath, "task-1", PlanTask.Done);
 
@@ -254,8 +254,8 @@ public class GetImplementationPlanToolTests : IDisposable {
     }
 
     [Fact]
-    public void GetImplementationPlan_HappyPath_ReturnsPlanWithCounts() {
-        _store.Save(_projectPath, new ImplementationPlan {
+    public async Task GetImplementationPlan_HappyPath_ReturnsPlanWithCounts() {
+        await _store.SaveAsync(_projectPath, new ImplementationPlan {
             Goal = "g",
             Tasks = [
                 new PlanTask { Id = "task-1", Title = "a", Status = PlanTask.Done },

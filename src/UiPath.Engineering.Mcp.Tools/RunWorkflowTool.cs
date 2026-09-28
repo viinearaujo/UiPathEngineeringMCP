@@ -41,7 +41,7 @@ public sealed class RunWorkflowTool {
         ReadOnly = false,
         Destructive = true,
         Idempotent = false),
-     Description("Leave-off execution (needs UiPathCli:EnableExecution). Starts uip rpa run as a background job; returns {jobId,status:running}. Poll get_job. Next: get_job.")]
+     Description("Leave-off execution (needs UiPathCli:EnableExecution). Starts uip rpa run as a background job; returns {jobId,phase:running} with status pending. Poll get_job until status is success or error. Next: get_job.")]
     public Task<ToolResult> RunWorkflow(
         [Description("Absolute path to the UiPath project directory (must contain project.json).")] string projectPath,
         [Description("Workflow or coded file to run, relative to the project root, e.g. 'Main.xaml'. Resolved and verified inside the project before it is passed to the CLI.")] string filePath,

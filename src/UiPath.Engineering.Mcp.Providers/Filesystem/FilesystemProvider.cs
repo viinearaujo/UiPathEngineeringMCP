@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text;
 using UiPath.Engineering.Mcp.Core.Abstractions;
 using UiPath.Engineering.Mcp.Core.Models;
@@ -38,7 +37,6 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
     private readonly IPathPolicy _pathPolicy;
     private readonly IProjectWriteJournal? _writeJournal;
-    private readonly ConcurrentDictionary<string, byte> _enumeratedAllowed = new(StringComparer.OrdinalIgnoreCase);
 
     public FilesystemProvider(IPathPolicy pathPolicy, IProjectWriteJournal? writeJournal = null) {
         _pathPolicy = pathPolicy;
@@ -69,12 +67,7 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
         // Enumerate manually so we can skip noise folders (bin/obj/.git/etc.) instead of
         // returning build artifacts and version-control internals as if they were workflows.
-        var files = EnumerateFiles(path, pattern).ToList();
-        foreach (var file in files) {
-            _enumeratedAllowed.TryAdd(file, 0);
-        }
-
-        return files;
+        return EnumerateFiles(path, pattern).ToList();
     }
 
     private static IEnumerable<string> EnumerateFiles(string directory, string pattern) {
@@ -155,8 +148,7 @@ public sealed class FilesystemProvider : IFilesystemProvider {
         return node;
     }
 
-    private string EnsureAllowed(string filePath) =>
-        _enumeratedAllowed.ContainsKey(filePath) ? filePath : _pathPolicy.EnsureAllowed(filePath);
+    private string EnsureAllowed(string filePath) => _pathPolicy.EnsureAllowed(filePath);
 
     public string ReadAllText(string filePath) {
         var path = EnsureAllowed(filePath);
@@ -213,11 +205,31 @@ public sealed class FilesystemProvider : IFilesystemProvider {
 
     private static string MatchNewlines(string content, byte[] existing, bool hasBom) {
         var start = hasBom ? 3 : 0;
-        var text = Encoding.UTF8.GetString(existing, start, existing.Length - start);
-        var newline = text.Contains("\r\n", StringComparison.Ordinal)
-            ? "\r\n"
-            : text.Contains('\n') ? "\n" : Environment.NewLine;
+        var newline = DetectNewline(existing, start);
         return content.Replace("\r\n", "\n").Replace("\n", newline);
+    }
+
+    private static string DetectNewline(byte[] existing, int start) {
+        var headEnd = Math.Min(existing.Length, start + 8192);
+        var head = ScanNewline(existing, start, headEnd);
+        if (head is not null) {
+            return head;
+        }
+
+        var tailStart = Math.Max(headEnd, existing.Length - 8192);
+        return ScanNewline(existing, tailStart, existing.Length) ?? Environment.NewLine;
+    }
+
+    private static string? ScanNewline(byte[] data, int from, int to) {
+        for (var i = from; i < to; i++) {
+            if (data[i] != (byte)'\n') {
+                continue;
+            }
+
+            return i > 0 && data[i - 1] == (byte)'\r' ? "\r\n" : "\n";
+        }
+
+        return null;
     }
 
     public void DeleteFile(string filePath) {

@@ -41,6 +41,9 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         var executedCommands = new List<string>();
         var overallSuccess = true;
         var lastExitCode = 0;
+        var budgetSeconds = ClampTimeoutSeconds(null, _options.DefaultTimeoutSeconds);
+        var budget = TimeSpan.FromSeconds(budgetSeconds);
+        var pipeline = Stopwatch.StartNew();
 
         if (CliCommandPolicy.ContainsRejectedChars(projectPath)) {
             return new UiPathCliResult {
@@ -71,7 +74,26 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
                 continue;
             }
 
-            var (stepResult, _) = await RunTokensAsync(verb, BuildVerbArguments(verb, projectPath), null, cancellationToken);
+            var remaining = budget - pipeline.Elapsed;
+            if (remaining <= TimeSpan.Zero) {
+                var timeoutError = $"[{verb}] exceeded the {budgetSeconds}s pipeline timeout.";
+                stepResults[verb] = new CliStepResult {
+                    Executed = true,
+                    Success = false,
+                    Errors = [timeoutError]
+                };
+                errors.Add(timeoutError);
+                overallSuccess = false;
+                break;
+            }
+
+            var (stepResult, _) = await RunTokensAsync(
+                verb,
+                BuildVerbArguments(verb, projectPath),
+                null,
+                cancellationToken,
+                (int)Math.Ceiling(remaining.TotalSeconds),
+                captureFullStdOut: false);
 
             stepResults[verb] = new CliStepResult {
                 Executed = true,
@@ -127,11 +149,75 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         return (Cap(redactedOut, maxChars), Cap(redactedErr, maxChars));
     }
 
-    internal static List<string> BuildRawOutputLines(string stdout, string stderr) {
+    internal static int ClampTimeoutSeconds(int? requested, int configuredDefault) {
+        const int fallback = 300;
+        const int max = 3600;
+        int seconds;
+        if (requested is > 0) {
+            seconds = requested.Value;
+        } else if (configuredDefault > 0) {
+            seconds = configuredDefault;
+        } else {
+            seconds = fallback;
+        }
+
+        return Math.Min(seconds, max);
+    }
+
+    internal static List<string> BuildRawOutputLines(string stdout, string stderr, int maxChars = 32_768) {
+        var limit = maxChars > 0 ? maxChars : 32_768;
         var lines = new List<string>();
-        lines.AddRange(SecretRedactor.RedactLines(ProcessRunner.SplitLines(stdout)));
-        lines.AddRange(SecretRedactor.RedactLines(ProcessRunner.SplitLines(stderr)));
+        var used = 0;
+        if (!AppendRawStream(lines, stdout, ref used, limit)) {
+            return lines;
+        }
+
+        AppendRawStream(lines, stderr, ref used, limit);
         return lines;
+    }
+
+    private static bool AppendRawStream(List<string> lines, string? text, ref int used, int limit) {
+        if (string.IsNullOrEmpty(text)) {
+            return true;
+        }
+
+        var start = 0;
+        while (start < text.Length) {
+            if (used >= limit) {
+                lines.Add("...[truncated]");
+                return false;
+            }
+
+            var newline = text.IndexOf('\n', start);
+            var end = newline < 0 ? text.Length : newline;
+            var length = end - start;
+            if (length > 0 && text[end - 1] == '\r') {
+                length--;
+            }
+
+            if (length > 0) {
+                var (redacted, _) = SecretRedactor.Redact(text.Substring(start, length));
+                if (redacted.Length > 0) {
+                    if (used + redacted.Length > limit) {
+                        var keep = Math.Max(0, limit - used);
+                        lines.Add(redacted[..keep] + "\n...[truncated]");
+                        used = limit;
+                        return false;
+                    }
+
+                    lines.Add(redacted);
+                    used += redacted.Length;
+                }
+            }
+
+            if (newline < 0) {
+                break;
+            }
+
+            start = newline + 1;
+        }
+
+        return true;
     }
 
     private static string Cap(string s, int maxChars) =>
@@ -154,6 +240,25 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
 
         var (result, _) = await RunTokensAsync(
             verb, ProcessRunner.SplitQuotedArguments(arguments), workingDirectory, cancellationToken);
+        return result;
+    }
+
+    public async Task<UiPathCliResult> RunArgumentsAsync(
+        string verb,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory = null,
+        CancellationToken cancellationToken = default) {
+        if (arguments.Any(CliCommandPolicy.ContainsRejectedChars)) {
+            return new UiPathCliResult {
+                Success = false,
+                Command = FormatExecutedCommand(_options.ExecutablePath, arguments),
+                ExitCode = -1,
+                Summary = "Arguments rejected.",
+                Errors = ["The arguments contain control characters that cannot be passed as process arguments."]
+            };
+        }
+
+        var (result, _) = await RunTokensAsync(verb, arguments, workingDirectory, cancellationToken);
         return result;
     }
 
@@ -315,7 +420,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
 
         var command = FormatExecutedCommand(spec.ResolvedPath, arguments);
         var sw = Stopwatch.StartNew();
-        var timeout = TimeSpan.FromSeconds(timeoutSeconds ?? _options.DefaultTimeoutSeconds);
+        var timeout = TimeSpan.FromSeconds(ClampTimeoutSeconds(timeoutSeconds, _options.DefaultTimeoutSeconds));
 
         var run = await ProcessRunner.RunAsync(
             spec.FileName, spec.BuildArgumentList(arguments), workingDirectory,
@@ -372,6 +477,14 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         var errors = parsed.Errors;
         var warnings = parsed.Warnings;
 
+        if (run.OutputTruncated) {
+            errors.Add($"[{verb}] CLI output was truncated.");
+        }
+
+        if (parsed.EnvelopeRecognized && !parsed.EnvelopeSucceeded && errors.Count == 0) {
+            errors.Add($"[{verb}] CLI result was not success.");
+        }
+
         if (run.ExitCode != 0 && errors.Count == 0) {
             // The process failed without emitting any recognizable error line;
             // still surface a minimal reason instead of a bare "failed".
@@ -379,7 +492,7 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
         }
 
         var rawLines = _options.IncludeRawOutput
-            ? BuildRawOutputLines(run.StdOut, run.StdErr)
+            ? BuildRawOutputLines(run.StdOut, run.StdErr, _options.MaxOutputChars)
             : [];
 
         var (stdout, stderr) = CaptureOutput(run.StdOut, run.StdErr, _options.MaxOutputChars);
@@ -391,7 +504,9 @@ public sealed class UiPathCliProvider : IUiPathCliProvider {
             run.ExitCode == 0 && errors.Count == 0 ? null : "exit",
             run.ExitCode);
 
-        var success = run.ExitCode == 0 && errors.Count == 0;
+        var success = run.ExitCode == 0
+            && errors.Count == 0
+            && (!parsed.EnvelopeRecognized || parsed.EnvelopeSucceeded);
         return (new UiPathCliResult {
             Success = success,
             Command = command,

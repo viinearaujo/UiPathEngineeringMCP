@@ -39,8 +39,9 @@ public sealed class CreateProjectTool {
         var sw = Stopwatch.StartNew();
         var reporter = CliToolSupport.ProgressFor(progress, "Running uip rpa init (a cold headless Studio start can take 30-90s).");
 
-        if (string.IsNullOrWhiteSpace(name)) {
-            return ToolResults.Failure("Project name is required.", sw);
+        if (!IsSinglePathSegment(name)) {
+            return ToolResults.Failure(
+                "Project name must be a single folder name without path separators or quotes.", sw);
         }
 
         if (ToolArgs.ParseChoice(expressionLanguage, "expressionLanguage", ["CSharp", "VisualBasic"], sw, out var parsedLanguage) is { } languageError) {
@@ -62,11 +63,15 @@ public sealed class CreateProjectTool {
             return ToolResults.Failure($"Target directory already exists and is not empty: {targetDirectory}", sw);
         }
 
-        var arguments = $"init --name \"{name}\" --location \"{Path.GetFullPath(parentDirectory)}\" " +
-            $"--expression-language {parsedLanguage} --target-framework {parsedFramework} " +
-            $"--description \"{description}\" --output json";
-
-        var cliResult = await _cliProvider.RunAsync("rpa", arguments);
+        var cliResult = await _cliProvider.RunArgumentsAsync("rpa", [
+            "init",
+            "--name", name,
+            "--location", Path.GetFullPath(parentDirectory),
+            "--expression-language", parsedLanguage!,
+            "--target-framework", parsedFramework!,
+            "--description", description ?? string.Empty,
+            "--output", "json"
+        ]);
 
         reporter.Step("uip rpa init returned.");
 
@@ -93,5 +98,18 @@ public sealed class CreateProjectTool {
             Warnings = cliResult.Warnings,
             DurationMs = sw.ElapsedMilliseconds
         };
+    }
+
+    private static bool IsSinglePathSegment(string name) {
+        if (string.IsNullOrWhiteSpace(name) || name is "." or "..") {
+            return false;
+        }
+
+        if (name.Contains('/') || name.Contains('\\') || name.Contains('"')) {
+            return false;
+        }
+
+        return name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
+            && string.Equals(name, Path.GetFileName(name), StringComparison.Ordinal);
     }
 }

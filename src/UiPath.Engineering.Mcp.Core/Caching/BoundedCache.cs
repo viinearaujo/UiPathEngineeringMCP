@@ -4,10 +4,8 @@ namespace UiPath.Engineering.Mcp.Core.Caching;
 
 /// <summary>
 /// Bounded in-process cache: max entries (LRU), sliding TTL, and a per-key
-/// <see cref="SemaphoreSlim"/>. Keys are project paths, so the key space is small; the
-/// per-key semaphores are kept for the lifetime of the cache and disposed only in
-/// <see cref="Dispose"/>. Disposing an idle semaphore on eviction can race another
-/// caller between its <c>GetOrAdd</c> and <c>WaitAsync</c>, so it is deliberately avoided.
+/// <see cref="SemaphoreSlim"/>. Idle semaphores leave with the entries they guard.
+/// A caller that loses the race with that dispose retries on a fresh semaphore.
 /// </summary>
 public sealed class BoundedCache<TValue> : IDisposable {
     public const int DefaultMaxEntries = 32;
@@ -49,12 +47,28 @@ public sealed class BoundedCache<TValue> : IDisposable {
         CancellationToken cancellationToken = default) {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        var gate = _locks.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken);
-        try {
-            return await action(cancellationToken);
-        } finally {
-            gate.Release();
+        while (true) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            var gate = _locks.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
+            try {
+                await gate.WaitAsync(cancellationToken);
+            } catch (ObjectDisposedException) {
+                continue;
+            }
+
+            try {
+                return await action(cancellationToken);
+            } finally {
+                try {
+                    gate.Release();
+                } catch (ObjectDisposedException) {
+                    // Eviction disposed this semaphore after the wait completed.
+                }
+
+                if (!_entries.ContainsKey(key)) {
+                    ReleaseIdleLock(key);
+                }
+            }
         }
     }
 
@@ -69,6 +83,7 @@ public sealed class BoundedCache<TValue> : IDisposable {
             if (!includeExpired) {
                 if (_entries.TryRemove(key, out var removed)) {
                     _onEvicted?.Invoke(key, removed.Value);
+                    ReleaseIdleLock(key);
                 }
 
                 return false;
@@ -138,7 +153,18 @@ public sealed class BoundedCache<TValue> : IDisposable {
 
             if (_entries.TryRemove(victim, out var removed)) {
                 _onEvicted?.Invoke(victim, removed.Value);
+                ReleaseIdleLock(victim);
             }
+        }
+    }
+
+    private void ReleaseIdleLock(string key) {
+        if (!_locks.TryGetValue(key, out var gate) || gate.CurrentCount != 1) {
+            return;
+        }
+
+        if (_locks.TryRemove(new KeyValuePair<string, SemaphoreSlim>(key, gate)) && gate.CurrentCount == 1) {
+            gate.Dispose();
         }
     }
 

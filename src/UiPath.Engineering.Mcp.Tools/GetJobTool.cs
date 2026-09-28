@@ -18,7 +18,7 @@ public sealed class GetJobTool {
         ReadOnly = true,
         Destructive = false,
         Idempotent = true),
-     Description("Polls a background CLI job by jobId. Returns status/phase; when finished, the same ToolResult payload the tool would have returned. Cancelling this poll does not kill the job. Next: update_plan_task or fix errors.")]
+     Description("Polls a background CLI job by jobId. While it is running, status is pending and data.phase is the latest phase. When finished, returns the same ToolResult the tool would have returned, so status is that verdict. Cancelling this poll does not kill the job. Next: update_plan_task or fix errors.")]
     public ToolResult GetJob(
         [Description("Job id returned by validate_project or another async CLI tool.")] string jobId) {
         var sw = Stopwatch.StartNew();
@@ -30,21 +30,36 @@ public sealed class GetJobTool {
             return ToolResults.Failure($"Job '{jobId}' was not found (expired or unknown).", sw);
         }
 
-        var finished = job.State is BackgroundJobStates.Succeeded or BackgroundJobStates.Failed;
-        return ToolResults.Ok(
-            finished
-                ? $"Job '{job.JobId}' {job.State}."
-                : $"Job '{job.JobId}' is {job.State}. Poll again.",
-            new {
+        if (job.State is BackgroundJobStates.Succeeded or BackgroundJobStates.Failed) {
+            if (job.Result is ToolResult finished) {
+                return finished;
+            }
+
+            if (job.State == BackgroundJobStates.Failed) {
+                return new ToolResult {
+                    Status = "error",
+                    Summary = "The background job failed.",
+                    Errors = string.IsNullOrWhiteSpace(job.Error) ? [] : [job.Error],
+                    Data = new {
+                        jobId = job.JobId,
+                        tool = job.ToolName,
+                        phase = job.Phase ?? job.State
+                    },
+                    DurationMs = sw.ElapsedMilliseconds
+                };
+            }
+        }
+
+        return new ToolResult {
+            Status = "pending",
+            Summary = $"Job '{job.JobId}' is {job.State}. Poll again.",
+            Data = new {
                 jobId = job.JobId,
                 tool = job.ToolName,
-                status = job.State,
-                phase = job.Phase,
-                result = job.Result,
-                error = job.Error,
-                createdUtc = job.CreatedUtc,
-                finishedUtc = job.FinishedUtc
+                phase = job.Phase ?? job.State,
+                createdUtc = job.CreatedUtc
             },
-            sw);
+            DurationMs = sw.ElapsedMilliseconds
+        };
     }
 }

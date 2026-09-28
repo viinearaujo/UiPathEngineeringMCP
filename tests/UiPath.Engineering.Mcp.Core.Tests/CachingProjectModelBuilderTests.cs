@@ -179,7 +179,7 @@ public class CachingProjectModelBuilderTests {
     }
 
     [Fact]
-    public async Task BuildAsync_FingerprintFailureWithoutCache_BuildsWithoutCaching() {
+    public async Task BuildAsync_FingerprintFailureWithoutCache_CachesTheBuildAsStale() {
         var fs = CreateFilesystem();
         fs.GetLastWriteTimeException = new IOException("denied");
         var inner = new CountingProjectModelBuilder();
@@ -188,10 +188,10 @@ public class CachingProjectModelBuilderTests {
         var first = await sut.BuildAsync(Root);
         var second = await sut.BuildAsync(Root);
 
-        Assert.Equal(2, inner.CallCount);
-        Assert.False(first.Stale);
-        Assert.False(second.Stale);
-        Assert.NotSame(first, second);
+        Assert.Equal(1, inner.CallCount);
+        Assert.True(first.Stale);
+        Assert.True(second.Stale);
+        Assert.Same(first, second);
     }
 
     [Fact]

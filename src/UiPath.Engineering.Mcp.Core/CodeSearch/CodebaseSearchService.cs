@@ -58,13 +58,35 @@ public sealed class CodebaseSearchService : ICodebaseSearchService {
             }
             result.FilesSearched++;
 
-            var lines = content.Split('\n');
-            for (var i = 0; i < lines.Length; i++) {
-                var exact = lines[i].Contains(query, StringComparison.Ordinal);
-                if (!exact && !lines[i].Contains(query, StringComparison.OrdinalIgnoreCase)) {
-                    continue;
+            var start = 0;
+            var lineNumber = 1;
+            while (start <= content.Length) {
+                var newline = content.IndexOf('\n', start);
+                var end = newline < 0 ? content.Length : newline;
+                var length = end - start;
+                if (length > 0 && content[end - 1] == '\r') {
+                    length--;
                 }
-                matches.Add((new TextMatch { FilePath = file, Line = i + 1, Snippet = TrimSnippet(lines[i]) }, exact));
+
+                var line = content.AsSpan(start, length);
+                var exact = line.Contains(query, StringComparison.Ordinal);
+                if (exact || line.Contains(query, StringComparison.OrdinalIgnoreCase)) {
+                    matches.Add((new TextMatch {
+                        FilePath = file,
+                        Line = lineNumber,
+                        Snippet = TrimSnippet(line.ToString())
+                    }, exact));
+                }
+
+                if (newline < 0) {
+                    break;
+                }
+
+                start = newline + 1;
+                lineNumber++;
+                if (start == content.Length) {
+                    break;
+                }
             }
         }
 
